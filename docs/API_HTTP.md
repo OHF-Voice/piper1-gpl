@@ -3,7 +3,7 @@
 Install the necessary dependencies:
 
 ``` sh
-python3 -m pip install piper[http]
+python3 -m pip install piper-tts[http]
 ```
 
 Download a voice, for example:
