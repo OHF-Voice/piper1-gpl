@@ -14,6 +14,7 @@ pip install piper-tts
 * 🖥️ [Command-line interface][cli]
 * 🌐 [Web server][api-http]
 * 🐍 [Python API][api-python]
+* 🔧 [C/C++ API][libpiper]
 * 🏋️ [Training new voices][training]
 * 🛠️ [Building manually][building]
 
@@ -47,3 +48,4 @@ People/projects using Piper:
 [voices]: https://github.com/OHF-Voice/piper1-gpl/blob/main/docs/VOICES.md
 [samples]: https://rhasspy.github.io/piper-samples
 [demo]: https://rhasspy.github.io/piper-samples/demo.html
+[libpiper]: https://github.com/OHF-Voice/piper1-gpl/tree/main/libpiper
