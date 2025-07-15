@@ -1,4 +1,4 @@
-# Piper C API
+# 🔧 Piper C/C++ API
 
 A shared library for Piper with a C-style API.
 
