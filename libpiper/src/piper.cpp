@@ -102,6 +102,8 @@ struct piper_synthesizer *piper_create(const char *model_path,
 }
 
 void piper_free(struct piper_synthesizer *synth) {
+    espeak_Terminate();
+
     if (!synth) {
         return;
     }
