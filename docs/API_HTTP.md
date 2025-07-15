@@ -1,4 +1,4 @@
-# HTTP API
+# 🌐 HTTP API
 
 Install the necessary dependencies:
 

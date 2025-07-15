@@ -1,4 +1,4 @@
-# Training
+# 🏋️ Training
 
 Code for training new voices is included in `src/piper/train` and can be run with `python3 -m piper.train fit`.
 This uses [PyTorch Lightning][lighting] and the `LightningCLI`.

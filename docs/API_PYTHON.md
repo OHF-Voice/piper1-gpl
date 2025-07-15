@@ -1,4 +1,4 @@
-# Python API
+# 🐍 Python API
 
 Install with:
 

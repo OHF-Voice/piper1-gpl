@@ -1,4 +1,4 @@
-# Voices
+# 🗣️ Voices
 
 [Listen to voice samples](https://rhasspy.github.io/piper-samples)
 

@@ -1,4 +1,4 @@
-# Building Manually
+# 🛠️ Building Manually
 
 We use [scikit-build-core](https://github.com/scikit-build/scikit-build-core) along with [cmake](https://cmake.org/) to build a Python module that directly embeds [espeak-ng][].
 

@@ -1,4 +1,4 @@
-# Command Line Interface
+# 🖥️ Command Line Interface
 
 The Piper command-line interface allows for quickly getting audio from text and trying out different voices. It can be slow, however, because it needs to load the voice model each time. For repeated use, the [web server](API_HTTP.md) is recommended.
 
