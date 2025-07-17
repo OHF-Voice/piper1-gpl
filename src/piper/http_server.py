@@ -4,12 +4,13 @@ import argparse
 import io
 import json
 import logging
+import time
 import wave
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from urllib.request import urlopen
 
-from flask import Flask, request
+from flask import Flask, request, Response
 
 from . import PiperVoice, SynthesisConfig
 from .download_voices import VOICES_JSON, download_voice
@@ -66,6 +67,12 @@ def main() -> None:
     #
     parser.add_argument(
         "--debug", action="store_true", help="Print DEBUG messages to console"
+    )
+    parser.add_argument(
+         "--media",
+        action="append",
+        default=[str(Path.cwd())],
+        help="Data directory to check for downloaded models (default: current directory)",
     )
     args = parser.parse_args()
     logging.basicConfig(level=logging.DEBUG if args.debug else logging.INFO)
@@ -171,10 +178,26 @@ def main() -> None:
         return model_id
 
     @app.route("/", methods=["POST"])
-    def app_synthesize() -> bytes:
+    def download_audio() -> bytes:
+        wav_io = __app_synthesize()
+
+        return wav_io.getvalue()
+
+    @app.route("/save-file", methods=["GET", "POST"])
+    def save_audio() -> bytes:
+        wav_io = __app_synthesize()
+        with wave.open(wav_io, 'r') as wav_file:
+            duration = round(wav_file.getnframes() / float(wav_file.getframerate()), 2)            
+
+        return Response(
+            f"OK: Created Speech file {wav_io} with length of {duration} seconds",
+            status=200
+        )
+
+    def __app_synthesize() -> bytes:
         """Synthesize audio from text.
 
-        Expects a JSON object with the format:
+        POST Expects a JSON object with the format:
         {
           "text": "Text to speak.",      (required)
           "voice": "<voice name>",       (optional)
@@ -182,10 +205,14 @@ def main() -> None:
           "speaker_id": "<speaker id>",  (optional, overrides speaker)
           "length_scale": 1.0,           (optional)
           "noise_scale": 0.667,          (optional)
-          "length_w_scale": 0.8          (optional)
+          "length_w_scale": 0.8,         (optional)
+          "filename": "path/to/file.wav" (optional)
         }
         """
-        data = json.loads(request.data)
+        if request.method == "POST":
+            data = json.loads(request.data)
+        else:
+            data = request.values
         text = data.get("text", "").strip()
         if not text:
             raise ValueError("No text provided")
@@ -258,10 +285,15 @@ def main() -> None:
             ),
         )
 
+        filename: Optional[str] = request.values.get("filename")
+        if (filename is not None):
+            wave_output = f"{args.media}/{filename}.wav"
+        else:
+            wave_output = io.BytesIO()
+
         _LOGGER.debug("Synthesizing text: '%s' with config=%s", text, syn_config)
-        with io.BytesIO() as wav_io:
-            wav_file: wave.Wave_write = wave.open(wav_io, "wb")
-            with wav_file:
+        with wave_output as wav_io:
+            with wave.open(wav_io, "wb") as wav_file:
                 wav_params_set = False
                 for i, audio_chunk in enumerate(voice.synthesize(text, syn_config)):
                     if not wav_params_set:
@@ -281,7 +313,7 @@ def main() -> None:
 
                     wav_file.writeframes(audio_chunk.audio_int16_bytes)
 
-            return wav_io.getvalue()
+            return wav_io
 
     app.run(host=args.host, port=args.port)
 
