@@ -231,8 +231,11 @@ Let me know if you'd like a script version or Makefile to automate this setup.
 
 ---
 Piper TTS CLI deb package for termux
-1- apt install espeak
-2- download deb package
+
+ 1- apt install espeak
+ 
+ 2- download deb package
+ 
 
 apt install -f ./xxx.deb
 for use see : piper -h  or piper -help
