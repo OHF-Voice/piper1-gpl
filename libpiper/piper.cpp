@@ -4,6 +4,7 @@
 #include <string>
 #include <cstring>
 #include <cstdlib>
+#include <cstdio> 
 
 #include <piper.h>
 
@@ -73,6 +74,7 @@ Report bugs to: https://github.com/gyroing
 
 
 int main(int argc, char *argv[]) {
+    setvbuf(stdout, nullptr, _IONBF, 0);
     std::string model_name;
     std::string output_file = "output.raw";
     bool output_to_stdout = false;
