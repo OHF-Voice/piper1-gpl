@@ -258,3 +258,15 @@ python3 -m piper --model ~/.cache/piper/en_US-lessac-medium.onnx --config ~/.cac
 6.  **Termux Specifics**: Remember Termux's unique environment, especially the `/data/data/com.termux/files/usr` prefix for installations.
 7.  **The Value of Verbose Output**: Using `-v` with build commands (e.g., `python3 setup.py build_ext -v`) provides invaluable debugging information.
 8.  **`dpkg-deb` for Packaging**: For distributing software on Debian-based systems like Termux, `dpkg-deb` is the tool to use. It requires careful preparation of the package's internal file structure and a correct `control` file.
+
+## Termux (Android) Build Status and Improvements
+
+This section summarizes the current state of building Piper TTS on Termux, highlighting the successful compilation and the automated improvements implemented.
+
+The project now compiles successfully on Termux. The following key improvements have been made to streamline the build process:
+
+*   **Automated `espeak-ng` Integration**: The build system now intelligently detects and links against your system-installed `espeak-ng` (assuming `pkg install espeak` has been run). This eliminates the need for complex `ExternalProject` builds and ensures ABI compatibility with your Termux environment.
+*   **Automated ONNX Runtime Handling**: The `CMakeLists.txt` automatically downloads, extracts, and correctly links against the necessary `libonnxruntime.so` shared library. This eliminates the need for manual intervention for ONNX Runtime.
+*   **ABI Compatibility Resolved**: By ensuring all native C++ components (like `espeakbridge.so` and `piper_phonemize_cpp`) are built and linked against the system's `libc++` and other core libraries, the notorious ABI compatibility issues (such as the `nlohmann::json` parsing errors) are inherently addressed.
+*   **Simplified Installation**: The overall goal is to transform the installation into a "go for coffee" experience. After installing the initial `pkg` prerequisites, a simple `pip install piper-tts` will manage the compilation and linking of all native components, allowing the user to focus on using Piper rather than troubleshooting build errors.
+*   **Reduced Manual Intervention**: The need for manual extraction of `libonnxruntime.so` from `.aar` files or using `patchelf` for library path adjustments is significantly reduced or provided as clear fallback steps.
