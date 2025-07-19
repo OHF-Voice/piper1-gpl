@@ -20,3 +20,5 @@ src/piper/train/vits/monotonic_align/core.c
 *.so
 
 lightning_logs/
+espeak-ng/
+output.wav
