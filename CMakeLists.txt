@@ -69,7 +69,12 @@ if(ANDROID)
 
     ExternalProject_Add(espeak_ng_external
         SOURCE_DIR ${ESPEAK_NG_SRC_DIR}
-        CONFIGURE_COMMAND /data/data/com.termux/files/usr/bin/bash -c "./autogen.sh && ./configure --prefix=${ESPEAK_NG_INSTALL_DIR}"
+        CONFIGURE_COMMAND sh -c "./autogen.sh && ./configure --prefix=${ESPEAK_NG_INSTALL_DIR}"
+        BUILD_COMMAND make -j4
+        INSTALL_COMMAND make install
+        BYPRODUCTS ${ESPEAKNG_LIB}
+        # Ensure Termux binaries are in PATH for autogen.sh and its sub-processes
+        ENV PATH "${TERMUX_PREFIX}/bin:$ENV{PATH}"
         BUILD_COMMAND make -j4
         INSTALL_COMMAND make install
         BYPRODUCTS ${ESPEAKNG_LIB}
