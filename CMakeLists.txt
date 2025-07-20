@@ -27,8 +27,10 @@ if(ANDROID)
         message(STATUS "${PKG_NAME} installed successfully.")
     endfunction()
 
-    # Install python-onnxruntime
-    try_install_pkg(python-onnxruntime)
+    set(TERMUX_PACKAGES espeak python-onnxruntime)
+    foreach(PKG IN LISTS TERMUX_PACKAGES)
+        try_install_pkg(${PKG})
+    endforeach()
 
     # Check for ONNX Runtime library and headers
     find_library(ONNX_RUNTIME_LIB onnxruntime PATHS
