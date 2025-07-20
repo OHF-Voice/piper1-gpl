@@ -55,71 +55,71 @@ Building Piper on Termux (Android) involves specific considerations due to its u
 
 ### Plan A: Automated Build (Recommended)
 
-This approach leverages modifications to `CMakeLists.txt` (part of this fork) to automate the handling of native dependencies, aiming for a seamless `pip install` experience.
+This approach leverages modifications to `CMakeLists.txt` to automate the handling of native dependencies, aiming for a seamless `pip install` experience. The build process is as follows:
 
 1.  **Initial Prerequisites**: Before running `pip install`, ensure you have the fundamental build tools installed via `pkg`. These are essential for CMake and the overall build process:
 
     ```bash
-    pkg update && pkg install build-essential cmake git
+    pkg update && pkg install build-essential cmake git ninja-build
     ```
-    *(Note: `ninja` is handled automatically by the CMake script itself.)*
 
-2.  **Automated `espeak-ng` Build**: To avoid version and ABI incompatibilities with the system-provided `espeak-ng` package, the `CMakeLists.txt` now automatically clones and compiles `espeak-ng` from source during the build process. This ensures that Piper is built against the exact version of `espeak-ng` it requires. The `python-onnxruntime` package is still installed automatically via `pkg`.
-
-3.  **Simple `pip install`**: Once the initial prerequisites are met, you can install Piper directly using `pip`:
+2.  **Run Installation**: With the prerequisites in place, simply run the standard pip installation command from the project root:
 
     ```bash
-    pip install piper-tts
+    pip install .
     ```
 
-    This command will trigger the compilation of Piper's native extensions. The `CMakeLists.txt` will handle the installation of `python-onnxruntime` and the compilation of `espeak-ng`, allowing you to go for coffee while it builds.
+3.  **Automated Dependency Management (What Happens Next)**: When you run the install command, the `CMakeLists.txt` script takes over and performs several automated steps:
+    *   **Installs System Packages**: It uses the Termux `pkg` command to automatically install `espeak`, `python-onnxruntime`, `autoconf`, and `automake`. These are required for the subsequent build steps.
+    *   **Verifies ONNX Runtime**: It checks that the `onnxruntime` library (from the `python-onnxruntime` package) is correctly installed and located.
+    *   **Clones and Builds `espeak-ng`**: To avoid version and ABI incompatibilities with the system-provided `espeak-ng` package, the `CMakeLists.txt` now automatically clones and compiles `espeak-ng` from source during the build process. This ensures that Piper is built against the exact version of `espeak-ng` it requires. This local build is used exclusively by Piper, avoiding any potential conflicts with the system version.
+    *   **Handles Data Installation (The "Hack")**: A small but critical modification was made to the build process. The required `espeak-ng-data` directory is now copied into its final package location *before* the main `piper` library is compiled. This is done using a `PRE_BUILD` custom command in CMake. This architectural choice is a workaround for a complex timing issue where the standard `install` command would fail because the data from the external `espeak-ng` project wasn't available at the right moment. This ensures the data is ready when the final package is assembled.
+    *   **Builds Piper**: Finally, it compiles the Piper library itself, linking it against the locally built `espeak-ng` and the system's `onnxruntime`.
+
+This entire process is designed to be automatic. Once you start the `pip install` command, you can step away while it completes.
 
 ### Plan B: Manual Verification and Troubleshooting
 
-If the automated build (Plan A) fails, it is almost always due to an issue with the underlying system dependencies or network connectivity. This plan will guide you through verifying the environment and diagnosing problems.
+If the automated build (Plan A) fails, this guide will help you diagnose the problem. The issue is almost always related to system dependencies, network connectivity, or a stale build cache.
 
-1.  **Check `pkg` Status and Network**: If the build fails during the automated `pkg install` step for `python-onnxruntime`, verify your network connection and ensure `pkg` is functioning correctly.
-
-    ```bash
-    ping -c 3 google.com # Check network connectivity
-    pkg update           # Ensure pkg is up-to-date
-    ```
-
-2.  **Verify Package Installation**: If the build fails with a `FATAL_ERROR` indicating a missing library or header, manually verify the presence of the packages and their files:
+1.  **Clean the Build Environment**: Before anything else, if a build has failed, you must start with a clean slate. This is the most common fix.
 
     ```bash
-    pkg list-installed python-onnxruntime # Check if package is listed as installed
-    ls -l /data/data/com.termux/files/usr/lib/python*/site-packages/onnxruntime/capi/libonnxruntime.so* # Check onnxruntime library
-    ```
-    If any of these files are missing, try manually installing the respective package: `pkg install -y python-onnxruntime`.
+    # If piper-tts was partially installed, remove it
+    pip uninstall piper-tts
 
-3.  **`espeak-ng` Build Failure**: If the build fails during the compilation of the bundled `espeak-ng`, you may need to build it manually. It is recommended to clone it into the `third-party` directory:
+    # CRITICAL: Remove the build cache directory from the project root
+    rm -rf _skbuild
+    ```
+
+2.  **Verify Prerequisites and Network**: Ensure the core packages are installed and that you have network access, which is required for the `git clone` step.
 
     ```bash
-    # Clone the repository into the third-party directory
-    git clone https://github.com/espeak-ng/espeak-ng.git third-party/espeak-ng
-    cd third-party/espeak-ng
+    # Install/verify core build tools
+    pkg install -y build-essential cmake git ninja-build autoconf automake
 
-    # Build and install
-    ./autogen.sh
-    ./configure --prefix=/data/data/com.termux/files/usr
-    make
-    make install
+    # Check network connectivity
+    ping -c 3 google.com
     ```
 
-4.  **Clean the Build Environment**: After any manual intervention or failed build, it's crucial to clean the build cache to ensure a fresh start:
-
-    ```bash
-    pip uninstall piper-tts # If partially installed
-    rm -rf _skbuild         # Remove the build cache directory from the project root
-    ```
-
-5.  **Re-run the Build with Verbose Output**: If problems persist, run the installation with verbose output to get more detailed compiler and linker messages:
+3.  **Re-run with Verbose Output**: The most important step for debugging is to get detailed logs.
 
     ```bash
     pip install . -v
     ```
-    Examine the output carefully for specific errors.
+    Examine the output carefully. The error will be near the end.
+
+4.  **Interpreting Common Errors**:
+    *   **`Failed to clone espeak-ng repository`**: This indicates a network problem or that `git` is not installed correctly. Check your connection.
+    *   **`sh: 1: ./autogen.sh: not found`**: This was an error we fixed. If you see it, ensure your `CMakeLists.txt` is up-to-date with the version in this repository.
+    *   **`make: *** No targets specified and no makefile found`**: This was another error we fixed. It means the `espeak-ng` build is happening in the wrong directory. Ensure your `CMakeLists.txt` contains the `BUILD_IN_SOURCE 1` directive for the external project.
+    *   **`file INSTALL cannot find ... espeak-ng-data`**: This was the final timing error we fixed. It means the `espeak-ng-data` directory wasn't copied correctly. Ensure your `libpiper/CMakeLists.txt` uses the `add_custom_command` logic.
+    *   **Errors inside `espeak-ng` compilation**: If the error occurs during the `make` step for `espeak_ng_external` (you'll see C++ compiler errors), the problem is likely with the build environment itself. You can inspect the detailed logs created by the external project build:
+        ```bash
+        # Find the log files after a failed build
+        ls -l _skbuild/linux-aarch64-3.12/cmake-build/espeak_ng_external-prefix/src/
+        ```
+        Look at the `espeak_ng_external-configure-out.log` and `espeak_ng_external-build-out.log` files for specific compiler errors.
 
 
 

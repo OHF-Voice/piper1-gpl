@@ -35,11 +35,11 @@ install(
 
 
 
-# Copy espeak-ng-data
-set(ESPEAKNG_DATA_SRC ${CMAKE_BINARY_DIR}/espeak_ng-install/share/espeak-ng-data)
-set(ESPEAKNG_DATA_DST ${CMAKE_INSTALL_PREFIX}/espeak-ng-data)
-
-install(
-    DIRECTORY ${ESPEAKNG_DATA_SRC}
-    DESTINATION ${CMAKE_INSTALL_PREFIX}
+# Copy espeak-ng-data during the build
+add_custom_command(
+    TARGET piper PRE_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+    "${CMAKE_BINARY_DIR}/espeak-ng-install/share/espeak-ng-data"
+    "${CMAKE_INSTALL_PREFIX}/espeak-ng-data"
+    COMMENT "Copying espeak-ng-data"
 )
