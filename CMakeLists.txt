@@ -1,3 +1,6 @@
+cmake_minimum_required(VERSION 3.16)
+project(piper)
+
 if(ANDROID)
     # Termux/Android specific handling
     set(TERMUX_PREFIX "/data/data/com.termux/files/usr")
@@ -27,16 +30,21 @@ if(ANDROID)
     # Install python-onnxruntime
     try_install_pkg(python-onnxruntime)
 
-    # Check for ONNX Runtime library
+    # Check for ONNX Runtime library and headers
     find_library(ONNX_RUNTIME_LIB onnxruntime PATHS
         ${PYTHON_SITE_PACKAGES}/onnxruntime/capi
         ${TERMUX_PREFIX}/lib
         NO_DEFAULT_PATH
     )
-    if(NOT ONNX_RUNTIME_LIB)
-        message(FATAL_ERROR "ONNX Runtime library not found after installation. Please verify with 'ls ${PYTHON_SITE_PACKAGES}/onnxruntime/capi/libonnxruntime.so' or 'ls ${TERMUX_PREFIX}/lib/libonnxruntime.so'.")
+    find_path(ONNX_RUNTIME_INCLUDE_DIR onnxruntime_c_api.h PATHS
+        ${TERMUX_PREFIX}/include
+        NO_DEFAULT_PATH
+    )
+    if(NOT ONNX_RUNTIME_LIB OR NOT ONNX_RUNTIME_INCLUDE_DIR)
+        message(FATAL_ERROR "ONNX Runtime library or headers not found after installation. Please verify the installation.")
     endif()
     message(STATUS "Found ONNX Runtime library: ${ONNX_RUNTIME_LIB}")
+    message(STATUS "Found ONNX Runtime include dir: ${ONNX_RUNTIME_INCLUDE_DIR}")
 
     # --- Build espeak-ng from source ---
     include(ExternalProject)
@@ -65,8 +73,10 @@ if(ANDROID)
         BYPRODUCTS ${ESPEAKNG_LIB}
     )
 
+    add_subdirectory(libpiper)
+
     # Add dependency to ensure espeak-ng is built before our main target
-    add_dependencies(piper_phonemize espeak_ng_external)
+    add_dependencies(piper espeak_ng_external)
 
     set(ESPEAKNG_STATIC_LIB ${ESPEAKNG_LIB})
     set(UCD_STATIC_LIB "") # Not needed for shared espeak-ng
