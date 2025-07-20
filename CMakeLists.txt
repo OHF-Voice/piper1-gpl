@@ -75,6 +75,7 @@ if(ANDROID)
         BYPRODUCTS ${ESPEAKNG_LIB}
         # Ensure Termux binaries are in PATH for autogen.sh and its sub-processes
         ENV PATH "${TERMUX_PREFIX}/bin:$ENV{PATH}"
+    )
 
     add_subdirectory(libpiper)
 
