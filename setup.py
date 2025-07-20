@@ -8,9 +8,11 @@ from skbuild import setup
 MODULE_DIR = Path(__file__).parent / "src" / "piper"
 PIPER_DATA_FILES = ["py.typed", "espeakbridge.pyi"]
 ESPEAK_NG_DATA_DIR = MODULE_DIR / "espeak-ng-data"
-ESPEAK_NG_DATA_FILES = [
-    f.relative_to(MODULE_DIR) for f in ESPEAK_NG_DATA_DIR.rglob("*") if f.is_file()
-]
+ESPEAK_NG_DATA_FILES = []
+if ESPEAK_NG_DATA_DIR.is_dir():
+    ESPEAK_NG_DATA_FILES = [
+        f.relative_to(MODULE_DIR) for f in ESPEAK_NG_DATA_DIR.rglob("*") if f.is_file()
+    ]
 TASHKEEL_DATA_DIR = MODULE_DIR / "tashkeel"
 TASHKEEL_DATA_FILES = [
     (TASHKEEL_DATA_DIR / f_name).relative_to(MODULE_DIR)

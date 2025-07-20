@@ -10,7 +10,7 @@ This section clarifies the relationships between the various Git repositories en
 *   **Original/Upstream (`upstream` remote):** `https://github.com/OHF-Voice/piper1-gpl`
     *   This is the repository from which the user's `Manamama/piper1-gpl` fork was created. Updates are pulled from here to synchronize the user's fork with the original project.
 
-### 2. Separate `piper-tts-for-termux` Repository
+### 2. Separate temp `piper-tts-for-termux` Repository
     *   **Local Path:** `/data/data/com.termux/files/home/downloads/GitHub/piper1-gpl/piper-tts-for-termux`
 
 *   **Its Origin:** `https://github.com/gyroing/piper-tts-for-termux`
@@ -19,7 +19,7 @@ This section clarifies the relationships between the various Git repositories en
 
 ## Piper TTS Build and Packaging for Termux: A Comprehensive Guide (Historical Context)
 
-This section contains historical details about the process of building and packaging the Piper TTS project for Termux, including troubleshooting steps and lessons learned from various build attempts. While some issues have been resolved, these insights remain valuable.
+This section contains historical details about the process of building and packaging the Piper TTS project for Termux, including troubleshooting steps and lessons learned from various build attempts. While some issues have been resolved, these insights remain valuable. They mostly concern the .deb package method. Here we are using Python only. 
 
 ### The Problem: ABI Incompatibility and `nlohmann::json` Versions
 
@@ -171,9 +171,9 @@ rm -rf _skbuild
 python3 setup.py build_ext --inplace -v
 ```
 
-#### 5. Create Debian Package
+#### 5. You can create Debian Package
 
-Use the `create_deb.sh` script to package the compiled Piper Python module into a `.deb` file.
+Use the `create_deb.sh` script in to package the compiled Piper Python module into a `.deb` file. Not needed here, as all pure Python
 
 **`create_deb.sh` content:**
 
