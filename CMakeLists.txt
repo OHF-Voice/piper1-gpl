@@ -1,150 +1,80 @@
-# Builds Python module for Piper using espeak-ng and cmake.
-#
-# This is called automatically by scikit-build from setup.py.
-cmake_minimum_required(VERSION 3.26)
-project(piper LANGUAGES C CXX)
-
-find_package(Python COMPONENTS Interpreter Development REQUIRED)
-
 if(ANDROID)
-    # Termux/Android specific handling for ONNX Runtime and espeak-ng
-    set(ONNX_RUNTIME_VERSION "1.22.0") # Match the version from README.md
-    set(ONNX_RUNTIME_AAR_URL "https://repo1.maven.org/maven2/com/microsoft/onnxruntime/onnxruntime-android/${ONNX_RUNTIME_VERSION}/onnxruntime-android-${ONNX_RUNTIME_VERSION}.aar")
-    set(ONNX_RUNTIME_DOWNLOAD_DIR ${CMAKE_BINARY_DIR}/onnxruntime_download)
-    set(ONNX_RUNTIME_EXTRACT_DIR ${CMAKE_BINARY_DIR}/onnxruntime_extracted)
-    set(ONNX_RUNTIME_LIB_PATH ${ONNX_RUNTIME_EXTRACT_DIR}/jni/arm64-v8a/libonnxruntime.so)
+    # Termux/Android specific handling
+    set(TERMUX_PREFIX "/data/data/com.termux/files/usr")
+    set(PYTHON_SITE_PACKAGES "${TERMUX_PREFIX}/lib/python${Python_VERSION_MAJOR}.${Python_VERSION_MINOR}/site-packages")
 
-    # Create download and extract directories
-    file(MAKE_DIRECTORY ${ONNX_RUNTIME_DOWNLOAD_DIR})
-    file(MAKE_DIRECTORY ${ONNX_RUNTIME_EXTRACT_DIR})
+    # Helper function to install Termux packages
+    function(try_install_pkg PKG_NAME)
+        find_program(PKG_EXECUTABLE NAMES pkg)
+        if(NOT PKG_EXECUTABLE)
+            message(FATAL_ERROR "Termux 'pkg' command not found. Please ensure Termux is properly set up and try manually installing '${PKG_NAME}' with 'pkg install ${PKG_NAME}'.")
+        endif()
 
-    # Download ONNX Runtime AAR
-    file(DOWNLOAD ${ONNX_RUNTIME_AAR_URL} ${ONNX_RUNTIME_DOWNLOAD_DIR}/onnxruntime-android-${ONNX_RUNTIME_VERSION}.aar
-         STATUS download_status
-         LOG download_log)
+        message(STATUS "Installing ${PKG_NAME} via pkg...")
+        execute_process(
+            COMMAND ${PKG_EXECUTABLE} install -y ${PKG_NAME}
+            RESULT_VARIABLE PKG_INSTALL_RESULT
+            OUTPUT_VARIABLE PKG_INSTALL_OUTPUT
+            ERROR_VARIABLE PKG_INSTALL_ERROR
+        )
+        if(NOT PKG_INSTALL_RESULT EQUAL 0)
+            message(WARNING "Failed to install ${PKG_NAME}: ${PKG_INSTALL_ERROR}\n${PKG_INSTALL_OUTPUT}")
+            message(FATAL_ERROR "Please manually install '${PKG_NAME}' using 'pkg install ${PKG_NAME}' and ensure network connectivity.")
+        endif()
+        message(STATUS "${PKG_NAME} installed successfully.")
+    endfunction()
 
-    if(NOT download_status EQUAL 0)
-        message(FATAL_ERROR "Failed to download ONNX Runtime AAR: ${download_log}")
+    # Install python-onnxruntime
+    try_install_pkg(python-onnxruntime)
+
+    # Check for ONNX Runtime library
+    find_library(ONNX_RUNTIME_LIB onnxruntime PATHS
+        ${PYTHON_SITE_PACKAGES}/onnxruntime/capi
+        ${TERMUX_PREFIX}/lib
+        NO_DEFAULT_PATH
+    )
+    if(NOT ONNX_RUNTIME_LIB)
+        message(FATAL_ERROR "ONNX Runtime library not found after installation. Please verify with 'ls ${PYTHON_SITE_PACKAGES}/onnxruntime/capi/libonnxruntime.so' or 'ls ${TERMUX_PREFIX}/lib/libonnxruntime.so'.")
     endif()
+    message(STATUS "Found ONNX Runtime library: ${ONNX_RUNTIME_LIB}")
 
-    # Extract libonnxruntime.so
-    execute_process(COMMAND unzip ${ONNX_RUNTIME_DOWNLOAD_DIR}/onnxruntime-android-${ONNX_RUNTIME_VERSION}.aar -d ${ONNX_RUNTIME_EXTRACT_DIR}
-                    RESULT_VARIABLE unzip_result
-                    OUTPUT_VARIABLE unzip_output
-                    ERROR_VARIABLE unzip_error)
-
-    if(NOT unzip_result EQUAL 0)
-        message(FATAL_ERROR "Failed to extract ONNX Runtime AAR: ${unzip_error}")
-    endif()
-
-    # Set espeak-ng and ONNX Runtime libraries for Android
-    # For Termux, we assume espeak-ng is system-installed via pkg
-    find_library(ESPEAKNG_LIB espeak-ng PATHS /data/data/com.termux/files/usr/lib NO_DEFAULT_PATH)
-    if(NOT ESPEAKNG_LIB)
-        message(FATAL_ERROR "espeak-ng library not found. Please install it via 'pkg install espeak'.")
-    endif()
-
-    set(ESPEAKNG_STATIC_LIB ${ESPEAKNG_LIB})
-    set(UCD_STATIC_LIB "") # Not needed for system espeak-ng
-    set(ONNX_RUNTIME_LIB ${ONNX_RUNTIME_LIB_PATH})
-
-    # Add ONNX Runtime include directory (assuming it's within the extracted AAR)
-    include_directories(${ONNX_RUNTIME_EXTRACT_DIR}/jni/arm64-v8a/include)
-
-    # Add Termux system include directory for espeak-ng headers
-    include_directories(/data/data/com.termux/files/usr/include)
-
-else()
-    # Original espeak-ng ExternalProject_Add for non-Android platforms
+    # --- Build espeak-ng from source ---
     include(ExternalProject)
 
-    # Install location for espeak-ng
-    set(ESPEAKNG_BUILD_DIR ${CMAKE_BINARY_DIR}/espeak_ng)
-    set(ESPEAKNG_INSTALL_DIR ${CMAKE_BINARY_DIR}/espeak_ng-install)
+    set(ESPEAK_NG_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third-party/espeak-ng")
+    set(ESPEAK_NG_INSTALL_DIR "${CMAKE_BINARY_DIR}/espeak-ng-install")
+    set(ESPEAKNG_LIB "${ESPEAK_NG_INSTALL_DIR}/lib/libespeak-ng.so")
+    set(ESPEAKNG_INCLUDE_DIR "${ESPEAK_NG_INSTALL_DIR}/include")
 
-    if(WIN32)
-        # Special handling for Windows
-        set(ESPEAKNG_STATIC_LIB ${ESPEAKNG_INSTALL_DIR}/lib/espeak-ng.lib)
-        set(UCD_STATIC_LIB ${ESPEAKNG_BUILD_DIR}/src/espeak_ng_external-build/src/ucd-tools/ucd.lib)
-    else()
-        set(ESPEAKNG_STATIC_LIB ${ESPEAKNG_INSTALL_DIR}/lib/libespeak-ng.a)
-        set(UCD_STATIC_LIB ${ESPEAKNG_BUILD_DIR}/src/espeak_ng_external-build/src/ucd-tools/libucd.a)
+    if(NOT EXISTS "${ESPEAK_NG_SRC_DIR}/.git")
+        message(STATUS "Cloning espeak-ng repository...")
+        execute_process(
+            COMMAND git clone https://github.com/espeak-ng/espeak-ng.git ${ESPEAK_NG_SRC_DIR}
+            RESULT_VARIABLE GIT_CLONE_RESULT
+        )
+        if(NOT GIT_CLONE_RESULT EQUAL 0)
+            message(FATAL_ERROR "Failed to clone espeak-ng repository.")
+        endif()
     endif()
 
     ExternalProject_Add(espeak_ng_external
-        GIT_REPOSITORY https://github.com/espeak-ng/espeak-ng.git
-        GIT_TAG 212928b394a96e8fd2096616bfd54e17845c48f6  # 2025-Mar-22
-        PREFIX ${ESPEAKNG_BUILD_DIR}
-        CMAKE_ARGS
-            -DCMAKE_INSTALL_PREFIX=${ESPEAKNG_INSTALL_DIR}
-            -DBUILD_SHARED_LIBS:BOOL=OFF
-            -DCMAKE_POSITION_INDEPENDENT_CODE:BOOL=ON
-            -DUSE_ASYNC:BOOL=OFF
-            -DUSE_MBROLA:BOOL=OFF
-            -DUSE_LIBSONIC:BOOL=OFF
-            -DUSE_LIBPCAUDIO:BOOL=OFF
-            -DUSE_KLATT:BOOL=OFF
-            -DUSE_SPEECHPLAYER:BOOL=OFF
-            -DEXTRA_cmn:BOOL=ON
-            -DEXTRA_ru:BOOL=ON
-            # Need to explicitly add ucd include directory for CI
-            "-DCMAKE_C_FLAGS=-D_FILE_OFFSET_BITS=64 -I${ESPEAKNG_BUILD_DIR}/src/espeak_ng_external/src/ucd-tools/src/include"
-        BUILD_BYPRODUCTS
-            ${ESPEAKNG_STATIC_LIB}
-            ${UCD_STATIC_LIB}
-        UPDATE_DISCONNECTED TRUE
+        SOURCE_DIR ${ESPEAK_NG_SRC_DIR}
+        CONFIGURE_COMMAND ./autogen.sh && ./configure --prefix=${ESPEAK_NG_INSTALL_DIR}
+        BUILD_COMMAND make -j4
+        INSTALL_COMMAND make install
+        BYPRODUCTS ${ESPEAKNG_LIB}
     )
 
+    # Add dependency to ensure espeak-ng is built before our main target
+    add_dependencies(piper_phonemize espeak_ng_external)
+
+    set(ESPEAKNG_STATIC_LIB ${ESPEAKNG_LIB})
+    set(UCD_STATIC_LIB "") # Not needed for shared espeak-ng
+
+    # Include directories for Termux
     include_directories(
-        ${ESPEAKNG_INSTALL_DIR}/include
-    )
-endif()
-
-# espeak bridge
-add_library(espeakbridge MODULE
-    src/piper/espeakbridge.c
-)
-
-if(ANDROID)
-    target_link_libraries(espeakbridge
-        ${ESPEAKNG_LIB}
-        ${ONNX_RUNTIME_LIB}
-        ${PYTHON_LIBRARIES}
-    )
-    target_include_directories(espeakbridge PRIVATE
+        ${ESPEAKNG_INCLUDE_DIR}
         ${PYTHON_INCLUDE_DIRS}
-        /data/data/com.termux/files/usr/include/python3.12/
-    )
-else()
-    add_dependencies(espeakbridge espeak_ng_external)
-    target_link_libraries(espeakbridge
-        ${ESPEAKNG_STATIC_LIB}
-        ${UCD_STATIC_LIB}
-        ${PYTHON_LIBRARIES}
-    )
-    target_include_directories(espeakbridge PRIVATE
-        ${PYTHON_INCLUDE_DIRS}
+        ${TERMUX_PREFIX}/include/python${Python_VERSION_MAJOR}.${Python_VERSION_MINOR}
     )
 endif()
-
-if(WIN32)
-    # Fix dll thunk issue (__imp_SYMBOL not found)
-    target_compile_definitions(espeakbridge PRIVATE LIBESPEAK_NG_EXPORT)
-
-    # Fix .dll suffix
-    set_target_properties(espeakbridge PROPERTIES
-        PREFIX ""
-        SUFFIX ".pyd"
-    )
-else()
-    set_target_properties(espeakbridge PROPERTIES
-        PREFIX ""
-    )
-endif()
-
-install(TARGETS espeakbridge
-    LIBRARY DESTINATION .
-    RUNTIME DESTINATION .
-)
-
-
