@@ -27,7 +27,7 @@ if(ANDROID)
         message(STATUS "${PKG_NAME} installed successfully.")
     endfunction()
 
-    set(TERMUX_PACKAGES espeak python-onnxruntime)
+    set(TERMUX_PACKAGES espeak python-onnxruntime autoconf automake)
     foreach(PKG IN LISTS TERMUX_PACKAGES)
         try_install_pkg(${PKG})
     endforeach()
