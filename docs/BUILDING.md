@@ -40,6 +40,10 @@ python3 -m build
 
 [espeak-ng][] is used via a small Python bridge in `espeakbridge.c` which uses Python's [limited API][limited-api]. This allows the use of Python's [stable ABI][stable-abi], which means Piper wheels only need to be built once for each platform (Linux, Mac, Windows) instead of for each platform **and** Python version.
 
+### `espeakbridge.c` Python Extension
+
+The `espeakbridge.c` file is compiled as a Python C extension (`piper.espeakbridge`) during the `pip install` process. This is handled by `setup.py` using `setuptools.Extension`. This ensures that the C functions for interacting with `espeak-ng` are directly accessible from Python, enabling the phonemization process. The `setup.py` script is configured to locate the necessary `espeak-ng` headers and libraries from the `espeak-ng` build directory within `_skbuild` to correctly compile this extension.
+
 We build upstream [espeak-ng][] since they added the `espeak_TextToPhonemesWithTerminator` that Piper depends on. This function gets phonemes for text as well as the "terminator" that ends each text clause, such as a comma or period. Piper requires this terminator because punctuation is passed on to the voice model as "phonemes" so they can influence synthesis. For example, a voice trained with statements (ends with "."), questions (ends with "?"), and exclamations (ends with "!") may pronounce sentences ending in each punctuation mark differently. Commas, colons, and semicolons are also useful for proper pauses in synthesized audio.
 
 <!-- Links -->

@@ -50,3 +50,39 @@ If my planned action fails this check—if it is a tactical solution that underm
 
 ---
 
+## Current Bug: `espeakbridge` ImportError during `pip install`
+
+**Problem:**
+After `pip install .`, the `piper` executable fails with an `ImportError: cannot import name 'espeakbridge' from 'piper'`. This indicates that the `espeakbridge` C extension, which is crucial for `espeak-ng` phonemization, is not being correctly built or linked into the Python package.
+
+**Attempts to Fix:**
+
+1.  **Initial `setup.py` Modification (Adding `Extension`):**
+    *   **Action:** Modified `setup.py` to explicitly define `piper.espeakbridge` as a `setuptools.Extension`, pointing its `sources` to `src/piper/espeakbridge.c`.
+    *   **Rationale:** This was intended to instruct the build system to compile `espeakbridge.c` into a Python-importable shared library (`.so` file).
+    *   **Outcome:** The `pip install` failed with an error: "setup script specifies an absolute path: /data/data/com.termux/files/home/downloads/GitHub/piper1-gpl/src/piper/espeakbridge.c".
+
+2.  **Path Correction in `setup.py` (Relative `sources`):**
+    *   **Action:** Changed the `sources` path in `setup.py` from `str(MODULE_DIR / "espeakbridge.c")` (which resolved to an absolute path) to a direct relative string: `"src/piper/espeakbridge.c"`.
+    *   **Rationale:** `setuptools` requires paths in `Extension` definitions to be relative to `setup.py`.
+    *   **Outcome:** The `pip install` *still* failed with the exact same "setup script specifies an absolute path" error, pointing to the same absolute path. This suggests that `setuptools` or `skbuild` is performing an internal path resolution that converts the relative path back into an absolute one before the final build step, or that the error message is misleading.
+
+3.  **Path Correction in `setup.py` (Relative `include_dirs` and `library_dirs`):**
+    *   **Action:** Changed `include_dirs` and `library_dirs` within the `Extension` definition to also use relative paths (`"build/espeak-ng-install/include"` and `"build/espeak-ng-install/lib"`).
+    *   **Rationale:** To ensure all paths provided to the `Extension` are relative, in case the issue was with these arguments.
+    *   **Outcome:** The `pip install` *still* failed with the exact same "setup script specifies an absolute path" error.
+
+4.  **Revert `include_dirs` and `library_dirs`:**
+    *   **Action:** Reverted `include_dirs` and `library_dirs` back to using `Path(__file__).parent` as they were not the direct cause of the absolute path error.
+    *   **Rationale:** To isolate the problem to the `sources` argument or the interaction between `setuptools.Extension` and `skbuild`.
+
+**Current Hypothesis:**
+The persistent "absolute path" error, despite providing relative paths in `setup.py`, indicates a deeper interaction issue between `setuptools.Extension` and `skbuild` (which uses CMake). It appears that `skbuild` might be resolving these paths to absolute paths internally before passing them to the underlying build system, leading to `setuptools` complaining.
+
+**Next Steps (Plan):**
+
+1.  **Remove `espeakbridge_ext` from `setup.py`:** The current approach of defining `espeakbridge.c` as a separate `setuptools.Extension` seems problematic with `skbuild`'s path handling.
+2.  **Integrate `espeakbridge.c` compilation directly into `libpiper/CMakeLists.txt`:** This is the more robust and idiomatic way to handle C/C++ components when using CMake. I will modify `libpiper/CMakeLists.txt` to compile `espeakbridge.c` and link it into `libpiper.so`. This will ensure that `espeakbridge`'s functionality is part of the main `libpiper.so` shared library.
+3.  **Verify Python-C interface:** After modifying CMake, I will need to ensure that the Python code in `piper/phonemize_espeak.py` can correctly call the C functions exposed by `libpiper.so` (which will now include the `espeakbridge` functionality). This might involve using `ctypes` or ensuring the C functions are exposed in a way that `libpiper.so` can be directly loaded and its symbols accessed.
+
+This approach leverages CMake's strengths for managing C/C++ builds and avoids the potential path resolution conflicts encountered with `setuptools.Extension` in this specific setup.
