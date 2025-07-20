@@ -121,13 +121,7 @@ If the automated build (Plan A) fails, it is almost always due to an issue with 
     ```
     Examine the output carefully for specific errors.
 
-6.  **Patching (Last Resort)**: If you encounter linking errors related to incorrect library versions (e.g., it's looking for `libonnxruntime.so.1` but you only have `libonnxruntime.so`), you may need to use `patchelf`. This is an advanced step and should only be attempted if the error messages specifically indicate a version mismatch.
 
-    ```bash
-    # Example: Make a binary look for libonnxruntime.so instead of a versioned file
-    # (You would run this on the compiled piper library inside _skbuild)
-    patchelf --replace-needed libonnxruntime.so.1 libonnxruntime.so /path/to/compiled/piper/library.so
-    ```
 
 ### What This Means for the User (Overall):
 
