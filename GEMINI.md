@@ -86,3 +86,28 @@ The persistent "absolute path" error, despite providing relative paths in `setup
 3.  **Verify Python-C interface:** After modifying CMake, I will need to ensure that the Python code in `piper/phonemize_espeak.py` can correctly call the C functions exposed by `libpiper.so` (which will now include the `espeakbridge` functionality). This might involve using `ctypes` or ensuring the C functions are exposed in a way that `libpiper.so` can be directly loaded and its symbols accessed.
 
 This approach leverages CMake's strengths for managing C/C++ builds and avoids the potential path resolution conflicts encountered with `setuptools.Extension` in this specific setup.
+
+## Tactical Decision: Handling `espeakbridge.c` Absolute Path Error
+
+**Problem Summary:**
+The `pip install` process consistently fails with the error: "setup script specifies an absolute path: `/data/data/com.termux/files/home/downloads/GitHub/piper1-gpl/src/piper/espeakbridge.c`". This error originates from `setuptools` (used by `skbuild`), which rejects absolute paths for extension sources.
+
+**Analysis:**
+1.  **`espeakbridge.c`'s Role:** This C source file provides the C-level interface to the `espeak-ng` library. It is intended to be compiled *into* the core native library, `libpiper.so`, not as a standalone Python C extension.
+2.  **`skbuild`'s Misinterpretation:** `skbuild` (the build backend for `pip` that integrates with CMake) automatically scans Python package directories (like `src/piper/`). When it finds `espeakbridge.c` there, it implicitly assumes it's a standalone Python C extension.
+3.  **Absolute Path Generation:** Due to this misinterpretation, `skbuild` (or the underlying build system it invokes) generates an absolute path to `espeakbridge.c` when attempting to build it as a separate extension. This absolute path is then passed to `setuptools`, triggering the error.
+4.  **No Explicit `Extension` in `setup.py`:** Our review of `setup.py` confirms that `espeakbridge.c` is *not* explicitly defined as a `setuptools.Extension`. The problem is `skbuild`'s implicit behavior, not a direct instruction from `setup.py`.
+
+**Proposed Solution (Future Action):**
+The most idiomatic and robust solution is to explicitly include `espeakbridge.c` as a source file for the `piper` shared library within `libpiper/CMakeLists.txt`. This will tell CMake (and thus `skbuild`) that `espeakbridge.c` is part of `libpiper.so`, preventing `skbuild` from misinterpreting it as a separate Python extension and generating the problematic absolute path.
+
+**Rationale for this Tactical Decision:**
+This approach ensures that `espeakbridge.c` is handled correctly within the native library build, aligning with the project's architectural intent. It avoids fighting against `skbuild`'s implicit behaviors by providing explicit instructions at the CMake level where the native library is defined.
+
+**Current State (Pre-Modification):**
+The `CMakeLists.txt` currently includes debug messages for `PATH` and `LD_LIBRARY_PATH`, and explicitly sets `Python_VERSION_MAJOR` and `Python_VERSION_MINOR`. The `libpiper/CMakeLists.txt` is in its original state regarding `espeakbridge.c` sources.
+
+**Next Steps:**
+1.  Update `GEMINI.md` with this tactical decision.
+2.  Commit `GEMINI.md`, `CMakeLists.txt`, and `libpiper/CMakeLists.txt` (if modified since last commit) to establish a clear checkpoint.
+3.  Only *then* proceed with the modification to `libpiper/CMakeLists.txt` as described in the "Proposed Solution".

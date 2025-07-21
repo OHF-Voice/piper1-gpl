@@ -3,8 +3,12 @@ project(piper)
 
 if(ANDROID)
     # Termux/Android specific handling
-    set(TERMUX_PREFIX "/data/data/com.termux/files/usr")
-    set(PYTHON_SITE_PACKAGES "${TERMUX_PREFIX}/lib/python${Python_VERSION_MAJOR}.${Python_VERSION_MINOR}/site-packages")
+    set(PREFIX "/data/data/com.termux/files/usr")
+    set(Python_VERSION_MAJOR 3)
+    set(Python_VERSION_MINOR 12)
+    set(PYTHON_SITE_PACKAGES "${PREFIX}/lib/python${Python_VERSION_MAJOR}.${Python_VERSION_MINOR}/site-packages")
+    message(STATUS "DEBUG: Environment PATH: $ENV{PATH}")
+    message(STATUS "DEBUG: Environment LD_LIBRARY_PATH: $ENV{LD_LIBRARY_PATH}")
 
     # Helper function to install Termux packages
     function(try_install_pkg PKG_NAME)
@@ -33,20 +37,23 @@ if(ANDROID)
     endforeach()
 
     # Check for ONNX Runtime library and headers
+    message(STATUS "DEBUG: Searching for ONNX Runtime library in:")
+    message(STATUS "DEBUG:   ${PYTHON_SITE_PACKAGES}/onnxruntime/capi")
+    message(STATUS "DEBUG:   ${PREFIX}/lib")
     find_library(ONNX_RUNTIME_LIB onnxruntime PATHS
         ${PYTHON_SITE_PACKAGES}/onnxruntime/capi
-        ${TERMUX_PREFIX}/lib
-        NO_DEFAULT_PATH
+        ${PREFIX}/lib
     )
+    message(STATUS "DEBUG: Searching for ONNX Runtime include dir in:")
+    message(STATUS "DEBUG:   ${PREFIX}/include")
     find_path(ONNX_RUNTIME_INCLUDE_DIR onnxruntime_c_api.h PATHS
-        ${TERMUX_PREFIX}/include
-        NO_DEFAULT_PATH
+        ${PREFIX}/include
     )
+    message(STATUS "DEBUG: ONNX_RUNTIME_LIB = ${ONNX_RUNTIME_LIB}")
+    message(STATUS "DEBUG: ONNX_RUNTIME_INCLUDE_DIR = ${ONNX_RUNTIME_INCLUDE_DIR}")
     if(NOT ONNX_RUNTIME_LIB OR NOT ONNX_RUNTIME_INCLUDE_DIR)
         message(FATAL_ERROR "ONNX Runtime library or headers not found after installation. Please verify the installation.")
     endif()
-    message(STATUS "Found ONNX Runtime library: ${ONNX_RUNTIME_LIB}")
-    message(STATUS "Found ONNX Runtime include dir: ${ONNX_RUNTIME_INCLUDE_DIR}")
 
     # --- Build espeak-ng from source ---
     include(ExternalProject)
@@ -75,7 +82,7 @@ if(ANDROID)
         BYPRODUCTS ${ESPEAKNG_LIB} ${ESPEAK_NG_INSTALL_DIR}/share/espeak-ng-data
         BUILD_IN_SOURCE 1
         # Ensure Termux binaries are in PATH for autogen.sh and its sub-processes
-        ENV PATH "${TERMUX_PREFIX}/bin:$ENV{PATH}"
+        ENV PATH "${PREFIX}/bin:$ENV{PATH}"
     )
 
     add_subdirectory(libpiper)
@@ -90,6 +97,7 @@ if(ANDROID)
     include_directories(
         ${ESPEAKNG_INCLUDE_DIR}
         ${PYTHON_INCLUDE_DIRS}
-        ${TERMUX_PREFIX}/include/python${Python_VERSION_MAJOR}.${Python_VERSION_MINOR}
+        ${PREFIX}/include/python${Python_VERSION_MAJOR}.${PYTHON_VERSION_MINOR}
+        ${PREFIX}/include
     )
 endif()
