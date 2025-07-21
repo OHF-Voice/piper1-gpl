@@ -87,6 +87,8 @@ if(ANDROID)
 
     add_subdirectory(libpiper)
 
+    
+
     # Add dependency to ensure espeak-ng is built before our main target
     add_dependencies(piper espeak_ng_external)
 

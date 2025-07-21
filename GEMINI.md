@@ -48,66 +48,66 @@ If my planned action fails this check—if it is a tactical solution that underm
 
 **Termux Environment and Shebangs:** Its crucial to understand that Termux operates on top of the Android OS. When a scripts shebang (e.g., `#!/bin/sh`) is invoked, it typically resolves to the *native Android system shell* (`/bin/sh`), not the Termux shell, unless specific Termux virtualization commands are employed. This native shell is often minimal and may not be suitable for complex build scripts. To ensure scripts are run by the full-featured Termux shell, explicitly invoke them with `/data/data/com.termux/files/usr/bin/bash -c "..."` or ensure the `PATH` is correctly set for the sub-process. If unsure about the nature of a binary or script, use `file <path>` or `ldd <path>` to inspect it.
 
----
+When testing the ready `piper` package do use the audio models which are located in `~/.cache/piper`. Do use piper's --help to learn how to
 
-## Current Bug: `espeakbridge` ImportError during `pip install`
+## Known Issues
 
-**Problem:**
-After `pip install .`, the `piper` executable fails with an `ImportError: cannot import name 'espeakbridge' from 'piper'`. This indicates that the `espeakbridge` C extension, which is crucial for `espeak-ng` phonemization, is not being correctly built or linked into the Python package.
+### ImportError: espeakbridge
 
-**Attempts to Fix:**
+When attempting to run the `piper` command, an `ImportError` occurs, indicating that the `espeakbridge` module cannot be imported:
 
-1.  **Initial `setup.py` Modification (Adding `Extension`):**
-    *   **Action:** Modified `setup.py` to explicitly define `piper.espeakbridge` as a `setuptools.Extension`, pointing its `sources` to `src/piper/espeakbridge.c`.
-    *   **Rationale:** This was intended to instruct the build system to compile `espeakbridge.c` into a Python-importable shared library (`.so` file).
-    *   **Outcome:** The `pip install` failed with an error: "setup script specifies an absolute path: /data/data/com.termux/files/home/downloads/GitHub/piper1-gpl/src/piper/espeakbridge.c".
+```
+ImportError: cannot import name 'espeakbridge' from 'piper' (/data/data/com.termux/files/usr/lib/python3.12/site-packages/piper/__init__.py)
+```
 
-2.  **Path Correction in `setup.py` (Relative `sources`):**
-    *   **Action:** Changed the `sources` path in `setup.py` from `str(MODULE_DIR / "espeakbridge.c")` (which resolved to an absolute path) to a direct relative string: `"src/piper/espeakbridge.c"`.
-    *   **Rationale:** `setuptools` requires paths in `Extension` definitions to be relative to `setup.py`.
-    *   **Outcome:** The `pip install` *still* failed with the exact same "setup script specifies an absolute path" error, pointing to the same absolute path. This suggests that `setuptools` or `skbuild` is performing an internal path resolution that converts the relative path back into an absolute one before the final build step, or that the error message is misleading.
+This suggests that the native `espeakbridge` component, crucial for phonemization, is is not being correctly built or installed during the `pip install .` process. This is the primary blocker for the `piper` package's functionality.
 
-3.  **Path Correction in `setup.py` (Relative `include_dirs` and `library_dirs`):**
-    *   **Action:** Changed `include_dirs` and `library_dirs` within the `Extension` definition to also use relative paths (`"build/espeak-ng-install/include"` and `"build/espeak-ng-install/lib"`).
-    *   **Rationale:** To ensure all paths provided to the `Extension` are relative, in case the issue was with these arguments.
-    *   **Outcome:** The `pip install` *still* failed with the exact same "setup script specifies an absolute path" error.
+## Build Fixes and Progress
 
-4.  **Revert `include_dirs` and `library_dirs`:**
-    *   **Action:** Reverted `include_dirs` and `library_dirs` back to using `Path(__file__).parent` as they were not the direct cause of the absolute path error.
-    *   **Rationale:** To isolate the problem to the `sources` argument or the interaction between `setuptools.Extension` and `skbuild`.
+### espeakbridge ImportError Resolved (Manual Build)
 
-**Current Hypothesis:**
-The persistent "absolute path" error, despite providing relative paths in `setup.py`, indicates a deeper interaction issue between `setuptools.Extension` and `skbuild` (which uses CMake). It appears that `skbuild` might be resolving these paths to absolute paths internally before passing them to the underlying build system, leading to `setuptools` complaining.
+The persistent `ImportError: cannot import name 'espeakbridge'` has been addressed. The root cause was the `espeakbridge.c` C extension not being properly compiled and integrated into the Python package.
 
-**Next Steps (Plan):**
+**Solution:**
 
-1.  **Remove `espeakbridge_ext` from `setup.py`:** The current approach of defining `espeakbridge.c` as a separate `setuptools.Extension` seems problematic with `skbuild`'s path handling.
-2.  **Integrate `espeakbridge.c` compilation directly into `libpiper/CMakeLists.txt`:** This is the more robust and idiomatic way to handle C/C++ components when using CMake. I will modify `libpiper/CMakeLists.txt` to compile `espeakbridge.c` and link it into `libpiper.so`. This will ensure that `espeakbridge`'s functionality is part of the main `libpiper.so` shared library.
-3.  **Verify Python-C interface:** After modifying CMake, I will need to ensure that the Python code in `piper/phonemize_espeak.py` can correctly call the C functions exposed by `libpiper.so` (which will now include the `espeakbridge` functionality). This might involve using `ctypes` or ensuring the C functions are exposed in a way that `libpiper.so` can be directly loaded and its symbols accessed.
+`setup.py` was modified to explicitly define `espeakbridge` as a `setuptools.Extension`. This involved:
 
-This approach leverages CMake's strengths for managing C/C++ builds and avoids the potential path resolution conflicts encountered with `setuptools.Extension` in this specific setup.
+*   Adding `import sys` and `from setuptools import Extension`.
+*   Defining an `espeakbridge_extension` object, specifying `src/piper/espeakbridge.c` as its source.
+*   Using `sys.prefix` to dynamically determine the `espeak-ng` include and library paths for portability (e.g., `Path(sys.prefix) / "include" / "espeak-ng"`).
+*   Adding `espeakbridge_extension` to the `ext_modules` list in the `setup()` call.
 
-## Tactical Decision: Handling `espeakbridge.c` Absolute Path Error
+**Verification (Manual Build):**
 
-**Problem Summary:**
-The `pip install` process consistently fails with the error: "setup script specifies an absolute path: `/data/data/com.termux/files/home/downloads/GitHub/piper1-gpl/src/piper/espeakbridge.c`". This error originates from `setuptools` (used by `skbuild`), which rejects absolute paths for extension sources.
-
-**Analysis:**
-1.  **`espeakbridge.c`'s Role:** This C source file provides the C-level interface to the `espeak-ng` library. It is intended to be compiled *into* the core native library, `libpiper.so`, not as a standalone Python C extension.
-2.  **`skbuild`'s Misinterpretation:** `skbuild` (the build backend for `pip` that integrates with CMake) automatically scans Python package directories (like `src/piper/`). When it finds `espeakbridge.c` there, it implicitly assumes it's a standalone Python C extension.
-3.  **Absolute Path Generation:** Due to this misinterpretation, `skbuild` (or the underlying build system it invokes) generates an absolute path to `espeakbridge.c` when attempting to build it as a separate extension. This absolute path is then passed to `setuptools`, triggering the error.
-4.  **No Explicit `Extension` in `setup.py`:** Our review of `setup.py` confirms that `espeakbridge.c` is *not* explicitly defined as a `setuptools.Extension`. The problem is `skbuild`'s implicit behavior, not a direct instruction from `setup.py`.
-
-**Proposed Solution (Future Action):**
-The most idiomatic and robust solution is to explicitly include `espeakbridge.c` as a source file for the `piper` shared library within `libpiper/CMakeLists.txt`. This will tell CMake (and thus `skbuild`) that `espeakbridge.c` is part of `libpiper.so`, preventing `skbuild` from misinterpreting it as a separate Python extension and generating the problematic absolute path.
-
-**Rationale for this Tactical Decision:**
-This approach ensures that `espeakbridge.c` is handled correctly within the native library build, aligning with the project's architectural intent. It avoids fighting against `skbuild`'s implicit behaviors by providing explicit instructions at the CMake level where the native library is defined.
-
-**Current State (Pre-Modification):**
-The `CMakeLists.txt` currently includes debug messages for `PATH` and `LD_LIBRARY_PATH`, and explicitly sets `Python_VERSION_MAJOR` and `Python_VERSION_MINOR`. The `libpiper/CMakeLists.txt` is in its original state regarding `espeakbridge.c` sources.
+Running `python3 setup.py build_ext --inplace` successfully compiled `espeakbridge.c` into `espeakbridge.cpython-312.so` and placed it in the `src/piper` directory, resolving the compilation aspect of the `ImportError`.
 
 **Next Steps:**
-1.  Update `GEMINI.md` with this tactical decision.
-2.  Commit `GEMINI.md`, `CMakeLists.txt`, and `libpiper/CMakeLists.txt` (if modified since last commit) to establish a clear checkpoint.
-3.  Only *then* proceed with the modification to `libpiper/CMakeLists.txt` as described in the "Proposed Solution".
+
+While the C extension now compiles, the `piper` package itself is not yet fully discoverable by the Python interpreter in a standard way (e.g., `python3 -m piper` still fails). This indicates that a proper installation (e.g., via `pip install .` or `pip install -e .`) is still required to make the package and its entry points accessible in the Python environment.
+
+
+## Build Fixes and Progress
+
+### espeakbridge ImportError Resolved (Final Solution)
+
+The persistent `ImportError: cannot import name 'espeakbridge'` has been fully addressed, and the `piper` package now installs and functions correctly with `pip install .` (including build isolation).
+
+**Root Cause:**
+
+The primary issue was the `espeakbridge.c` C extension not being properly compiled and integrated into the Python package, specifically due to `setuptools` misinterpreting relative paths as absolute within `pip`'s isolated build environment.
+
+**Solution:**
+
+`setup.py` was modified to explicitly define `espeakbridge` as a `setuptools.Extension` with a robust relative path construction. This involved:
+
+*   Adding `import os` and ensuring `import sys` and `from setuptools import Extension` are present.
+*   Defining an `espeakbridge_extension` object.
+*   Crucially, setting the `sources` argument for `espeakbridge_extension` to use `os.path.relpath(os.path.join(os.path.dirname(__file__), "src", "piper", "espeakbridge.c"))`. This ensures the path is always correctly interpreted as relative to `setup.py`, even in isolated build environments.
+*   Using `sys.prefix` to dynamically determine the `espeak-ng` include and library paths for portability (e.g., `str(Path(sys.prefix) / "include" / "espeak-ng")`).
+*   Adding `espeakbridge_extension` to the `ext_modules` list in the `setup()` call.
+
+**Verification:**
+
+Running `pip install . -v` now successfully builds and installs the `piper` package, including the `espeakbridge` C extension. The `piper` command is accessible in the PATH, and speech generation functions as expected.
+
+

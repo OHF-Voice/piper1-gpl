@@ -3,7 +3,10 @@
 import itertools
 from pathlib import Path
 
+import os
+import sys
 from skbuild import setup
+from setuptools import Extension
 
 MODULE_DIR = Path(__file__).parent / "src" / "piper"
 PIPER_DATA_FILES = ["py.typed", "espeakbridge.pyi"]
@@ -18,6 +21,15 @@ TASHKEEL_DATA_FILES = [
         "hint_id_map.json",
     )
 ]
+
+# Define espeakbridge extension
+espeakbridge_extension = Extension(
+    "piper.espeakbridge",
+    sources=[os.path.relpath(os.path.join(os.path.dirname(__file__), "src", "piper", "espeakbridge.c"))],
+    include_dirs=[str(Path(sys.prefix) / "include" / "espeak-ng")],
+    library_dirs=[str(Path(sys.prefix) / "lib")],
+    libraries=["espeak-ng"],
+)
 
 setup(
     name="piper-tts",
@@ -87,4 +99,5 @@ setup(
             "piper = piper.__main__:main",
         ]
     },
+    ext_modules=[espeakbridge_extension], # Added espeakbridge extension
 )

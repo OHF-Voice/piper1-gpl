@@ -106,14 +106,22 @@ If the automated build (Plan A) fails, this guide will help you diagnose the pro
     ping -c 3 google.com
     ```
 
-3.  **Re-run with Verbose Output**: The most important step for debugging is to get detailed logs.
+3.  **Manually Build Python Extensions**: If the `ImportError: cannot import name 'espeakbridge'` occurs, it indicates that the `espeakbridge.c` Python C extension was not compiled correctly. This can be manually triggered:
 
     ```bash
-    pip install . -v
+    python3 setup.py build_ext --inplace
     ```
-    Examine the output carefully. The error will be near the end.
+    This command compiles the `espeakbridge.c` file and places the resulting `espeakbridge.cpython-*.so` file directly into the `src/piper` directory, making it available for import.
+
+4.  **Make Package Discoverable (Development Mode)**: After building extensions, for the `piper` package to be discoverable by `python3 -m piper` in a development environment, perform an editable install:
+
+    ```bash
+    pip install -e .
+    ```
+    This creates a link to your source directory, allowing Python to find the `piper` module and its compiled extensions.
 
 4.  **Interpreting Common Errors**:
+    *   **`ImportError: cannot import name 'espeakbridge'`**: This error indicates that the `espeakbridge.c` Python C extension was not compiled or installed correctly. Ensure you have followed the manual build steps for Python extensions (step 3 in Plan B) and performed an editable install (step 4 in Plan B).
     *   **`Failed to clone espeak-ng repository`**: This indicates a network problem or that `git` is not installed correctly. Check your connection.
     *   **`sh: 1: ./autogen.sh: not found`**: This was an error we fixed. If you see it, ensure your `CMakeLists.txt` is up-to-date with the version in this repository.
     *   **`make: *** No targets specified and no makefile found`**: This was another error we fixed. It means the `espeak-ng` build is happening in the wrong directory. Ensure your `CMakeLists.txt` contains the `BUILD_IN_SOURCE 1` directive for the external project.
@@ -125,6 +133,14 @@ If the automated build (Plan A) fails, this guide will help you diagnose the pro
         ```
         Look at the `espeak_ng_external-configure-out.log` and `espeak_ng_external-build-out.log` files for specific compiler errors.
 
+
+    *   `setup.py` was modified to explicitly define `espeakbridge` as a `setuptools.Extension` with a robust relative path construction. This involved:
+
+*   Adding `import os` and ensuring `import sys` and `from setuptools import Extension` are present.
+*   Defining an `espeakbridge_extension` object.
+*   Crucially, setting the `sources` argument for `espeakbridge_extension` to use `os.path.relpath(os.path.join(os.path.dirname(__file__), "src", "piper", "espeakbridge.c"))`. This ensures the path is always correctly interpreted as relative to `setup.py`, even in isolated build environments.
+*   Using `sys.prefix` to dynamically determine the `espeak-ng` include and library paths for portability (e.g., `str(Path(sys.prefix) / "include" / "espeak-ng")`).
+*   Adding `espeakbridge_extension` to the `ext_modules` list in the `setup()` call.
 
 
 ### What This Means for the User (Overall):
