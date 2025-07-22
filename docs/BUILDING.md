@@ -59,7 +59,7 @@ Building Piper on Termux (Android) involves specific considerations due to its u
 
 ### Plan A: Automated Build (Recommended)
 
-This approach leverages modifications to `CMakeLists.txt` to automate the handling of native dependencies, aiming for a seamless `pip install` experience. The build process is as follows:
+This approach leverages `scikit-build` to integrate Python's packaging with a sophisticated `CMakeLists.txt` that automates the handling of native dependencies. This is designed for a seamless `pip install` experience. The build process is as follows:
 
 1.  **Initial Prerequisites**: Before running `pip install`, ensure you have the fundamental build tools installed via `pkg`. These are essential for CMake and the overall build process:
 
@@ -73,12 +73,12 @@ This approach leverages modifications to `CMakeLists.txt` to automate the handli
     pip install .
     ```
 
-3.  **Automated Dependency Management (What Happens Next)**: When you run the install command, the `CMakeLists.txt` script takes over and performs several automated steps:
-    *   **Installs System Packages**: It uses the Termux `pkg` command to automatically install `espeak`, `python-onnxruntime`, `autoconf`, and `automake`. These are required for the subsequent build steps.
-    *   **Verifies ONNX Runtime**: It checks that the `onnxruntime` library (from the `python-onnxruntime` package) is correctly installed and located.
-    *   **Clones and Builds `espeak-ng`**: To avoid version and ABI incompatibilities with the system-provided `espeak-ng` package, the `CMakeLists.txt` now automatically clones and compiles `espeak-ng` from source during the build process. This ensures that Piper is built against the exact version of `espeak-ng` it requires. This local build is used exclusively by Piper, avoiding any potential conflicts with the system version.
-    *   **Handles Data Installation (The "Hack")**: A small but critical modification was made to the build process. The required `espeak-ng-data` directory is now copied into its final package location *before* the main `piper` library is compiled. This is done using a `PRE_BUILD` custom command in CMake. This architectural choice is a workaround for a complex timing issue where the standard `install` command would fail because the data from the external `espeak-ng` project wasn't available at the right moment. This ensures the data is ready when the final package is assembled.
-    *   **Builds Piper**: Finally, it compiles the Piper library itself, linking it against the locally built `espeak-ng` and the system's `onnxruntime`.
+3.  **Automated Dependency Management (What Happens Next)**: When you run the install command, `pip` invokes `scikit-build`, which in turn executes the project's `CMakeLists.txt` script to perform several automated steps:
+    *   **Installs System Packages**: A custom CMake function (`try_install_pkg`) calls the Termux `pkg` command to automatically install `espeak`, `python-onnxruntime`, `autoconf`, and `automake`.
+    *   **Verifies ONNX Runtime**: The script checks that the `onnxruntime` library and headers (from the `python-onnxruntime` package) are correctly installed and located.
+    *   **Clones and Builds a Private `espeak-ng`**: To guarantee ABI compatibility and avoid conflicts with system-wide versions, the build process uses CMake's `ExternalProject_Add` command. This clones the `espeak-ng` repository and compiles it from source. This local build is used exclusively by Piper.
+    *   **Handles Data Installation**: The `espeak-ng` external project is configured to install its necessary data files (e.g., `espeak-ng-data`) as part of its own build. The main `piper` build then declares a dependency on this external project, which ensures all of `espeak-ng`'s components, including its data, are fully built and installed *before* the main Piper library begins to compile. This resolves a critical build-order dependency.
+    *   **Builds Piper**: Finally, CMake compiles the Piper library itself, linking it against the private, locally-built `espeak-ng` and the system's `onnxruntime`.
 
 This entire process is designed to be automatic. Once you start the `pip install` command, you can step away while it completes.
 
