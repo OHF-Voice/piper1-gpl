@@ -1,6 +1,8 @@
-# 🛠️ Building Manually
+# 🛠️ Building Piper-TTS: A Visual Guide
 
-We use [scikit-build-core](https://github.com/scikit-build/scikit-build-core) along with [cmake](https://cmake.org/) to build a Python module that directly embeds [espeak-ng][].
+![Build Architecture](../Architecture_materials/Mermaid%20Piper%2002.png)
+
+This guide provides a detailed look at building the `piper-tts` Python module, which directly embeds [espeak-ng][].
 
 You will need the following system packages installed (`apt-get`):
 

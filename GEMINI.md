@@ -110,4 +110,13 @@ The primary issue was the `espeakbridge.c` C extension not being properly compil
 
 Running `pip install . -v` now successfully builds and installs the `piper` package, including the `espeakbridge` C extension. The `piper` command is accessible in the PATH, and speech generation functions as expected.
 
+## README.md Cleanup and Simplification
 
+The `README.md` file has been significantly updated and simplified to reflect the successful build process and provide a clearer user experience. Key changes include:
+
+*   **Introduction of a "Quick Start (Recommended Method)" section**: This new section highlights the streamlined `pip install .` process, making it the primary and easiest way for users to get started.
+*   **Removal of obsolete manual build instructions**: All detailed, step-by-step guides for manual compilation, ONNX Runtime handling, and `patchelf` usage have been removed as they are no longer necessary with the automated build.
+*   **Consolidation and update of usage examples**: The various usage examples have been combined into a single, comprehensive "Usage" section. All examples now correctly demonstrate how to use the installed Python package via `python3 -m piper`.
+*   **Refined "Environment Variables" section**: This section has been updated to reflect the relevant environment variables for the Python API and CLI, removing outdated information.
+*   **Removal of the Debian package section**: The section detailing the `piper-tts-cli` deb package has been removed as it is no longer the primary or recommended installation method.
+*   **Retention of "Building from Source & Development"**: This section remains and now explicitly points to `docs/BUILDING.md` for advanced users who need detailed build information or wish to contribute to development.

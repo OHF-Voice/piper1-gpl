@@ -33,7 +33,7 @@ espeakbridge_extension = Extension(
 
 setup(
     name="piper-tts",
-    version="1.3.0",
+    version="1.3.5-termux",
     description="Fast and local neural text-to-speech engine",
     url="http://github.com/OHF-voice/piper1-gpl",
     license="GPL-3.0-or-later",
