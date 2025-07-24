@@ -6,7 +6,10 @@ You will need the following system packages installed (`apt-get`):
 
 * `build-essential`
 * `cmake`
+* `git`
 * `ninja-build`
+* `python3-dev`
+* `python3-venv`
 
 To create a dev environment:
 
