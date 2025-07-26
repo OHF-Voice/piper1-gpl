@@ -16,7 +16,9 @@ espeak-ng-data/
 _skbuild/
 *.egg-info/
 
-src/piper/train/vits/monotonic_align/core.c
+#src/piper/train/vits/monotonic_align/core.c
 *.so
 
 lightning_logs/
+espeak-ng/
+third_party/

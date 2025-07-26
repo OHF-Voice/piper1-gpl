@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Union
 
 _DIR = Path(__file__).parent
-ESPEAK_DATA_DIR = _DIR / "espeak-ng-data"
+ESPEAK_DATA_DIR = "/data/data/com.termux/files/usr/share/espeak-ng-data"
 
 
 class EspeakPhonemizer:
