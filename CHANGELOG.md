@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.3.5-termux
+
+- Termux build improvements and unified CMakeLists.txt
+
 ## 1.3.0
 
 - Moved development to OHF-Voice org

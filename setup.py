@@ -3,14 +3,14 @@
 import itertools
 from pathlib import Path
 
+import os
+import sys
 from skbuild import setup
+from setuptools import Extension
 
 MODULE_DIR = Path(__file__).parent / "src" / "piper"
 PIPER_DATA_FILES = ["py.typed", "espeakbridge.pyi"]
-ESPEAK_NG_DATA_DIR = MODULE_DIR / "espeak-ng-data"
-ESPEAK_NG_DATA_FILES = [
-    f.relative_to(MODULE_DIR) for f in ESPEAK_NG_DATA_DIR.rglob("*") if f.is_file()
-]
+ESPEAK_NG_DATA_FILES = []
 TASHKEEL_DATA_DIR = MODULE_DIR / "tashkeel"
 TASHKEEL_DATA_FILES = [
     (TASHKEEL_DATA_DIR / f_name).relative_to(MODULE_DIR)
@@ -22,9 +22,18 @@ TASHKEEL_DATA_FILES = [
     )
 ]
 
+# Define espeakbridge extension
+espeakbridge_extension = Extension(
+    "piper.espeakbridge",
+    sources=[os.path.relpath(os.path.join(os.path.dirname(__file__), "src", "piper", "espeakbridge.c"))],
+    include_dirs=[str(Path(sys.prefix) / "include" / "espeak-ng")],
+    library_dirs=[str(Path(sys.prefix) / "lib")],
+    libraries=["espeak-ng"],
+)
+
 setup(
     name="piper-tts",
-    version="1.3.0",
+    version="1.3.6",
     description="Fast and local neural text-to-speech engine",
     url="http://github.com/OHF-voice/piper1-gpl",
     license="GPL-3.0-or-later",
@@ -90,4 +99,5 @@ setup(
             "piper = piper.__main__:main",
         ]
     },
+    ext_modules=[espeakbridge_extension], # Added espeakbridge extension
 )

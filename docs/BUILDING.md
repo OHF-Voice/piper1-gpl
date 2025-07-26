@@ -1,6 +1,6 @@
-# 🛠️ Building Manually
+# 🛠️ Building Piper-TTS: A Visual Guide
 
-We use [scikit-build-core](https://github.com/scikit-build/scikit-build-core) along with [cmake](https://cmake.org/) to build a Python module that directly embeds [espeak-ng][].
+This guide provides a detailed look at building the `piper-tts` Python module, which directly embeds [espeak-ng][].
 
 You will need the following system packages installed (`apt-get`):
 
@@ -40,9 +40,129 @@ python3 -m build
 
 [espeak-ng][] is used via a small Python bridge in `espeakbridge.c` which uses Python's [limited API][limited-api]. This allows the use of Python's [stable ABI][stable-abi], which means Piper wheels only need to be built once for each platform (Linux, Mac, Windows) instead of for each platform **and** Python version.
 
+### `espeakbridge.c` Python Extension
+
+The `espeakbridge.c` file is compiled as a Python C extension (`piper.espeakbridge`) during the `pip install` process. This is handled by `setup.py` using `setuptools.Extension`. This ensures that the C functions for interacting with `espeak-ng` are directly accessible from Python, enabling the phonemization process. The `setup.py` script is configured to locate the necessary `espeak-ng` headers and libraries from the `espeak-ng` build directory within `_skbuild` to correctly compile this extension.
+
 We build upstream [espeak-ng][] since they added the `espeak_TextToPhonemesWithTerminator` that Piper depends on. This function gets phonemes for text as well as the "terminator" that ends each text clause, such as a comma or period. Piper requires this terminator because punctuation is passed on to the voice model as "phonemes" so they can influence synthesis. For example, a voice trained with statements (ends with "."), questions (ends with "?"), and exclamations (ends with "!") may pronounce sentences ending in each punctuation mark differently. Commas, colons, and semicolons are also useful for proper pauses in synthesized audio.
 
 <!-- Links -->
 [espeak-ng]: https://github.com/espeak-ng/espeak-ng
 [limited-api]: https://docs.python.org/3/c-api/stable.html#limited-c-api
 [stable-abi]: https://docs.python.org/3/c-api/stable.html#stable-abi
+
+---
+
+## 📱 Termux (Android) Specifics
+
+Building Piper on Termux (Android) involves specific considerations due to its unique environment. This section outlines the recommended approach (Plan A) for a streamlined `pip install` experience, and a manual troubleshooting guide (Plan B) if automated steps encounter issues.
+
+### Plan A: Automated Build (Recommended)
+
+This approach leverages `scikit-build` to integrate Python's packaging with a sophisticated `CMakeLists.txt` that automates the handling of native dependencies. This is designed for a seamless `pip install` experience. The build process is as follows:
+
+1.  **Initial Prerequisites**: Before running `pip install`, ensure you have the fundamental build tools installed via `pkg`. These are essential for CMake and the overall build process:
+
+    ```bash
+    pkg update && pkg install build-essential cmake git ninja-build
+    ```
+
+2.  **Run Installation**: With the prerequisites in place, simply run the standard pip installation command from the project root:
+
+    ```bash
+    pip install .
+    ```
+
+3.  **Automated Dependency Management (What Happens Next)**: When you run the install command, `pip` invokes `scikit-build`, which in turn executes the project's `CMakeLists.txt` script to perform several automated steps:
+    *   **Installs System Packages**: A custom CMake function (`try_install_pkg`) calls the Termux `pkg` command to automatically install `espeak`, `python-onnxruntime`, `autoconf`, and `automake`.
+    *   **Verifies ONNX Runtime**: The script checks that the `onnxruntime` library and headers (from the `python-onnxruntime` package) are correctly installed and located.
+    *   **Clones and Builds a Private `espeak-ng`**: To guarantee ABI compatibility and avoid conflicts with system-wide versions, the build process uses CMake's `ExternalProject_Add` command. This clones the `espeak-ng` repository and compiles it from source. This local build is used exclusively by Piper.
+    *   **Handles Data Installation**: The `espeak-ng` external project is configured to install its necessary data files (e.g., `espeak-ng-data`) as part of its own build. The main `piper` build then declares a dependency on this external project, which ensures all of `espeak-ng`'s components, including its data, are fully built and installed *before* the main Piper library begins to compile. This resolves a critical build-order dependency.
+    *   **Builds Piper**: Finally, CMake compiles the Piper library itself, linking it against the private, locally-built `espeak-ng` and the system's `onnxruntime`.
+
+![Build Architecture](../Architecture_materials/Mermaid_Piper_02.png)
+
+This entire process is designed to be automatic. Once you start the `pip install` command, you can step away while it completes.
+
+
+
+
+
+
+### Plan B: Manual Verification and Troubleshooting
+
+If the automated build (Plan A) fails, this guide will help you diagnose the problem. The issue is almost always related to system dependencies, network connectivity, or a stale build cache.
+
+1.  **Clean the Build Environment**: Before anything else, if a build has failed, you must start with a clean slate. This is the most common fix.
+
+    ```bash
+    # If piper-tts was partially installed, remove it
+    pip uninstall piper-tts
+
+    # CRITICAL: Remove the build cache directory from the project root
+    rm -rf _skbuild
+    ```
+
+2.  **Verify Prerequisites and Network**: Ensure the core packages are installed and that you have network access, which is required for the `git clone` step.
+
+    ```bash
+    # Install/verify core build tools
+    pkg install -y build-essential cmake git ninja-build autoconf automake
+
+    # Check network connectivity
+    ping -c 3 google.com
+    ```
+
+3.  **Manually Build Python Extensions**: If the `ImportError: cannot import name 'espeakbridge'` occurs, it indicates that the `espeakbridge.c` Python C extension was not compiled correctly. This can be manually triggered:
+
+    ```bash
+    python3 setup.py build_ext --inplace
+    ```
+    This command compiles the `espeakbridge.c` file and places the resulting `espeakbridge.cpython-*.so` file directly into the `src/piper` directory, making it available for import.
+
+4.  **Make Package Discoverable (Development Mode)**: After building extensions, for the `piper` package to be discoverable by `python3 -m piper` in a development environment, perform an editable install:
+
+    ```bash
+    pip install -e .
+    ```
+    This creates a link to your source directory, allowing Python to find the `piper` module and its compiled extensions.
+
+4.  **Interpreting Common Errors**:
+    *   **`ImportError: cannot import name 'espeakbridge'`**: This error indicates that the `espeakbridge.c` Python C extension was not compiled or installed correctly. Ensure you have followed the manual build steps for Python extensions (step 3 in Plan B) and performed an editable install (step 4 in Plan B).
+    *   **`Failed to clone espeak-ng repository`**: This indicates a network problem or that `git` is not installed correctly. Check your connection.
+    *   **`sh: 1: ./autogen.sh: not found`**: This was an error we fixed. If you see it, ensure your `CMakeLists.txt` is up-to-date with the version in this repository.
+    *   **`make: *** No targets specified and no makefile found`**: This was another error we fixed. It means the `espeak-ng` build is happening in the wrong directory. Ensure your `CMakeLists.txt` contains the `BUILD_IN_SOURCE 1` directive for the external project.
+    *   **`file INSTALL cannot find ... espeak-ng-data`**: This was the final timing error we fixed. It means the `espeak-ng-data` directory wasn't copied correctly. Ensure your `libpiper/CMakeLists.txt` uses the `add_custom_command` logic.
+    *   **Errors inside `espeak-ng` compilation**: If the error occurs during the `make` step for `espeak_ng_external` (you'll see C++ compiler errors), the problem is likely with the build environment itself. You can inspect the detailed logs created by the external project build:
+        ```bash
+        # Find the log files after a failed build
+        ls -l _skbuild/linux-aarch64-3.12/cmake-build/espeak_ng_external-prefix/src/
+        ```
+        Look at the `espeak_ng_external-configure-out.log` and `espeak_ng_external-build-out.log` files for specific compiler errors.
+
+
+    *   `setup.py` was modified to explicitly define `espeakbridge` as a `setuptools.Extension` with a robust relative path construction. This involved:
+
+*   Adding `import os` and ensuring `import sys` and `from setuptools import Extension` are present.
+*   Defining an `espeakbridge_extension` object.
+*   Crucially, setting the `sources` argument for `espeakbridge_extension` to use `os.path.relpath(os.path.join(os.path.dirname(__file__), "src", "piper", "espeakbridge.c"))`. This ensures the path is always correctly interpreted as relative to `setup.py`, even in isolated build environments.
+*   Using `sys.prefix` to dynamically determine the `espeak-ng` include and library paths for portability (e.g., `str(Path(sys.prefix) / "include" / "espeak-ng")`).
+*   Adding `espeakbridge_extension` to the `ext_modules` list in the `setup()` call.
+
+
+### Autotest:
+
+Run `pytest` simply. 
+
+
+### What This Means for the User (Overall):
+
+This fork aims to provide a significantly smoother experience for Termux users building Piper. The primary goal (Plan A) is to automate the complex native dependency handling, transforming the installation into a "go for coffee" experience. Even if Plan A requires troubleshooting, Plan B provides clear manual steps to resolve common issues.
+
+*   **Automated Dependency Management**: The `CMakeLists.txt` now proactively manages the installation of `espeak` and `python-onnxruntime`, reducing manual steps.
+*   **Robust Checks**: The build includes checks for `espeak-ng` version compatibility, ensuring the correct API is available.
+*   **Clear Error Messages**: If automated steps fail, the script provides specific `FATAL_ERROR` messages with guidance for manual resolution.
+*   **Simplified Installation**: The overall goal is to transform the installation into a "go for coffee" experience. After installing the initial `pkg` prerequisites, a simple `pip install piper-tts` will manage the compilation and linking of all native components, allowing the user to focus on using Piper rather than troubleshooting build errors.
+*   **Reduced Manual Intervention**: The need for manual extraction of `libonnxruntime.so` from `.aar` files or using `patchelf` for library path adjustments is significantly reduced (Plan A) or provided as clear fallback steps (Plan B).
+
+This updated documentation reflects the desired state after the `CMakeLists.txt` modifications are integrated into the main project. It aims to provide a much smoother experience for Termux users.
