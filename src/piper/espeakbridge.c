@@ -3,6 +3,7 @@
 #define Py_LIMITED_API 0x03090000
 #include <Python.h>
 #include <espeak-ng/speak_lib.h>
+#include <espeak-ng/espeak_ng.h>
 
 #define CLAUSE_INTONATION_FULL_STOP 0x00000000
 #define CLAUSE_INTONATION_COMMA 0x00001000
@@ -40,7 +41,7 @@ static PyObject *py_set_voice(PyObject *self, PyObject *args) {
         return NULL;
     }
 
-    if (espeak_SetVoiceByName(voice) < 0) {
+    if (espeak_SetVoiceByName(voice) != ENS_OK) {
         PyErr_Format(PyExc_RuntimeError, "Failed to set voice: %s", voice);
         return NULL;
     }
