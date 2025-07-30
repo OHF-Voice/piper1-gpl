@@ -4,7 +4,7 @@ import argparse
 import io
 import json
 import logging
-import time
+import os.path
 import wave
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -71,7 +71,7 @@ def main() -> None:
     parser.add_argument(
          "--media",
         action="append",
-        default=[str(Path.cwd())],
+        default=["str(Path.cwd())"],
         help="Data directory to check for downloaded models (default: current directory)",
     )
     args = parser.parse_args()
@@ -194,6 +194,13 @@ def main() -> None:
             status=200
         )
 
+    # Check that filename is not attempting directory traversal
+    def _is_safe_filename(filename) -> bool:
+        current_directory = os.path.abspath(os.curdir)
+        requested_path = os.path.abspath(os.path.relpath(filename, start=current_directory))
+        common_prefix = os.path.commonprefix([requested_path, current_directory])
+        return (common_prefix == current_directory)
+
     def __app_synthesize() -> bytes:
         """Synthesize audio from text.
 
@@ -286,8 +293,15 @@ def main() -> None:
         )
 
         filename: Optional[str] = request.values.get("filename")
-        if (filename is not None):
-            wave_output = f"{args.media}/{filename}.wav"
+        if filename is not None:
+            if not _is_safe_filename(filename):
+                raise ValueError("Invalid filename")
+            else:
+                # Remove trailing dot
+                while filename.endswith("."):
+                    filename = filename[:-1]
+                normpath = os.path.normpath(f"{args.media}/{filename}")
+                wave_output = f"{normpath}.wav"
         else:
             wave_output = io.BytesIO()
 
