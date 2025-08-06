@@ -91,7 +91,7 @@
 //#define UNI_ALGO_DISABLE_FULL_CASE
 // Note that this define can be deprecated in the future.
 // Disable full case mapping and use simple case mapping instead.
-// The define is only usefull if you need compatibility with legacy implementations
+// The define is only useful if you need compatibility with legacy implementations
 // that don't expect that an UTF-16 string can grow in size.
 // Note that UTF-8 string still can grow in size even with simple case mapping.
 // Can be used to achieve the maximum performance when you are 100% sure that you
@@ -161,7 +161,7 @@ static_assert(std::is_unsigned<type_char32>::value && sizeof(type_char32) >= siz
 #endif
 #endif
 
-// Using any of the followings defines will disable a part of safe layer.
+// Using any of the following defines will disable a part of safe layer.
 // Use them only for perf testing to make sure safe layer doesn't mess things up.
 //#define UNI_ALGO_FORCE_CPP_ITERATORS // Force to use C++ iterators in low-level
 //#define UNI_ALGO_FORCE_C_POINTERS // Force to use C pointers in low-level
@@ -275,7 +275,7 @@ struct array
     { if (pos >= N) kms(); return internal_array[pos]; }
     constexpr const_reference operator[](size_type pos) const noexcept
     { if (pos >= N) kms(); return internal_array[pos]; }
-    // Low-level must never use the folowing functions but they might be helpfull for tests
+    // Low-level must never use the following functions but they might be helpful for tests
     constexpr size_type size() const noexcept { return N; }
     constexpr size_type max_size() const noexcept { return N; }
     constexpr bool empty() const noexcept { return N == 0; }
@@ -542,7 +542,7 @@ using type_array = std::array<T, N>;
 // Note that in C mode it isn't a problem so it need to be suppressed only in C++ mode.
 // Suppress -Wold-style-cast here too, low-level uses C casts to suppress conversion warnings
 // so we need to suppress the warning about suppressing warnings.
-// Note that even though these warnings are supressed it doesn't mean stupid things with
+// Note that even though these warnings are suppressed it doesn't mean stupid things with
 // casts are allowed that means the low-level must use casts only to suppress warnings.
 // -Wmissing-braces is just broken in GCC but works fine in Clang.
 #ifdef __cplusplus
@@ -55514,7 +55514,7 @@ uaix_static it_out_utf16 codepoint_to_utf16(type_codept c, it_out_utf16 dst)
 
 // impl_* versions don't have always inline attribute. They can be used on a higher level
 // and a compiler should decide better what to do with them.
-// Hovewer we have inline versions of these functions for a higher level too
+// However we have inline versions of these functions for a higher level too
 // they can be used for a critical performance code to guarantee to omit function calls always.
 
 uaix_const type_codept impl_iter_replacement = 0xFFFD; // iter_replacement
@@ -59691,7 +59691,7 @@ uaix_static size_t case_title_utf16(it_in_utf16 first, it_end_utf16 last, it_out
 #endif // UNI_ALGO_DISABLE_SEGMENT_WORD
 
 // This is just an example how sort keys can look with this simple collation algorithm.
-// They are not that usefull so these functions are disabled for now.
+// They are not that useful so these functions are disabled for now.
 #ifdef UNI_ALGO_EXPERIMENTAL
 
 #ifndef UNI_ALGO_DISABLE_COLLATE
@@ -61799,7 +61799,7 @@ UNI_ALGO_IMPL_NAMESPACE_END
 UNI_ALGO_IMPL_NAMESPACE_BEGIN
 
 // https://www.unicode.org/reports/tr44/#Property_APIs
-// Some recomendations but mostly useless except maybe default values
+// Some recommendations but mostly useless except maybe default values
 
 // These values are stable it is guaranteed that
 // they will never change and a wrapper can rely on that
@@ -62338,7 +62338,7 @@ uaix_static bool stages_qc_yes_ns_nfc(type_codept c, size_t* const count_ns)
      * functions because we need to count initial/trailing
      * non-starters in NFKD for Stream-Safe Text Process.
      * This disallow us to use NFC lower bound for example,
-     * that is much higher, to achive a better performance,
+     * that is much higher, to achieve a better performance,
      * but it cannot be done other way.
      * We still can use real lower bounds in
      * normalization detection functions below.
@@ -63835,7 +63835,7 @@ uaix_static bool inline_norm_iter_nfc(struct impl_norm_iter_state* const s, type
     // but we can use the same idea to make them a bit faster.
     // TODO: we can emulate the fast loop from impl_utf8_nfc much better.
     // ---
-    // Very usefull todo. Much better how? I don't remember what I meant by this.
+    // Very useful todo. Much better how? I don't remember what I meant by this.
     // I hate myself so much sometimes.
 
     c = norm_safe_cp(c);
@@ -64599,7 +64599,7 @@ using ref_view = std::ranges::ref_view<R>;
 // std::owning_view is available in C++20 starting with __cpp_lib_ranges >= 202110L
 // but we still enable our owning_view only in C++17 so in C++20 inside all view sometimes
 // std::owning_view will be used and sometimes std::ranges::subrange it shouldn't create any problems.
-// C++ Commitee just thought it is a good idea to add std::ranges that is still WIP to C++20
+// C++ Committee just thought it is a good idea to add std::ranges that is still WIP to C++20
 // for God sake just make them experimental or something in C++20 and add them to C++23.
 // Now I'm forced to deal with that crap. Thank you so much bros much appreciate it.
 #if !defined(__cpp_lib_ranges) || defined(UNI_ALGO_FORCE_CPP17_RANGES) || (__cpp_lib_ranges >= 202110L)
@@ -64647,7 +64647,7 @@ namespace detail::rng {
 // https://mariusbancila.ro/blog/2020/06/06/a-custom-cpp20-range-view/
 // For adaptors without parameters adaptor_closure object from this article is enough so we just call them adaptor
 // and for adaptors with parameters both adaptor and adaptor_closure objects are needed
-// For C++20 we still use them because C++ Commitee just want people to suffer and custom adaptors still not available
+// For C++20 we still use them because C++ Committee just want people to suffer and custom adaptors still not available
 // For C++23 where such adaptors will be available we want to use them
 // They will be called: std::ranges::range_adaptor_closure
 // https://stackoverflow.com/questions/71689137/what-is-the-best-way-to-drop-last-element-using-c20-ranges
@@ -67128,7 +67128,7 @@ public:
     }
 
 #ifdef UNI_ALGO_EXPERIMENTAL
-    // This might be usefull for tests
+    // This might be useful for tests
     //uaiw_constexpr unsigned char General_Category() const noexcept { return static_cast<unsigned char>(detail::impl_prop_get_gc_prop(data)); }
 #endif
 };
@@ -71474,12 +71474,12 @@ private:
 public:
     macedonian_to_latin_docs() = delete;
 
-    // Buffer size 2 is enought to translit Macedonian to Latin
+    // Buffer size 2 is enough to translit Macedonian to Latin
     // the smaller the buffer the faster the translit view works.
     static constexpr std::size_t buf_size = 2;
 
     // The function below is used by the translit view.
-    // Translit view is very powerfull it can do everything that
+    // Translit view is very powerful it can do everything that
     // una::ranges::filter_view and una::ranges::transform_view can do
     // and much more but it can be dangerous for example it's possible
     // to cause an endless loop when it used improperly so it's important

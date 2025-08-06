@@ -337,7 +337,7 @@ class MultiHeadAttention(nn.Module):
         """
         batch, heads, length, _ = x.size()
 
-        # padd along column
+        # pad along column
         # x = F.pad(x, convert_pad_shape([[0, 0], [0, 0], [0, 0], [0, length - 1]]))
         x = F.pad(x, (0, length - 1, 0, 0, 0, 0, 0, 0))
         x_flat = x.view([batch, heads, (length * length) + (length * (length - 1))])

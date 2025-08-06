@@ -9,7 +9,7 @@ class AudioPlayer:
     """Plays raw audio using ffplay."""
 
     def __init__(self, sample_rate: int) -> None:
-        """Initialzes audio player."""
+        """Initializes audio player."""
         self.sample_rate = sample_rate
         self._proc: Optional[subprocess.Popen] = None
 

@@ -11,7 +11,7 @@
 - Change Python API:
     - `PiperVoice.synthesize` takes a `SynthesisConfig` and generates `AudioChunk` objects
     - `PiperVoice.synthesize_raw` is removed
-- Add seperate `piper.download_voices` utility for downloading voices from HuggingFace
+- Add separate `piper.download_voices` utility for downloading voices from HuggingFace
 - Allow text as CLI argument: `piper ... -- "Text to speak"`
 - Allow text from one or more files with `--input-file <FILE>`
 - Excluding any file output arguments will play audio directly with `ffplay`
