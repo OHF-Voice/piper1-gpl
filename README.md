@@ -36,6 +36,7 @@ People/projects using Piper:
 * [POTaTOS](https://www.youtube.com/watch?v=Dz95q6XYjwY)
 * [Narration Studio](https://github.com/phyce/Narration-Studio)
 * [Basic TTS](https://basictts.com/) - Simple online text-to-speech converter.
+* [QuickPiperAudiobook](https://github.com/C-Loftus/QuickPiperAudiobook/) - Create audiobooks from any text content in one command 
 
 [![A library from the Open Home Foundation](https://www.openhomefoundation.org/badges/ohf-library.png)](https://www.openhomefoundation.org/)
 
