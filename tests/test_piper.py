@@ -134,11 +134,10 @@ def test_synthesize() -> None:
 def test_synthesize_wav() -> None:
     """Test text to audio synthesis with WAV output."""
     voice = PiperVoice.load(_TEST_VOICE)
-
+    # directly to file
+    voice.synthesize_wav("This is a test. This is another test.", wav_file= "test.wav")
     with io.BytesIO() as wav_io:
-        wav_output: wave.Wave_write = wave.open(wav_io, "wb")
-        with wav_output:
-            voice.synthesize_wav("This is a test. This is another test.", wav_output)
+        
 
         wav_io.seek(0)
         wav_input: wave.Wave_read = wave.open(wav_io, "rb")

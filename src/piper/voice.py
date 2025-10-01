@@ -16,7 +16,7 @@ import onnxruntime
 
 from .config import PhonemeType, PiperConfig, SynthesisConfig
 from .const import BOS, EOS, PAD
-from .phoneme_ids import phonemes_to_ids
+# from .phoneme_ids import phonemes_to_ids
 from .phonemize_espeak import ESPEAK_DATA_DIR, EspeakPhonemizer
 from .tashkeel import TashkeelDiacritizer
 
@@ -238,6 +238,7 @@ class PiperVoice:
         :param phonemes: List of phonemes.
         :return: List of phoneme ids.
         """
+        from .phoneme_ids import phonemes_to_ids
         return phonemes_to_ids(phonemes, self.config.phoneme_id_map)
 
     def synthesize(
@@ -353,7 +354,7 @@ class PiperVoice:
     def synthesize_wav(
         self,
         text: str,
-        wav_file: wave.Wave_write,
+        wav_file: Path | str,
         syn_config: Optional[SynthesisConfig] = None,
         set_wav_format: bool = True,
         include_alignments: bool = False,
@@ -371,6 +372,7 @@ class PiperVoice:
         """
         alignments: list[PhonemeAlignment] = []
         first_chunk = True
+        wav_file: wave.Wave_write = wave.open(wav_file, "wb")
         for audio_chunk in self.synthesize(
             text, syn_config=syn_config, include_alignments=include_alignments
         ):
@@ -390,7 +392,7 @@ class PiperVoice:
 
         if include_alignments:
             return alignments
-
+        
         return None
 
     def phoneme_ids_to_audio(
