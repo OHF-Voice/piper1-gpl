@@ -2,7 +2,7 @@ import logging
 
 import inspect
 import tempfile
-import argparse
+import sys
 
 import torch
 from lightning.pytorch.cli import LightningCLI
@@ -51,23 +51,34 @@ def clean_checkpoint(checkpoint_path):
     return temp_file.name
 
 def main():
-    parser = argparse.ArgumentParser(description="VITS Lightning CLI with checkpoint cleaning")
-    parser.add_argument("--ckpt_path", type=str, help="Path to the checkpoint file to clean")
-    args = parser.parse_args()
-
+    
     logging.basicConfig(level=logging.INFO)
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.allow_tf32 = True
     torch.backends.cudnn.deterministic = False
 
-    if args.ckpt_path:
-        cleaned_ckpt_path = clean_checkpoint(args.ckpt_path)
+    ckpt_path = None
+    if '--ckpt_path' in sys.argv:
+        try:
+            ckpt_idx = sys.argv.index('--ckpt_path')
+            if ckpt_idx + 1 < len(sys.argv):
+                ckpt_path = sys.argv[ckpt_idx + 1]
+        except (IndexError, ValueError):
+            pass
+
+    if ckpt_path:
+        cleaned_ckpt_path = clean_checkpoint(ckpt_path)
+        # issue a ckpt path replacement to fixed ckpt path
+        if '--ckpt_path' in sys.argv:
+            ckpt_idx = sys.argv.index('--ckpt_path')
+            if ckpt_idx + 1 < len(sys.argv):
+                sys.argv[ckpt_idx + 1] = cleaned_ckpt_path
+
     else:
-        cleaned_ckpt_path = None
         _LOGGER.info("No checkpoint path provided; skipping checkpoint cleaning.")
 
     _cli = VitsLightningCLI(  # noqa: ignore=F841
-        VitsModel, VitsDataModule, trainer_defaults={"max_epochs": -1}, args={"ckpt_path": cleaned_ckpt_path} if cleaned_ckpt_path else {}
+        VitsModel, VitsDataModule, trainer_defaults={"max_epochs": -1}
     )
 
 
