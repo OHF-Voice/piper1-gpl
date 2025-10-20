@@ -374,7 +374,7 @@ class VitsDataModule(L.LightningDataModule):
             first_sec = first_chunk * seconds_per_chunk
             first_sec = max(0, first_sec - self.keep_seconds_before_silence)
             first_sample = int(
-                math.floor(num_original_samples * (offset_sec / audio_seconds))
+                math.floor(num_original_samples * (first_sec / audio_seconds))
             )
 
             last_sec = (last_chunk + 1) * seconds_per_chunk
