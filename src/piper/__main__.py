@@ -190,7 +190,18 @@ def main() -> None:
             wav_path = output_dir / f"{time.monotonic_ns()}.wav"
             wav_file = wave.open(str(wav_path), "wb")
             with wav_file:
-                lines_to_wav()
+                wav_params_set = False
+                for i, audio_chunk in enumerate(voice.synthesize(line, syn_config)):
+                    if not wav_params_set:
+                        wav_file.setframerate(audio_chunk.sample_rate)
+                        wav_file.setsampwidth(audio_chunk.sample_width)
+                        wav_file.setnchannels(audio_chunk.sample_channels)
+                        wav_params_set = True
+
+                    if i > 0:
+                        wav_file.writeframes(silence_int16_bytes)
+
+                    wav_file.writeframes(audio_chunk.audio_int16_bytes)
 
             _LOGGER.info("Wrote %s", wav_path)
     else:
