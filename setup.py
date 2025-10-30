@@ -34,7 +34,7 @@ setup(
     classifiers=[
         "Development Status :: 3 - Alpha",
         "Intended Audience :: Developers",
-        "Topic :: Text Processing :: Linguistic",
+        "Topic :: Multimedia :: Sound/Audio :: Speech",
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
