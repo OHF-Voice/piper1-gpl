@@ -278,8 +278,8 @@ class PiperVoice:
 
             if syn_config.normalize_audio:
                 max_val = np.max(np.abs(audio))
-                if max_val < 1e-8:
-                    # Prevent division by zero
+                if max_val == 0 or max_val < 1e-8:
+                    # Prevent division by zero or near-zero values
                     audio = np.zeros_like(audio)
                 else:
                     audio = audio / max_val
