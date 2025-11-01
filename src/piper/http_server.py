@@ -68,6 +68,12 @@ def main() -> None:
         "--debug", action="store_true", help="Print DEBUG messages to console"
     )
     args = parser.parse_args()
+
+    app = create_app(args)
+    app.run(host=args.host, port=args.port)
+
+
+def create_app(args: Any) -> Flask:
     logging.basicConfig(level=logging.DEBUG if args.debug else logging.INFO)
     _LOGGER.debug(args)
 
@@ -283,7 +289,7 @@ def main() -> None:
 
             return wav_io.getvalue()
 
-    app.run(host=args.host, port=args.port)
+    return app
 
 
 if __name__ == "__main__":
