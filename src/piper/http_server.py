@@ -5,6 +5,7 @@ import io
 import json
 import logging
 import wave
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from urllib.request import urlopen
@@ -69,11 +70,28 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    app = create_app(args)
+    app_args_params = {
+        k: v for k, v in args.__dict__.items() if k != "host" and k != "port"
+    }
+    app = create_app(AppArgs(**app_args_params))
     app.run(host=args.host, port=args.port)
 
 
-def create_app(args: Any) -> Flask:
+@dataclass
+class AppArgs:
+    model: str
+    speaker: Optional[int]
+    length_scale: Optional[float]
+    noise_scale: Optional[float]
+    noise_w_scale: Optional[float]
+    cuda: bool
+    sentence_silence: float
+    data_dir: list[str]
+    download_dir: Optional[str]
+    debug: bool
+
+
+def create_app(args: AppArgs) -> Flask:
     logging.basicConfig(level=logging.DEBUG if args.debug else logging.INFO)
     _LOGGER.debug(args)
 
