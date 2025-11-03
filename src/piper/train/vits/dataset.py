@@ -237,7 +237,7 @@ class VitsDataModule(L.LightningDataModule):
         with open(self.csv_path, "r", encoding="utf-8") as csv_file:
             reader = csv.reader(csv_file, delimiter="|")
             for row_number, row in enumerate(reader, start=1):
-                utt_id, text = row[0], row[1]
+                utt_id, text = row[0], row[-1]
                 audio_path = self.audio_dir / utt_id
                 if not audio_path.exists():
                     audio_path = self.audio_dir / f"{utt_id}.wav"
