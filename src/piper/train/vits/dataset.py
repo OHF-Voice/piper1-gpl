@@ -7,7 +7,7 @@ import logging
 import math
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional, Sequence, Union
+from typing import Dict, List, Optional, Sequence, Union
 
 import librosa
 import lightning as L
@@ -101,22 +101,55 @@ class VitsDataModule(L.LightningDataModule):
         self.keep_seconds_before_silence = keep_seconds_before_silence
         self.keep_seconds_after_silence = keep_seconds_after_silence
 
+        self.piper_config: Optional[PiperConfig] = None
+        self.is_multispeaker = self.num_speakers > 1
+
     def prepare_data(self):
         self.cache_dir.mkdir(parents=True, exist_ok=True)
+
+        self.piper_config = PiperConfig(
+            num_symbols=self.num_symbols,
+            num_speakers=self.num_speakers,
+            sample_rate=self.sample_rate,
+            espeak_voice=self.espeak_voice,
+            phoneme_id_map=DEFAULT_PHONEME_ID_MAP,
+            phoneme_type=PhonemeType.ESPEAK,
+            piper_version="1.3.0",
+        )
+
+        speaker_id_map: Dict[str, int] = {}
+        if self.is_multispeaker:
+            # Generate speaker id map
+            with open(self.csv_path, "r", encoding="utf-8") as csv_file:
+                reader = csv.reader(csv_file, delimiter="|")
+                for row in reader:
+                    assert (
+                        len(row) >= 3
+                    ), "Expected CSV columns for multi-speaker metadata: wav|speaker|text"
+                    speaker_name = row[1]
+                    if speaker_name in speaker_id_map:
+                        continue
+
+                    speaker_id_map[speaker_name] = len(speaker_id_map)
+
+            assert (
+                len(speaker_id_map) <= self.num_speakers
+            ), "More speakers in metadata than num_speakers"
+
+            if len(speaker_id_map) != self.num_speakers:
+                _LOGGER.warning(
+                    "Expected %s speakers in the dataset, got %s",
+                    self.num_speakers,
+                    len(speaker_id_map),
+                )
+
+            self.piper_config.speaker_id_map = speaker_id_map
 
         # Write config
         self.config_path.parent.mkdir(parents=True, exist_ok=True)
         with open(self.config_path, "w", encoding="utf-8") as config_file:
             json.dump(
-                PiperConfig(
-                    num_symbols=self.num_symbols,
-                    num_speakers=self.num_speakers,
-                    sample_rate=self.sample_rate,
-                    espeak_voice=self.espeak_voice,
-                    phoneme_id_map=DEFAULT_PHONEME_ID_MAP,
-                    phoneme_type=PhonemeType.ESPEAK,
-                    piper_version="1.3.0",
-                ).to_dict(),
+                self.piper_config.to_dict(),
                 config_file,
                 ensure_ascii=False,
                 indent=2,
@@ -131,6 +164,14 @@ class VitsDataModule(L.LightningDataModule):
             reader = csv.reader(csv_file, delimiter="|")
             for row_number, row in enumerate(reader, start=1):
                 utt_id, text = row[0], row[-1]
+                speaker_id: Optional[int] = None
+                if self.is_multispeaker:
+                    assert (
+                        len(row) >= 3
+                    ), "Expected CSV columns for multi-speaker metadata: wav|speaker|text"
+                    speaker_name = row[1]
+                    speaker_id = speaker_id_map[speaker_name]
+
                 audio_path = self.audio_dir / utt_id
                 if not audio_path.exists():
                     audio_path = self.audio_dir / f"{utt_id}.wav"
@@ -139,8 +180,9 @@ class VitsDataModule(L.LightningDataModule):
                     _LOGGER.warning("Missing audio file: %s", audio_path)
                     continue
 
-                cache_id = get_cache_id(row_number, text)
+                cache_id = get_cache_id(row_number, text, speaker_id=speaker_id)
 
+                # text
                 text_path = self.cache_dir / f"{cache_id}.txt"
                 if not text_path.exists():
                     text_path.write_text(text, encoding="utf-8")
@@ -232,12 +274,23 @@ class VitsDataModule(L.LightningDataModule):
         _LOGGER.info("Processed %s utterance(s)", num_utterances)
 
     def setup(self, stage: str) -> None:
+        assert self.piper_config is not None
+
         all_utts: list[CachedUtterance] = []
+        speaker_id_map = self.piper_config.speaker_id_map
 
         with open(self.csv_path, "r", encoding="utf-8") as csv_file:
             reader = csv.reader(csv_file, delimiter="|")
             for row_number, row in enumerate(reader, start=1):
                 utt_id, text = row[0], row[-1]
+                speaker_id: Optional[int] = None
+                if self.is_multispeaker:
+                    assert (
+                        len(row) >= 3
+                    ), "Expected CSV columns for multi-speaker metadata: wav|speaker|text"
+                    speaker_name = row[1]
+                    speaker_id = speaker_id_map[speaker_name]
+
                 audio_path = self.audio_dir / utt_id
                 if not audio_path.exists():
                     audio_path = self.audio_dir / f"{utt_id}.wav"
@@ -246,7 +299,7 @@ class VitsDataModule(L.LightningDataModule):
                     _LOGGER.warning("Missing audio file: %s", audio_path)
                     continue
 
-                cache_id = get_cache_id(row_number, text)
+                cache_id = get_cache_id(row_number, text, speaker_id=speaker_id)
 
                 phoneme_ids_path = self.cache_dir / f"{cache_id}.phonemes.pt"
                 if not phoneme_ids_path:
@@ -286,6 +339,7 @@ class VitsDataModule(L.LightningDataModule):
                         audio_norm_path=audio_norm_path,
                         audio_spec_path=audio_spec_path,
                         text=text,
+                        speaker_id=speaker_id,
                     )
                 )
 
