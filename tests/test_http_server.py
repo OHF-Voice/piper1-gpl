@@ -4,7 +4,7 @@ import time
 from http.client import HTTPResponse
 from pathlib import Path
 from subprocess import PIPE, Popen
-from typing import Optional
+from typing import IO, Optional
 from urllib.request import Request, urlopen
 
 import pytest
@@ -14,10 +14,65 @@ from piper.http_server import AppArgs, create_app_args_from_env
 _DIR = Path(__file__).parent
 _TESTS_DIR = _DIR
 _TEST_VOICE = _TESTS_DIR / "test_voice.onnx"
-_GUNICORN = _TESTS_DIR.parent / ".venv/bin/gunicorn"
-_SOCKET = "127.0.0.1:34075"
+_VENV_BIN_DIR = _TESTS_DIR.parent / ".venv/bin"
+_GUNICORN = _VENV_BIN_DIR / "gunicorn"
+_PYTHON = _VENV_BIN_DIR / "python"
+_PORT = 34075
+_HOST = "127.0.0.1"
+_SOCKET = f"{_HOST}:{_PORT}"
 _START_TIMEOUT = 5
 _READY_TIMEOUT = 10
+
+
+def wait_for_message_in_stream(stream: IO[bytes], message: bytes) -> None:
+    start_time = time.time()
+    while True:
+        line = stream.readline()
+        if line.find(message) >= 0:
+            break
+        time.sleep(0.02)
+        assert time.time() - start_time < _START_TIMEOUT
+
+
+def assert_tts_endpoint_returns_WAF() -> None:
+    request = Request(
+        url=f"http://{_SOCKET}",
+        method="POST",
+        headers={"Content-Type": "application/json"},
+        data=b'{ "text": "Test." }',
+    )
+    response: HTTPResponse
+    with urlopen(request, timeout=_READY_TIMEOUT) as response:
+        assert 200 == response.status
+        body = response.read()
+        assert body.startswith(b"RIFFh\xac\x00\x00WAVEfmt ")
+
+
+def test_standalone_server() -> None:
+    process: Optional[Popen[bytes]] = None
+    try:
+        process = Popen(
+            [
+                str(_PYTHON),
+                "-m",
+                "piper.http_server",
+                "--host",
+                _HOST,
+                "--port",
+                str(_PORT),
+                "-m",
+                str(_TEST_VOICE),
+            ],
+            stderr=PIPE,
+        )
+        stderr = process.stderr
+        assert stderr is not None
+        wait_for_message_in_stream(stderr, b"Press CTRL+C to quit")
+
+        assert_tts_endpoint_returns_WAF()
+    finally:
+        if process is not None:
+            process.send_signal(15)
 
 
 def test_wsgi_tts() -> None:
@@ -35,28 +90,11 @@ def test_wsgi_tts() -> None:
                 "PIPER_MODEL": str(_TEST_VOICE),
             },
         )
-
         stderr = process.stderr
         assert stderr is not None
-        start_time = time.time()
-        while True:
-            line = stderr.readline()
-            if line.find(b"Listening at:") >= 0:
-                break
-            time.sleep(0.02)
-            assert time.time() - start_time < _START_TIMEOUT
+        wait_for_message_in_stream(stderr, b"Listening at:")
 
-        request = Request(
-            url=f"http://{_SOCKET}",
-            method="POST",
-            headers={"Content-Type": "application/json"},
-            data=b'{ "text": "Test." }',
-        )
-        response: HTTPResponse
-        with urlopen(request, timeout=_READY_TIMEOUT) as response:
-            assert 200 == response.status
-            body = response.read()
-            assert body.startswith(b"RIFFh\xac\x00\x00WAVEfmt ")
+        assert_tts_endpoint_returns_WAF()
     finally:
         if process is not None:
             process.send_signal(15)
