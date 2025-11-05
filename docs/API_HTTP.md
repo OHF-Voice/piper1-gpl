@@ -65,7 +65,7 @@ python3 -m piper.download_voices en_US-lessac-medium
 Run server:
 
 ```shell
-PIPER_MODEL=en_US-lessac-medium gunicorn 'piper.wsgi:create_app_from_env()'
+PIPER_MODEL=en_US-lessac-medium gunicorn 'piper.http_server:create_app_from_env()'
 ```
 
 The environment variables are similar

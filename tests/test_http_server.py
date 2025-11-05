@@ -1,4 +1,4 @@
-"""Tests for `wsgi.py`."""
+"""Tests for `http_server.py`."""
 
 import time
 from http.client import HTTPResponse
@@ -9,8 +9,7 @@ from urllib.request import Request, urlopen
 
 import pytest
 
-from piper.http_server import AppArgs
-from piper.wsgi import create_app_args_from_env
+from piper.http_server import AppArgs, create_app_args_from_env
 
 _DIR = Path(__file__).parent
 _TESTS_DIR = _DIR
@@ -25,7 +24,12 @@ def test_wsgi_tts() -> None:
     process: Optional[Popen[bytes]] = None
     try:
         process = Popen(
-            [str(_GUNICORN), "--bind", _SOCKET, "piper.wsgi:create_app_from_env()"],
+            [
+                str(_GUNICORN),
+                "--bind",
+                _SOCKET,
+                "piper.http_server:create_app_from_env()",
+            ],
             stderr=PIPE,
             env={
                 "PIPER_MODEL": str(_TEST_VOICE),
