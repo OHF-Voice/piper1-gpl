@@ -4,6 +4,7 @@
 
 - Add experimental support for alignments (see docs/ALIGNMENTS.md)
 - Raw phonemes no longer split sentences
+- Fix training for multi-speaker voices
 
 ## 1.3.0
 

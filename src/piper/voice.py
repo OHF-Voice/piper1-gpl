@@ -303,6 +303,7 @@ class PiperVoice:
                 for phoneme in itertools.chain([BOS], phonemes, [EOS]):
                     expected_ids = self.config.phoneme_id_map.get(phoneme, [])
 
+                    ids_to_check: Sequence[int]
                     if phoneme != EOS:
                         ids_to_check = list(itertools.chain(expected_ids, pad_ids))
                     else:

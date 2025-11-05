@@ -2,7 +2,7 @@
 
 import logging
 from pathlib import Path
-from typing import Dict, Union
+from typing import Dict, Optional, Union
 
 import numpy as np
 import torch
@@ -56,6 +56,12 @@ def load_state_dict(model, saved_state_dict):
     model.load_state_dict(new_state_dict)
 
 
-def get_cache_id(row_number: int, text: str, max_length: int = 50) -> str:
-    cache_id = str(row_number) + "_" + sanitize_filename(text)
+def get_cache_id(
+    row_number: int, text: str, max_length: int = 50, speaker_id: Optional[int] = None
+) -> str:
+    speaker_id_str = ""
+    if speaker_id is not None:
+        speaker_id_str = f"_{speaker_id}"
+
+    cache_id = str(row_number) + speaker_id_str + "_" + sanitize_filename(text)
     return cache_id[:max_length]
