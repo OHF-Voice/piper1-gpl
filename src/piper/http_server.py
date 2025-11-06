@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 from urllib.request import urlopen
 
-from flask import Flask, request
+from flask import Flask, request, jsonify
 
 from . import PiperVoice, SynthesisConfig
 from .download_voices import VOICES_JSON, download_voice
@@ -102,6 +102,10 @@ def main() -> None:
 
     # Create web server
     app = Flask(__name__)
+    
+    @app.route("/health", methods=["GET"])
+    def health_check():
+        return jsonify({'status': 'healthy'}), 200
 
     @app.route("/voices", methods=["GET"])
     def app_voices() -> Dict[str, Any]:
