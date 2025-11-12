@@ -221,7 +221,7 @@ def main() -> None:
                 )
                 speaker_id = args.speaker or 0
 
-        if (speaker_id is not None) and (speaker_id > voice.config.num_speakers):
+        if (speaker_id is not None) and (speaker_id >= voice.config.num_speakers):
             speaker_id = 0
 
         syn_config = SynthesisConfig(

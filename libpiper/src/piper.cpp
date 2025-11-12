@@ -25,7 +25,16 @@ struct piper_synthesizer *piper_create(const char *model_path,
     }
 
     std::ifstream config_stream(config_path_str);
-    auto config = json::parse(config_stream);
+    if (!config_stream.is_open()) {
+        return nullptr;
+    }
+    
+    json config;
+    try {
+        config = json::parse(config_stream);
+    } catch (const json::parse_error &) {
+        return nullptr;
+    }
 
     if (espeak_Initialize(AUDIO_OUTPUT_SYNCHRONOUS, 0, espeak_data_path, 0) <
         0) {
