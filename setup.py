@@ -47,7 +47,7 @@ setup(
     ],
     extras_require={
         "train": [
-            "torch>=2,<3",
+            "torch==2.8.0",
             "lightning>=2,<3",
             "tensorboard>=2,<3",
             "tensorboardX>=2,<3",
