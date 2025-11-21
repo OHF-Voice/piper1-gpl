@@ -118,12 +118,19 @@ class VitsDataModule(L.LightningDataModule):
     def prepare_data(self):
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
+        if self.phoneme_type == PhonemeType.PINYIN:
+            from piper.phonemize_chinese import PHONEME_TO_ID
+
+            phoneme_id_map = PHONEME_TO_ID
+        else:
+            phoneme_id_map = DEFAULT_PHONEME_ID_MAP
+
         self.piper_config = PiperConfig(
             num_symbols=self.num_symbols,
             num_speakers=self.num_speakers,
             sample_rate=self.sample_rate,
             espeak_voice=self.espeak_voice,
-            phoneme_id_map=DEFAULT_PHONEME_ID_MAP,
+            phoneme_id_map=phoneme_id_map,
             phoneme_type=self.phoneme_type,
             piper_version="1.3.0",
         )
