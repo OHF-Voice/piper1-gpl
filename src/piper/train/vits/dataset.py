@@ -19,7 +19,7 @@ from torch import FloatTensor, LongTensor
 from torch.utils.data import DataLoader, Dataset, random_split
 
 from piper.config import PhonemeType, PiperConfig
-from piper.phoneme_ids import DEFAULT_PHONEME_ID_MAP, phonemes_to_ids
+from piper.phoneme_ids import DEFAULT_PHONEME_ID_MAP, default_phonemes_to_ids
 from piper.phonemize_espeak import EspeakPhonemizer
 
 from .mel_processing import spectrogram_torch
@@ -233,6 +233,15 @@ class VitsDataModule(L.LightningDataModule):
                 if not phoneme_ids_path.exists():
                     if phonemes is None:
                         phonemes = phonemize(text)
+
+                    if self.phoneme_type == PhonemeType.PINYIN:
+                        from piper.phonemize_chinese import (
+                            phonemes_to_ids as chinese_phonemes_to_ids,
+                        )
+
+                        phonemes_to_ids = chinese_phonemes_to_ids
+                    else:
+                        phonemes_to_ids = default_phonemes_to_ids
 
                     phoneme_ids = list(
                         itertools.chain(
