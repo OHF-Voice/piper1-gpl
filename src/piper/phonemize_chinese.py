@@ -1,0 +1,276 @@
+"""Pinyin-based phonemization for Chinese using g2pM."""
+
+import logging
+import re
+from collections.abc import Mapping, Sequence
+from typing import Optional
+
+from g2pM import G2pM
+from unicode_rbnf import RbnfEngine
+
+from .const import BOS, EOS, PAD
+from .phoneme_ids import DEFAULT_PHONEME_ID_MAP
+
+_LOGGER = logging.getLogger(__name__)
+
+PINYIN_INITIALS = [
+    "zh",
+    "ch",
+    "sh",
+    "b",
+    "p",
+    "m",
+    "f",
+    "d",
+    "t",
+    "n",
+    "l",
+    "g",
+    "k",
+    "h",
+    "j",
+    "q",
+    "x",
+    "r",
+    "z",
+    "c",
+    "s",
+    "y",
+    "w",
+]
+
+PHONEME_TO_ID: dict[str, list[int]] = {
+    PAD: DEFAULT_PHONEME_ID_MAP[PAD],
+    BOS: DEFAULT_PHONEME_ID_MAP[BOS],
+    EOS: DEFAULT_PHONEME_ID_MAP[EOS],
+    # --------------------
+    # Initials (24)
+    # --------------------
+    "Ø": [3],  # zero initial
+    "b": [4],
+    "p": [5],
+    "m": [6],
+    "f": [7],
+    "d": [8],
+    "t": [9],
+    "n": [10],
+    "l": [11],
+    "g": [12],
+    "k": [13],
+    "h": [14],
+    "j": [15],
+    "q": [16],
+    "x": [17],
+    "zh": [18],
+    "ch": [19],
+    "sh": [20],
+    "r": [21],
+    "z": [22],
+    "c": [23],
+    "s": [24],
+    "y": [25],
+    "w": [26],
+    # --------------------
+    # Finals (35)
+    # --------------------
+    "a": [27],
+    "o": [28],
+    "e": [29],
+    "ai": [30],
+    "ei": [31],
+    "ao": [32],
+    "ou": [33],
+    "an": [34],
+    "en": [35],
+    "ang": [36],
+    "eng": [37],
+    "ong": [38],
+    # i-family
+    "i": [39],
+    "ia": [40],
+    "ie": [41],
+    "iao": [42],
+    "iu": [43],
+    "ian": [44],
+    "in": [45],
+    "iang": [46],
+    "ing": [47],
+    "iong": [48],
+    # u-family
+    "u": [49],
+    "ua": [50],
+    "uo": [51],
+    "uai": [52],
+    "ui": [53],
+    "uan": [54],
+    "un": [55],
+    "uang": [56],
+    "ueng": [57],
+    # ü-family (ASCII-friendly ü → v)
+    "v": [58],  # ü
+    "ve": [59],  # üe
+    "van": [60],  # üan
+    "vn": [61],  # ün
+    # “er” syllable final
+    "er": [62],
+    # extra non-erhua final
+    "ue": [63],
+    # --------------------
+    # Tones (5)
+    # --------------------
+    "1": [64],
+    "2": [65],
+    "3": [66],
+    "4": [67],
+    "5": [68],  # neutral tone
+    # --------------------
+    # Long pauses
+    # --------------------
+    "。": [69],  # different ids for intonation
+    "？": [70],
+    "！": [71],
+    # --------------------
+    # Short pauses
+    # --------------------
+    "—": [72],  # same id
+    "…": [72],
+    "、": [72],
+    "，": [72],
+    "：": [72],
+    "；": [72],
+    # space
+    " ": [72],
+}
+
+GROUP_END_PHONEMES = {
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "。",
+    "？",
+    "！",
+    "—",
+    "…",
+    "、",
+    "，",
+    "：",
+    "；",
+    " ",
+}
+
+
+class ChinesePhonemizer:
+    """Phonemize Chinese text using g2pM."""
+
+    def __init__(self) -> None:
+        """Initialize phonemizer."""
+        self.g2p = G2pM()
+        self.number_engine = RbnfEngine.for_language("zh")
+
+    def phonemize(self, text: str) -> list[list[str]]:
+        """Turn text into phonemes per sentence."""
+        from sentence_stream import stream_to_sentences
+
+        all_phonemes: list[list[str]] = []
+
+        for sentence in stream_to_sentences([text]):
+            sentence = self._numbers_to_words(sentence)
+            sylls = self.g2p(sentence, tone=True)
+            sentence_phonemes = []
+            for syl in sylls:
+                syl = _normalize_g2pm_syllable(syl)
+                ini_p, fin_p, tone = _split_initial_final_tone(syl)
+                if not fin_p:
+                    # Not a normal pinyin syllable
+                    sentence_phonemes.append(syl)
+                    break
+
+                if not ini_p:
+                    ini_p = "Ø"
+
+                for sym in (ini_p, fin_p, tone):
+                    assert sym, sym
+                    sentence_phonemes.append(sym)
+
+            all_phonemes.append(sentence_phonemes)
+
+        return all_phonemes
+
+    def _numbers_to_words(self, text: str) -> str:
+        # TODO: dates/times/ordinals
+        return re.sub(
+            r"-?\d+(?:\.\d+)?",
+            lambda m: self.number_engine.format_number(m.group(0)).text,
+            text,
+        )
+
+
+def phonemes_to_ids(
+    phonemes: list[str],
+    id_map: Optional[Mapping[str, Sequence[int]]] = None,
+) -> list[int]:
+    """Get phoneme ids for phonemes.
+
+    Padding is done after a group of phonemes representing one pinyin group
+    instead of between each phoneme.
+    """
+    if not id_map:
+        id_map = PHONEME_TO_ID
+
+    ids: list[int] = []
+    ids.extend(id_map[BOS])
+    ids.extend(id_map[PAD])
+
+    for phoneme in phonemes:
+        if phoneme not in PHONEME_TO_ID:
+            _LOGGER.warning("Missing phoneme from id map: %s", phoneme)
+            continue
+
+        ids.extend(id_map[phoneme])
+
+        # pad after group
+        if phoneme in GROUP_END_PHONEMES:
+            ids.extend(id_map[PAD])
+
+    ids.extend(id_map[EOS])
+
+    return ids
+
+
+def _normalize_g2pm_syllable(syl: str) -> str:
+    """
+    - Keep only syllables like [a-z:]+[1-5]
+    - Convert g2pM's 'u:' -> 'v' (ü-family)
+      nu:3   -> nv3        (n + v)
+      lu:e4  -> lve4       (l + ve)
+      ju:an3 -> jvan3      (j + van)
+      ju:n3  -> jvn3       (j + vn)
+    """
+    m = re.match(r"^([a-z:]+?)([1-5])$", syl)
+    if not m:
+        return syl
+    base, tone = m.group(1), m.group(2)
+    base = base.replace("u:", "v")
+    return base + tone
+
+
+def _split_initial_final_tone(syl: str):
+    """
+    'hang2' -> ('h', 'ang', '2')
+    'ai3'   -> ('', 'ai', '3')
+    """
+    m = re.match(r"^([a-züv]+?)([1-5])$", syl)
+    if not m:
+        return "", "", None
+    base, tone = m.group(1), m.group(2)
+
+    ini = ""
+    for cand in PINYIN_INITIALS:
+        if base.startswith(cand):
+            ini = cand
+            break
+
+    fin = base[len(ini) :] if ini else base
+    return ini, fin, tone

@@ -174,6 +174,17 @@ class PiperVoice:
             # Phonemes = codepoints
             return [list(unicodedata.normalize("NFD", text))]
 
+        if self.config.phoneme_type == PhonemeType.PINYIN:
+            from .phonemize_chinese import ChinesePhonemizer
+
+            # Use g2pM-based phonemizer
+            phonemizer = getattr(self, "_chinese_phonemizer")
+            if phonemizer is None:
+                phonemizer = ChinesePhonemizer()
+                setattr(self, "_chinese_phonemizer", phonemizer)
+
+            return phonemizer.phonemize(text)
+
         if self.config.phoneme_type != PhonemeType.ESPEAK:
             raise ValueError(f"Unexpected phoneme type: {self.config.phoneme_type}")
 
