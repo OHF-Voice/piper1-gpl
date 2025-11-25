@@ -11,6 +11,10 @@
 
 #define CLAUSE_TYPE_CLAUSE 0x00040000
 #define CLAUSE_TYPE_SENTENCE 0x00080000
+#define CLAUSE_TYPE_EOF 0x00010000
+
+#define CLAUSE_INTONATION_TYPE 0x00007000
+#define CLAUSE_PAUSE 0x00000FFF
 
 #define CLAUSE_PERIOD (40 | CLAUSE_INTONATION_FULL_STOP | CLAUSE_TYPE_SENTENCE)
 #define CLAUSE_COMMA (20 | CLAUSE_INTONATION_COMMA | CLAUSE_TYPE_CLAUSE)
@@ -19,6 +23,11 @@
     (45 | CLAUSE_INTONATION_EXCLAMATION | CLAUSE_TYPE_SENTENCE)
 #define CLAUSE_COLON (30 | CLAUSE_INTONATION_FULL_STOP | CLAUSE_TYPE_CLAUSE)
 #define CLAUSE_SEMICOLON (30 | CLAUSE_INTONATION_COMMA | CLAUSE_TYPE_CLAUSE)
+
+#define EXCLAMATION_PAUSE (CLAUSE_EXCLAMATION & CLAUSE_PAUSE)
+#define PERIOD_PAUSE (CLAUSE_PERIOD & CLAUSE_PAUSE)
+#define SEMICOLON_PAUSE (CLAUSE_SEMICOLON & CLAUSE_PAUSE)
+#define COMMA_PAUSE (CLAUSE_COMMA & CLAUSE_PAUSE)
 
 static PyObject *py_initialize(PyObject *self, PyObject *args) {
     const char *data_dir;
@@ -64,21 +73,27 @@ static PyObject *py_get_phonemes(PyObject *self, PyObject *args) {
             (const void **)&text, espeakCHARS_AUTO, espeakPHONEMES_IPA,
             &terminator);
 
-        // Categorize terminator
-        terminator &= 0x000FFFFF;
+        if (!(terminator & CLAUSE_TYPE_EOF)) {
+            int pause = terminator & CLAUSE_PAUSE;
+            int intonation = terminator & CLAUSE_INTONATION_TYPE;
 
-        if (terminator == CLAUSE_PERIOD) {
-            terminator_str = ".";
-        } else if (terminator == CLAUSE_QUESTION) {
-            terminator_str = "?";
-        } else if (terminator == CLAUSE_EXCLAMATION) {
-            terminator_str = "!";
-        } else if (terminator == CLAUSE_COMMA) {
-            terminator_str = ",";
-        } else if (terminator == CLAUSE_COLON) {
-            terminator_str = ":";
-        } else if (terminator == CLAUSE_SEMICOLON) {
-            terminator_str = ";";
+            if (pause >= PERIOD_PAUSE) {
+                if (intonation == CLAUSE_INTONATION_EXCLAMATION) {
+                    terminator_str = "!";
+                } else if (intonation == CLAUSE_INTONATION_QUESTION) {
+                    terminator_str = "?";
+                } else {
+                    terminator_str = ".";
+                }
+            } else if (pause >= SEMICOLON_PAUSE) {
+                if (intonation == CLAUSE_INTONATION_FULL_STOP) {
+                    terminator_str = ":";
+                } else {
+                    terminator_str = ";";
+                }
+            } else if (pause >= COMMA_PAUSE) {
+                terminator_str = ",";
+            }
         }
 
         PyList_Append(phonemes_and_terminators,
@@ -86,7 +101,8 @@ static PyObject *py_get_phonemes(PyObject *self, PyObject *args) {
                                     (terminator & CLAUSE_TYPE_SENTENCE) ==
                                             CLAUSE_TYPE_SENTENCE
                                         ? Py_True
-                                        : Py_False));
+                                        : Py_False
+                                ));
     }
 
     return phonemes_and_terminators;
