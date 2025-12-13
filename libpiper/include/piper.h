@@ -6,6 +6,12 @@
 #include <stdint.h>
 #include <uchar.h>
 
+#if defined(_MSC_VER)
+#define EXPORT_SYMBOL __declspec( dllexport )
+#else
+#define EXPORT_SYMBOL
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -155,6 +161,7 @@ typedef struct piper_synthesize_options {
  *
  * \return a Piper text-to-speech synthesizer for the voice model.
  */
+EXPORT_SYMBOL
 piper_synthesizer *piper_create(const char *model_path, const char *config_path,
                                 const char *espeak_data_path);
 
@@ -163,6 +170,7 @@ piper_synthesizer *piper_create(const char *model_path, const char *config_path,
  *
  * \param synth Piper synthesizer.
  */
+EXPORT_SYMBOL
 void piper_free(piper_synthesizer *synth);
 
 /**
@@ -172,6 +180,7 @@ void piper_free(piper_synthesizer *synth);
  *
  * \return synthesis options from voice config.
  */
+EXPORT_SYMBOL
 piper_synthesize_options
 piper_default_synthesize_options(piper_synthesizer *synth);
 
@@ -188,6 +197,7 @@ piper_default_synthesize_options(piper_synthesizer *synth);
  *
  * \return PIPER_OK or error code.
  */
+EXPORT_SYMBOL
 int piper_synthesize_start(piper_synthesizer *synth, const char *text,
                            const piper_synthesize_options *options);
 
@@ -208,6 +218,7 @@ int piper_synthesize_start(piper_synthesizer *synth, const char *text,
  *
  * \return PIPER_DONE when complete, otherwise PIPER_OK or error code.
  */
+EXPORT_SYMBOL
 int piper_synthesize_next(piper_synthesizer *synth, piper_audio_chunk *chunk);
 
 #ifdef __cplusplus
