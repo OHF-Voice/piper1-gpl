@@ -122,7 +122,7 @@ struct piper_synthesizer *piper_create(const char *model_path,
 
     auto sz = ::MultiByteToWideChar(CP_ACP, 0, model_path, -1, 0,0);
     std::vector<wchar_t> model_path_wc(sz+1);
-    ::MultiByteToWideChar(CP_ACP, 0, model_path, -1, &model_path_wc[0], sz - 1);
+    ::MultiByteToWideChar(CP_ACP, 0, model_path, -1, &model_path_wc[0], sz);
     synth->session = std::make_unique<Ort::Session>(
         Ort::Session(ort_env, &model_path_wc[0], synth->session_options));
 
