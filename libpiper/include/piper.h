@@ -7,7 +7,11 @@
 #include <uchar.h>
 
 #if defined(_MSC_VER)
+#if defined(BUILDING_LIBPIPER)
 #define EXPORT_SYMBOL __declspec( dllexport )
+#else
+#define EXPORT_SYMBOL __declspec( dllimport )
+#endif
 #else
 #define EXPORT_SYMBOL
 #endif

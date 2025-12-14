@@ -1,3 +1,4 @@
+#define BUILDING_LIBPIPER
 #include "piper.h"
 #include "piper_impl.hpp"
 
