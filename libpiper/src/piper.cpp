@@ -121,7 +121,7 @@ struct piper_synthesizer *piper_create(const char *model_path,
     synth->session_options.DisableMemPattern();
     synth->session_options.DisableProfiling();
 
-    #if !defined (_MSC_VER) // MSVC onnx has wchar_t model_path
+    #if !defined (WIN32) // ort on WIN32 uses wchar_t
     auto model_path_ort = model_path;
     #else
     auto sz = ::MultiByteToWideChar(CP_ACP, 0, model_path, -1, 0,0);
