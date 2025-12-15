@@ -19,10 +19,8 @@ from torch import FloatTensor, LongTensor
 from torch.utils.data import DataLoader, Dataset, random_split
 
 from piper.config import PhonemeType, PiperConfig
-from piper.phoneme_ids import (
-    DEFAULT_PHONEME_ID_MAP,
-    phonemes_to_ids as default_phonemes_to_ids,
-)
+from piper.phoneme_ids import DEFAULT_PHONEME_ID_MAP
+from piper.phoneme_ids import phonemes_to_ids as default_phonemes_to_ids
 from piper.phonemize_espeak import EspeakPhonemizer
 
 from .mel_processing import spectrogram_torch

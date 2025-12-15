@@ -5,7 +5,7 @@ import re
 from collections.abc import Mapping, Sequence
 from typing import Optional
 
-from g2pM import G2pM
+from g2pw import G2PWConverter
 from unicode_rbnf import RbnfEngine
 
 from .const import BOS, EOS, PAD
@@ -162,11 +162,11 @@ GROUP_END_PHONEMES = {
 
 
 class ChinesePhonemizer:
-    """Phonemize Chinese text using g2pM."""
+    """Phonemize Chinese text using g2pW."""
 
     def __init__(self) -> None:
         """Initialize phonemizer."""
-        self.g2p = G2pM()
+        self.g2p = G2PWConverter(style="pinyin", enable_non_tradional_chinese=True)
         self.number_engine = RbnfEngine.for_language("zh")
 
     def phonemize(self, text: str) -> list[list[str]]:
@@ -177,9 +177,14 @@ class ChinesePhonemizer:
 
         for sentence in stream_to_sentences([text]):
             sentence = self._numbers_to_words(sentence)
-            sylls = self.g2p(sentence, tone=True)
+            sylls = self.g2p(sentence)[0]
             sentence_phonemes = []
-            for syl in sylls:
+            for syl, syl_char in zip(sylls, sentence):
+                if syl is None:
+                    # Punctuation
+                    sentence_phonemes.append(syl_char)
+                    continue
+
                 syl = _normalize_g2pm_syllable(syl)
                 ini_p, fin_p, tone = _split_initial_final_tone(syl)
                 if not fin_p:

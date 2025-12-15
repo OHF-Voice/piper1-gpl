@@ -71,6 +71,7 @@ class VitsModel(L.LightningModule):
         c_mel: int = 45,
         c_kl: float = 1.0,
         grad_clip: Optional[float] = None,
+        vocoder_warmstart_ckpt: str | None = None,
         # unused
         dataset: object = None,
         **kwargs,
@@ -111,6 +112,10 @@ class VitsModel(L.LightningModule):
         if (self.hparams.num_speakers > 1) and (self.hparams.gin_channels <= 0):
             # Default gin_channels for multi-speaker model
             self.hparams.gin_channels = 512
+
+        # Used to partially load the state dict from a checkpoint.
+        # Only the text/phoneme agnostic portions are loaded.
+        self._vocoder_warmstart_ckpt = vocoder_warmstart_ckpt
 
         # Set up models
         self.model_g = SynthesizerTrn(
@@ -310,3 +315,38 @@ class VitsModel(L.LightningModule):
         ]
 
         return optimizers, schedulers
+
+    def _warmstart_vocoder_from_ckpt(self, ckpt_path: str):
+        ckpt = torch.load(ckpt_path, map_location=self.device)
+
+        old_sd = ckpt["state_dict"]
+        new_sd = self.state_dict()
+
+        # Only keep vocoder/acoustic parts
+        KEEP_PREFIXES = (
+            "model_g.dec.",
+            "model_g.enc_q.",
+            "model_g.flow.",
+        )
+
+        copied = 0
+        for k, v in old_sd.items():
+            if not k.startswith(KEEP_PREFIXES):
+                continue
+            if (k in new_sd) and (new_sd[k].shape == v.shape):
+                new_sd[k] = v
+                copied += 1
+
+        self.load_state_dict(new_sd, strict=False)
+        print(f"[warmstart] Copied {copied} vocoder parameters from {ckpt_path}")
+
+    def on_fit_start(self):
+        # Called once at the start of fit()
+        if self._vocoder_warmstart_ckpt is None:
+            return
+
+        # Make sure we’re on the correct device
+        self._warmstart_vocoder_from_ckpt(self._vocoder_warmstart_ckpt)
+
+        # Avoid re-running if Trainer restarts
+        self._vocoder_warmstart_ckpt = None
