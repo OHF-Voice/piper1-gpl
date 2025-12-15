@@ -16,7 +16,7 @@
 #endif
 #endif
 
-#if defined (_MSC_VER) // MSVC compile of espeak gives a STATIC library.
+#if defined (WIN32) // MSVC compile of espeak gives a STATIC library.
 // tell espeak-ng/speak_lib.h to use unadorned entry points
 #if defined (_WIN32)
 #undef _WIN32
