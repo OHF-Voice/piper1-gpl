@@ -7,8 +7,8 @@ See `piper.h` for details.
 ## Building
 
 ``` sh
-cmake -Bbuild -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$PWD/install
-cmake --build build
+cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$PWD/install
+cmake --build build --config Release
 cmake --install build
 ```
 
