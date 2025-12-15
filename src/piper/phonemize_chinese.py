@@ -182,7 +182,9 @@ class ChinesePhonemizer:
             for syl, syl_char in zip(sylls, sentence):
                 if syl is None:
                     # Punctuation
-                    sentence_phonemes.append(syl_char)
+                    if syl_char in PHONEME_TO_ID:
+                        sentence_phonemes.append(syl_char)
+
                     continue
 
                 syl = _normalize_g2pm_syllable(syl)

@@ -71,7 +71,7 @@ class VitsModel(L.LightningModule):
         c_mel: int = 45,
         c_kl: float = 1.0,
         grad_clip: Optional[float] = None,
-        vocoder_warmstart_ckpt: str | None = None,
+        vocoder_warmstart_ckpt: Optional[str] = None,
         # unused
         dataset: object = None,
         **kwargs,
@@ -317,7 +317,7 @@ class VitsModel(L.LightningModule):
         return optimizers, schedulers
 
     def _warmstart_vocoder_from_ckpt(self, ckpt_path: str):
-        ckpt = torch.load(ckpt_path, map_location=self.device)
+        ckpt = torch.load(ckpt_path, map_location=self.device, weights_only=False)
 
         old_sd = ckpt["state_dict"]
         new_sd = self.state_dict()
@@ -338,7 +338,7 @@ class VitsModel(L.LightningModule):
                 copied += 1
 
         self.load_state_dict(new_sd, strict=False)
-        print(f"[warmstart] Copied {copied} vocoder parameters from {ckpt_path}")
+        _LOGGER.info(f"[warmstart] Copied {copied} vocoder parameters from {ckpt_path}")
 
     def on_fit_start(self):
         # Called once at the start of fit()
