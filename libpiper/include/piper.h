@@ -6,7 +6,7 @@
 #include <stdint.h>
 #include <uchar.h>
 
-#if defined(__GNUC__) || defined (_MSC_VER)
+#if defined (WIN32) && (defined(__GNUC__) || defined (_MSC_VER))
 #if defined(BUILDING_LIBPIPER)
 #define EXPORT_SYMBOL __declspec( dllexport )
 #else
