@@ -127,8 +127,11 @@ PHONEME_TO_ID: dict[str, list[int]] = {
     # Long pauses
     # --------------------
     "。": [69],  # different ids for intonation
+    ".": [69],  # different ids for intonation
     "？": [70],
+    "?": [70],
     "！": [71],
+    "!": [71],
     # --------------------
     # Short pauses
     # --------------------
@@ -136,8 +139,11 @@ PHONEME_TO_ID: dict[str, list[int]] = {
     "…": [72],
     "、": [72],
     "，": [72],
+    ",": [72],
     "：": [72],
+    ":": [72],
     "；": [72],
+    ";": [72],
     # space
     " ": [72],
 }
@@ -172,6 +178,8 @@ class ChinesePhonemizer:
     def phonemize(self, text: str) -> list[list[str]]:
         """Turn text into phonemes per sentence."""
         from sentence_stream import stream_to_sentences
+
+        text = re.sub('[“”"]', "", text)
 
         all_phonemes: list[list[str]] = []
 
