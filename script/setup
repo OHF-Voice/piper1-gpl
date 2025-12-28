@@ -7,11 +7,13 @@ from pathlib import Path
 _DIR = Path(__file__).parent
 _PROGRAM_DIR = _DIR.parent
 _VENV_DIR = _PROGRAM_DIR / ".venv"
-_MODULE_DIR = _PROGRAM_DIR / "src" / "piper"
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--dev", action="store_true", help="Install dev requirements")
-parser.add_argument("--train", action="store_true", help="Install training requirements")
+parser.add_argument(
+    "--train", action="store_true", help="Install training requirements"
+)
+parser.add_argument("--zh", action="store_true", help="Install Chinese requirements")
 args = parser.parse_args()
 
 # Create virtual environment
@@ -25,12 +27,18 @@ subprocess.check_call(pip + ["install", "--upgrade", "pip"])
 subprocess.check_call(pip + ["install", "--upgrade", "setuptools", "wheel"])
 
 # Install requirements
-subprocess.check_call(pip + ["install", "-e", str(_PROGRAM_DIR)])
-
+extras = []
 if args.dev:
-    # Install dev requirements
-    subprocess.check_call(pip + ["install", "-e", f"{_PROGRAM_DIR}[dev]"])
+    extras.append("dev")
 
 if args.train:
-    # Install training requirements
-    subprocess.check_call(pip + ["install", "-e", f"{_PROGRAM_DIR}[train]"])
+    extras.append("train")
+
+if args.zh:
+    extras.append("zh")
+
+extras_str = ""
+if extras:
+    extras_str = "[" + ",".join(extras) + "]"
+
+subprocess.check_call(pip + ["install", "-e", str(_PROGRAM_DIR) + extras_str])
