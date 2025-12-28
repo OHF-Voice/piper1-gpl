@@ -23,7 +23,7 @@ jobs:
 
       - name: Install Piper
         run: |
-          script/setup --dev --zh
+          script/setup --dev --zh --torch-cpu
           script/dev_build
 
       - name: Run tests

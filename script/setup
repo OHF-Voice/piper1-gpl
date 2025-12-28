@@ -14,6 +14,9 @@ parser.add_argument(
     "--train", action="store_true", help="Install training requirements"
 )
 parser.add_argument("--zh", action="store_true", help="Install Chinese requirements")
+parser.add_argument(
+    "--torch-cpu", action="store_true", help="Install CPU-only version of PyTorch"
+)
 args = parser.parse_args()
 
 # Create virtual environment
@@ -25,6 +28,18 @@ builder.create(_VENV_DIR)
 pip = [context.env_exe, "-m", "pip"]
 subprocess.check_call(pip + ["install", "--upgrade", "pip"])
 subprocess.check_call(pip + ["install", "--upgrade", "setuptools", "wheel"])
+
+# PyTorch
+if args.torch_cpu:
+    subprocess.check_call(
+        pip
+        + [
+            "install",
+            "torch>=2,<3",
+            "--extra-index-url",
+            "https://download.pytorch.org/whl/cpu",
+        ]
+    )
 
 # Install requirements
 extras = []

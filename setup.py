@@ -79,6 +79,7 @@ setup(
             "g2pW>=0.1.1,<1",
             "sentence-stream>=1.2.1,<2",
             "unicode-rbnf>=2.4.0,<3",
+            "torch>=2,<3",
         ],
     },
     packages=["piper", "piper.tashkeel", "piper.train"],
