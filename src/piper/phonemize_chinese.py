@@ -174,7 +174,7 @@ GROUP_END_PHONEMES = {
     " ",
 }
 
-G2PW_URL = "http://localhost:8000/zh/zh_CN/_resources/g2pw.tar.gz"
+G2PW_URL = "https://huggingface.co/datasets/rhasspy/piper-checkpoints/resolve/main/zh/zh_CN/_resources/g2pw.tar.gz?download=true"
 
 
 class ChinesePhonemizer:
