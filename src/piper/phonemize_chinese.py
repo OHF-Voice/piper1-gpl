@@ -1,9 +1,17 @@
-"""Pinyin-based phonemization for Chinese using g2pM."""
+"""Pinyin-based phonemization for Chinese using g2pW.
+
+Partially written by ChatGPT (December 2025).
+
+This code is Apache 2.0 licensed.
+"""
 
 import logging
 import re
+import tarfile
 from collections.abc import Mapping, Sequence
-from typing import Optional
+from pathlib import Path
+from typing import Optional, Union
+from urllib.request import urlopen
 
 from g2pw import G2PWConverter
 from unicode_rbnf import RbnfEngine
@@ -127,7 +135,7 @@ PHONEME_TO_ID: dict[str, list[int]] = {
     # Long pauses
     # --------------------
     "。": [69],  # different ids for intonation
-    ".": [69],  # different ids for intonation
+    ".": [69],
     "？": [70],
     "?": [70],
     "！": [71],
@@ -166,13 +174,21 @@ GROUP_END_PHONEMES = {
     " ",
 }
 
+G2PW_URL = "http://localhost:8000/zh/zh_CN/_resources/g2pw.tar.gz"
+
 
 class ChinesePhonemizer:
     """Phonemize Chinese text using g2pW."""
 
-    def __init__(self) -> None:
+    def __init__(self, model_dir: Union[str, Path]) -> None:
         """Initialize phonemizer."""
-        self.g2p = G2PWConverter(style="pinyin", enable_non_tradional_chinese=True)
+
+        # Ensure model is downloaded
+        download_model(model_dir)
+
+        self.g2p = G2PWConverter(
+            model_dir=str(model_dir), style="pinyin", enable_non_tradional_chinese=True
+        )
         self.number_engine = RbnfEngine.for_language("zh")
 
     def phonemize(self, text: str) -> list[list[str]]:
@@ -195,7 +211,7 @@ class ChinesePhonemizer:
 
                     continue
 
-                syl = _normalize_g2pm_syllable(syl)
+                syl = _normalize_g2pw_syllable(syl)
                 ini_p, fin_p, tone = _split_initial_final_tone(syl)
                 if not fin_p:
                     # Not a normal pinyin syllable
@@ -254,10 +270,10 @@ def phonemes_to_ids(
     return ids
 
 
-def _normalize_g2pm_syllable(syl: str) -> str:
+def _normalize_g2pw_syllable(syl: str) -> str:
     """
     - Keep only syllables like [a-z:]+[1-5]
-    - Convert g2pM's 'u:' -> 'v' (ü-family)
+    - Convert g2pW's 'u:' -> 'v' (ü-family)
       nu:3   -> nv3        (n + v)
       lu:e4  -> lve4       (l + ve)
       ju:an3 -> jvan3      (j + van)
@@ -289,3 +305,20 @@ def _split_initial_final_tone(syl: str):
 
     fin = base[len(ini) :] if ini else base
     return ini, fin, tone
+
+
+def download_model(model_dir: Union[str, Path]) -> None:
+    """Ensure g2pW model is downloaded."""
+    model_dir = Path(model_dir)
+    model_path = model_dir / "g2pw.onnx"
+
+    if model_path.exists():
+        # Already downloaded
+        _LOGGER.debug("Found g2pW model at %s", model_path)
+        return
+
+    _LOGGER.info("Downloading g2pW model from '%s' to '%s'", G2PW_URL, model_dir)
+    model_dir.mkdir(parents=True, exist_ok=True)
+    with urlopen(G2PW_URL) as response:
+        with tarfile.open(fileobj=response, mode="r|gz") as tar:
+            tar.extractall(path=model_dir)

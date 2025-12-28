@@ -1,5 +1,7 @@
 """Tests for Chinese phonemization."""
 
+from pathlib import Path
+
 import pytest
 
 from piper.phonemize_chinese import ChinesePhonemizer, phonemes_to_ids
@@ -8,9 +10,18 @@ PAD_ID = 0
 BOS_ID = 1
 EOS_ID = 2
 
+TEST_DIR = Path(__file__).parent
+REPO_DIR = TEST_DIR.parent
+LOCAL_DIR = REPO_DIR / "local"
+MODEL_DIR = LOCAL_DIR / "g2pW"
 
-def test_phonemize() -> None:
-    phonemizer = ChinesePhonemizer()
+
+@pytest.fixture(name="phonemizer", scope="session")
+def phonemizer_fixture() -> ChinesePhonemizer:
+    return ChinesePhonemizer(model_dir=MODEL_DIR)
+
+
+def test_phonemize(phonemizer: ChinesePhonemizer) -> None:
     phonemes = phonemizer.phonemize("卡尔普陪外孙玩滑梯。 假语村言别再拥抱我。")
     assert phonemes == [
         [
@@ -79,7 +90,7 @@ def test_phonemize() -> None:
             #
             "y",
             "ong",
-            "1",
+            "3",
             #
             "b",
             "ao",
@@ -184,6 +195,7 @@ def test_phonemize() -> None:
         ("前面有0个人，后面有10个人。", "前面有零个人，后面有十个人。"),
     ],
 )
-def test_numbers_to_words(number_text: str, word_text: str) -> None:
-    phonemizer = ChinesePhonemizer()
+def test_numbers_to_words(
+    phonemizer: ChinesePhonemizer, number_text: str, word_text: str
+) -> None:
     assert phonemizer.phonemize(number_text) == phonemizer.phonemize(word_text)

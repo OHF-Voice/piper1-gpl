@@ -174,8 +174,8 @@ class VitsDataModule(L.LightningDataModule):
         if self.phoneme_type == PhonemeType.PINYIN:
             from piper.phonemize_chinese import ChinesePhonemizer
 
-            # g2pM -> pinyin -> phonemes
-            phonemizer = ChinesePhonemizer()
+            # g2pW -> pinyin -> phonemes
+            phonemizer = ChinesePhonemizer(model_dir=Path.cwd() / "local" / "g2pW")
 
             def phonemize(text: str) -> list[list[str]]:
                 return phonemizer.phonemize(text)
