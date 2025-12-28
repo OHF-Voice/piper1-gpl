@@ -1,6 +1,12 @@
 # Changelog
 
-## 1.3.1 (unreleased)
+## 1.4.0
+
+- Add Chinese phonemizer based on [g2pW](https://github.com/GitYCC/g2pW/)
+    - Using a quantized version of the original model with `quantize_dynamic`
+- Add `pinyin` phoneme type for Chinese (zh_CN)
+
+## 1.3.1
 
 - Add experimental support for alignments (see docs/ALIGNMENTS.md)
 - Raw phonemes no longer split sentences

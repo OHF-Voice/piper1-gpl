@@ -5,6 +5,7 @@ import itertools
 import json
 import logging
 import math
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Union
@@ -18,7 +19,8 @@ from torch import FloatTensor, LongTensor
 from torch.utils.data import DataLoader, Dataset, random_split
 
 from piper.config import PhonemeType, PiperConfig
-from piper.phoneme_ids import DEFAULT_PHONEME_ID_MAP, phonemes_to_ids
+from piper.phoneme_ids import DEFAULT_PHONEME_ID_MAP
+from piper.phoneme_ids import phonemes_to_ids as default_phonemes_to_ids
 from piper.phonemize_espeak import EspeakPhonemizer
 
 from .mel_processing import spectrogram_torch
@@ -61,6 +63,7 @@ class VitsDataModule(L.LightningDataModule):
         trim_silence: bool = True,
         keep_seconds_before_silence: float = 0.25,
         keep_seconds_after_silence: float = 0.25,
+        phoneme_type: Optional[str] = None,
     ) -> None:
         super().__init__()
 
@@ -104,16 +107,29 @@ class VitsDataModule(L.LightningDataModule):
         self.piper_config: Optional[PiperConfig] = None
         self.is_multispeaker = self.num_speakers > 1
 
+        # Phonemes
+        if phoneme_type is None:
+            self.phoneme_type = PhonemeType.ESPEAK
+        else:
+            self.phoneme_type = PhonemeType(phoneme_type)
+
     def prepare_data(self):
         self.cache_dir.mkdir(parents=True, exist_ok=True)
+
+        if self.phoneme_type == PhonemeType.PINYIN:
+            from piper.phonemize_chinese import PHONEME_TO_ID
+
+            phoneme_id_map = PHONEME_TO_ID
+        else:
+            phoneme_id_map = DEFAULT_PHONEME_ID_MAP
 
         self.piper_config = PiperConfig(
             num_symbols=self.num_symbols,
             num_speakers=self.num_speakers,
             sample_rate=self.sample_rate,
             espeak_voice=self.espeak_voice,
-            phoneme_id_map=DEFAULT_PHONEME_ID_MAP,
-            phoneme_type=PhonemeType.ESPEAK,
+            phoneme_id_map=phoneme_id_map,
+            phoneme_type=self.phoneme_type,
             piper_version="1.3.0",
         )
 
@@ -155,7 +171,28 @@ class VitsDataModule(L.LightningDataModule):
                 indent=2,
             )
 
-        phonemizer = EspeakPhonemizer()
+        if self.phoneme_type == PhonemeType.PINYIN:
+            from piper.phonemize_chinese import ChinesePhonemizer
+
+            # g2pW -> pinyin -> phonemes
+            phonemizer = ChinesePhonemizer(model_dir=Path.cwd() / "local" / "g2pW")
+
+            def phonemize(text: str) -> list[list[str]]:
+                return phonemizer.phonemize(text)
+
+        elif self.phoneme_type == PhonemeType.TEXT:
+            # text = phonemes
+
+            def phonemize(text: str) -> list[list[str]]:
+                return [list(unicodedata.normalize("NFD", text))]
+
+        else:
+            # espeak-ng
+            phonemizer = EspeakPhonemizer()
+
+            def phonemize(text: str) -> list[list[str]]:
+                return phonemizer.phonemize(self.espeak_voice, text)
+
         vad = SileroVoiceActivityDetector()
 
         num_utterances = 0
@@ -191,7 +228,7 @@ class VitsDataModule(L.LightningDataModule):
                 phonemes: Optional[List[List[str]]] = None
                 phonemes_path = self.cache_dir / f"{cache_id}.phonemes.txt"
                 if not phonemes_path.exists():
-                    phonemes = phonemizer.phonemize(self.espeak_voice, text)
+                    phonemes = phonemize(text)
                     with open(phonemes_path, "w", encoding="utf-8") as phonemes_file:
                         for sentence_phonemes in phonemes:
                             print("".join(sentence_phonemes), file=phonemes_file)
@@ -203,7 +240,16 @@ class VitsDataModule(L.LightningDataModule):
                 phoneme_ids_path = self.cache_dir / f"{cache_id}.phonemes.pt"
                 if not phoneme_ids_path.exists():
                     if phonemes is None:
-                        phonemes = phonemizer.phonemize(self.espeak_voice, text)
+                        phonemes = phonemize(text)
+
+                    if self.phoneme_type == PhonemeType.PINYIN:
+                        from piper.phonemize_chinese import (
+                            phonemes_to_ids as chinese_phonemes_to_ids,
+                        )
+
+                        phonemes_to_ids = chinese_phonemes_to_ids
+                    else:
+                        phonemes_to_ids = default_phonemes_to_ids
 
                     phoneme_ids = list(
                         itertools.chain(
@@ -251,6 +297,8 @@ class VitsDataModule(L.LightningDataModule):
                     if audio_norm_tensor is None:
                         # Load audio from cache
                         audio_norm_tensor = torch.load(norm_audio_path)
+
+                    assert audio_norm_tensor is not None
 
                     torch.save(
                         spectrogram_torch(

@@ -14,6 +14,7 @@ DEFAULT_HOP_LENGTH: Final = 256
 class PhonemeType(str, Enum):
     ESPEAK = "espeak"
     TEXT = "text"
+    PINYIN = "pinyin"  # zh-CN
 
 
 @dataclass
