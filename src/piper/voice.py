@@ -187,7 +187,7 @@ class PiperVoice:
             from .phonemize_chinese import ChinesePhonemizer
 
             # Use g2pW-based phonemizer
-            phonemizer = getattr(self, "_chinese_phonemizer")
+            phonemizer = getattr(self, "_chinese_phonemizer", None)
             if phonemizer is None:
                 phonemizer = ChinesePhonemizer(self.download_dir / "g2pW")
                 setattr(self, "_chinese_phonemizer", phonemizer)
