@@ -2,7 +2,7 @@
 	"version": 6,
 	"cmakeMinimumRequired": {
 		"major": 3,
-		"minor": 26,
+		"minor": 25,
 		"patch": 0
 	},
 	"configurePresets": [
@@ -10,7 +10,19 @@
 			"name": ".cfg",
 			"hidden": true,
 			"generator": "Ninja",
+			"binaryDir": "${sourceDir}/cmake-build$penv{SF_BIN_DIR_SUFFIX}/${presetName}",
+			"environment": {
+				"SF_LIBRARY_DIR": "$env{SF_EXECUTABLE_DIR}/lib"
+			},
 			"cacheVariables": {
+				"CMAKE_RUNTIME_OUTPUT_DIRECTORY": {
+					"type": "STRING",
+					"value": "$env{SF_EXECUTABLE_DIR}"
+				},
+				"CMAKE_LIBRARY_OUTPUT_DIRECTORY": {
+					"type": "STRING",
+					"value": "$env{SF_LIBRARY_DIR}"
+				},
 				"CMAKE_COLOR_DIAGNOSTICS": {
 					"type": "BOOL",
 					"value": "ON"
@@ -21,7 +33,7 @@
 				},
 				"CMAKE_VERBOSE_MAKEFILE": {
 					"type": "BOOL",
-					"value": "ON"
+					"value": "OFF"
 				},
 				"CMAKE_BUILD_TYPE": {
 					"type": "STRING",
@@ -30,6 +42,10 @@
 				"ONNXRUNTIME_VERSION": {
 					"type": "STRING",
 					"value": "1.23.2"
+				},
+				"BUILD_LIB_ONLY": {
+					"type": "BOOL",
+					"value": "ON"
 				},
 				"BUILD_APPS": {
 					"type": "BOOL",
@@ -60,6 +76,63 @@
 			}
 		},
 		{
+			"name": ".tc-msvc",
+			"description": "Toolchain for generic MSVC",
+			"hidden": true,
+			"environment": {
+				"MSVC_ROOT": "$penv{MSVC_ROOT}",
+				"VCToolsVersion": "14.44.35207",
+				"WindowsSDKVersion": "10.0.26100.0",
+				"VSCMD_ARG_HOST_ARCH": "x64",
+				"VSCMD_ARG_TGT_ARCH": "x64",
+				"VCToolsInstallDir": "$env{MSVC_ROOT}\\VC\\Tools\\MSVC\\$env{VCToolsVersion}",
+				"WindowsSdkBinPath": "$env{MSVC_ROOT}\\Windows Kits\\10\\bin",
+				"LIB": "$env{MSVC_ROOT}\\VC\\Tools\\MSVC\\$env{VCToolsVersion}\\lib\\$env{VSCMD_ARG_TGT_ARCH};$env{MSVC_ROOT}\\Windows Kits\\10\\Lib\\$env{WindowsSDKVersion}\\ucrt\\$env{VSCMD_ARG_TGT_ARCH};$env{MSVC_ROOT}\\Windows Kits\\10\\Lib\\$env{WindowsSDKVersion}\\um\\$env{VSCMD_ARG_TGT_ARCH}",
+				"INCLUDE": "$env{MSVC_ROOT}\\VC\\Tools\\MSVC\\$env{VCToolsVersion}\\include;$env{MSVC_ROOT}\\Windows Kits\\10\\Include\\$env{WindowsSDKVersion}\\ucrt;$env{MSVC_ROOT}\\Windows Kits\\10\\Include\\$env{WindowsSDKVersion}\\shared;$env{MSVC_ROOT}\\Windows Kits\\10\\Include\\$env{WindowsSDKVersion}\\um;$env{MSVC_ROOT}\\Windows Kits\\10\\Include\\$env{WindowsSDKVersion}\\winrt;$env{MSVC_ROOT}\\Windows Kits\\10\\Include\\$env{WindowsSDKVersion}\\cppwinrt",
+				"PATH": "$env{SF_LIBRARY_DIR};$env{MSVC_ROOT}\\VC\\Tools\\MSVC\\$env{VCToolsVersion}\\bin\\Host$env{VSCMD_ARG_TGT_ARCH}\\$env{VSCMD_ARG_TGT_ARCH};$env{MSVC_ROOT}\\Windows Kits\\10\\bin\\$env{WindowsSDKVersion}\\$env{VSCMD_ARG_TGT_ARCH};$env{MSVC_ROOT}\\Windows Kits\\10\\bin\\$env{WindowsSDKVersion}\\$env{VSCMD_ARG_TGT_ARCH}\\ucrt;$penv{PATH}"
+			},
+			"cacheVariables": {
+				"SF_COMPILER": {
+					"type": "STRING",
+					"value": "msvc"
+				}
+			}
+		},
+		{
+			"name": ".tc-msvc-2022",
+			"description": "Toolchain for MSVC 2022",
+			"hidden": true,
+			"inherits": [
+				".tc-msvc"
+			],
+			"environment": {
+				"VCToolsVersion": "14.44.35207",
+				"WindowsSDKVersion": "10.0.26100.0"
+			}
+		},
+		{
+			"name": ".tc-msvc-2026",
+			"description": "Toolchain for MSVC 2026",
+			"hidden": true,
+			"inherits": [
+				".tc-msvc"
+			],
+			"environment": {
+				"VCToolsVersion": "14.50.35717",
+				"WindowsSDKVersion": "10.0.26100.0"
+			}
+		},
+		{
+			"name": ".qt",
+			"hidden": true,
+			"cacheVariables": {
+				"SF_BUILD_QT": {
+					"type": "BOOL",
+					"value": "ON"
+				}
+			}
+		},
+		{
 			"name": ".cfg-lnx",
 			"inherits": [
 				".lnx-only",
@@ -68,9 +141,10 @@
 			"hidden": true,
 			"displayName": "Debug Linux Template",
 			"description": "Debug config Linux template.",
-			"toolchainFile": "${sourceDir}/cmake/toolchain-gnu.cmake",
+			"toolchainFile": "${sourceDir}/libpiper/cmake/toolchain-gnu.cmake",
 			"environment": {
-				"PATH": "${sourceDir}/cmake/lib/bin:$penv{PATH}"
+				"SF_EXECUTABLE_DIR": "${sourceDir}/bin/lnx64$penv{SF_EXEC_DIR_SUFFIX}",
+				"LD_LIBRARY_PATH": "$env{SF_LIBRARY_DIR}:$penv{LD_LIBRARY_PATH}"
 			},
 			"cacheVariables": {
 				"BUILD_APPS": {
@@ -81,6 +155,27 @@
 					"type": "STRING",
 					"value": "gnu"
 				}
+			},
+			"vendor": {
+				"compiler": "gnu"
+			}
+		},
+		{
+			"name": ".cfg-lnx-arm",
+			"inherits": [
+				".cfg-lnx"
+			],
+			"hidden": true,
+			"displayName": "Debug Linux Template",
+			"description": "Debug config Linux template.",
+			"cacheVariables": {
+				"SF_COMPILER": {
+					"type": "STRING",
+					"value": "ga"
+				}
+			},
+			"vendor": {
+				"compiler": "ga"
 			}
 		},
 		{
@@ -92,7 +187,10 @@
 			"hidden": true,
 			"displayName": "Debug Windows Template",
 			"description": "Debug config Windows template.",
-			"toolchainFile": "${sourceDir}/cmake/toolchain-gw.cmake",
+			"toolchainFile": "${sourceDir}/libpiper/cmake/toolchain-gw.cmake",
+			"environment": {
+				"SF_EXECUTABLE_DIR": "${sourceDir}/bin/win64$penv{SF_EXEC_DIR_SUFFIX}"
+			},
 			"cacheVariables": {
 				"BUILD_APPS": {
 					"type": "BOOL",
@@ -103,8 +201,8 @@
 					"value": "gw"
 				}
 			},
-			"environment": {
-				"PATH": "${sourceDir}/cmake/lib/bin:$penv{PATH}"
+			"vendor": {
+				"compiler": "gw"
 			}
 		},
 		{
@@ -116,7 +214,11 @@
 			"hidden": true,
 			"displayName": "Debug Windows Template",
 			"description": "Debug config Windows template.",
-			"toolchainFile": "${sourceDir}/cmake/toolchain-mingw.cmake",
+			"toolchainFile": "${sourceDir}/libpiper/cmake/toolchain-mingw.cmake",
+			"environment": {
+				"SF_EXECUTABLE_DIR": "${sourceDir}/bin/win64$penv{SF_EXEC_DIR_SUFFIX}",
+				"PATH": "$env{SF_LIBRARY_DIR};$penv{PATH}"
+			},
 			"cacheVariables": {
 				"BUILD_APPS": {
 					"type": "BOOL",
@@ -126,9 +228,6 @@
 					"type": "STRING",
 					"value": "mingw"
 				}
-			},
-			"environment": {
-				"PATH_DISABLED": "${sourceDir}/lib/qt/w64-x86_64/Tools/mingw1310_64/bin;$penv{PATH}"
 			}
 		},
 		{
@@ -139,7 +238,21 @@
 			"inherits": [
 				".cfg-lnx"
 			],
-			"binaryDir": "${sourceDir}/cmake-build/gnu-debug"
+			"cacheVariables": {
+			}
+		},
+		{
+			"name": "ga-debug",
+			"hidden": false,
+			"displayName": "Debug GA",
+			"description": "Debug config GNU Arm compiler on Linux.",
+			"toolchainFile": "${sourceDir}/libpiper/cmake/toolchain-ga.cmake",
+			"inherits": [
+				".qt",
+				".cfg-lnx-arm"
+			],
+			"cacheVariables": {
+			}
 		},
 		{
 			"name": "gnu-coverage",
@@ -154,24 +267,7 @@
 					"type": "STRING",
 					"value": "Coverage"
 				}
-			},
-			"binaryDir": "${sourceDir}/cmake-build/gnu-coverage"
-		},
-		{
-			"name": "ga-debug",
-			"hidden": false,
-			"displayName": "Debug GA",
-			"description": "Debug config ARM GA compiler on Linux.",
-			"inherits": [
-				".cfg-lnx"
-			],
-			"cacheVariables": {
-				"SF_COMPILER": {
-					"type": "STRING",
-					"value": "ga"
-				}
-			},
-			"binaryDir": "${sourceDir}/cmake-build/ga-debug"
+			}
 		},
 		{
 			"name": "gw-coverage",
@@ -186,8 +282,7 @@
 					"type": "STRING",
 					"value": "Coverage"
 				}
-			},
-			"binaryDir": "${sourceDir}/cmake-build/gw-coverage"
+			}
 		},
 		{
 			"name": "gw-debug",
@@ -196,8 +291,7 @@
 			"description": "Debug config for Windows GW compiler on Linux.",
 			"inherits": [
 				".cfg-win"
-			],
-			"binaryDir": "${sourceDir}/cmake-build/gw-debug"
+			]
 		},
 		{
 			"name": "gnu-release",
@@ -207,7 +301,28 @@
 			"inherits": [
 				".cfg-lnx"
 			],
-			"binaryDir": "${sourceDir}/cmake-build/gnu-release"
+			"cacheVariables": {
+				"CMAKE_BUILD_TYPE": {
+					"type": "STRING",
+					"value": "Release"
+				}
+			}
+		},
+		{
+			"name": "ga-release",
+			"hidden": false,
+			"displayName": "Release GA",
+			"description": "Release config GNU Arm compiler on Linux.",
+			"inherits": [
+				".qt",
+				".cfg-lnx-arm"
+			],
+			"cacheVariables": {
+				"CMAKE_BUILD_TYPE": {
+					"type": "STRING",
+					"value": "Release"
+				}
+			}
 		},
 		{
 			"name": "gw-release",
@@ -217,7 +332,12 @@
 			"inherits": [
 				".cfg-win"
 			],
-			"binaryDir": "${sourceDir}/cmake-build/gw-release"
+			"cacheVariables": {
+				"CMAKE_BUILD_TYPE": {
+					"type": "STRING",
+					"value": "Release"
+				}
+			}
 		},
 		{
 			"name": "mingw-debug",
@@ -227,7 +347,17 @@
 			"inherits": [
 				".cfg-w64"
 			],
-			"binaryDir": "${sourceDir}/cmake-build/mingw-debug"
+			"cacheVariables": {
+				"SF_COMPILER": {
+					"type": "STRING",
+					"value": "mingw"
+				}
+			},
+			"vendor": {
+				"jetbrains.com/clion": {
+					"toolchain": "MinGW"
+				}
+			}
 		},
 		{
 			"name": "mingw-release",
@@ -237,7 +367,68 @@
 			"inherits": [
 				".cfg-w64"
 			],
-			"binaryDir": "${sourceDir}/cmake-build/mingw-release"
+			"cacheVariables": {
+				"CMAKE_BUILD_TYPE": {
+					"type": "STRING",
+					"value": "Release"
+				},
+				"SF_COMPILER": {
+					"type": "STRING",
+					"value": "mingw"
+				}
+			},
+			"vendor": {
+				"jetbrains.com/clion": {
+					"toolchain": "MinGW"
+				}
+			}
+		},
+		{
+			"name": "msvc-debug",
+			"hidden": false,
+			"displayName": "Debug MSVC",
+			"description": "Debug config for MSVC compiler on Windows.",
+			"toolchainFile": "${sourceDir}/libpiper/cmake/toolchain-msvc.cmake",
+			"inherits": [
+				".tc-msvc-2022",
+				".cfg-w64"
+			],
+			"cacheVariables": {
+				"SF_COMPILER": {
+					"type": "STRING",
+					"value": "msvc"
+				}
+			},
+			"vendor": {
+				"jetbrains.com/clion": {
+					"toolchain": "MSVC"
+				}
+			}
+		},
+		{
+			"name": "msvc-release",
+			"hidden": false,
+			"displayName": "Release MSVC",
+			"description": "Release config for MSVC compiler on Windows.",
+			"inherits": [
+				".tc-msvc-2022",
+				".cfg-w64"
+			],
+			"cacheVariables": {
+				"CMAKE_BUILD_TYPE": {
+					"type": "STRING",
+					"value": "Release"
+				},
+				"SF_COMPILER": {
+					"type": "STRING",
+					"value": "msvc"
+				}
+			},
+			"vendor": {
+				"jetbrains.com/clion": {
+					"toolchain": "MSVC"
+				}
+			}
 		}
 	],
 	"buildPresets": [
@@ -277,6 +468,17 @@
 			]
 		},
 		{
+			"name": "ga-debug",
+			"hidden": false,
+			"displayName": "Debug GA",
+			"description": "Debug build ARM GA compiler on Linux.",
+			"configurePreset": "ga-debug",
+			"inherits": [
+				".build",
+				".lnx-only"
+			]
+		},
+		{
 			"name": "gnu-coverage",
 			"hidden": false,
 			"displayName": "Coverage GNU",
@@ -287,14 +489,6 @@
 				".lnx-only"
 			],
 			"targets": [
-				"t_sf-misc",
-				"t_sf-misc-mutex",
-				"t_sf-misc-threads",
-				"t_sf-math",
-				"t_sf-gii",
-				"t_sf-gmi",
-				"sf-gmi-emulator",
-				"t_sf-ami-service"
 			]
 		},
 		{
@@ -309,11 +503,11 @@
 			]
 		},
 		{
-			"name": "ga-debug",
+			"name": "ga-release",
 			"hidden": false,
-			"displayName": "Debug GA",
-			"description": "Debug build ARM GA compiler on Linux.",
-			"configurePreset": "ga-debug",
+			"displayName": "Release GA",
+			"description": "Release build with GNU Arm compiler on Linux.",
+			"configurePreset": "ga-release",
 			"inherits": [
 				".build",
 				".lnx-only"
@@ -375,6 +569,28 @@
 				".w64-only",
 				".build"
 			]
+		},
+		{
+			"name": "msvc-debug",
+			"hidden": false,
+			"displayName": "Debug MSVC",
+			"description": "Debug build MSVC compiler on Windows.",
+			"configurePreset": "msvc-debug",
+			"inherits": [
+				".w64-only",
+				".build"
+			]
+		},
+		{
+			"name": "msvc-release",
+			"hidden": false,
+			"displayName": "Release MSVC",
+			"description": "Release build MSVC compiler on Windows.",
+			"configurePreset": "msvc-release",
+			"inherits": [
+				".w64-only",
+				".build"
+			]
 		}
 	],
 	"testPresets": [
@@ -419,6 +635,17 @@
 			"configurePreset": "gnu-debug"
 		},
 		{
+			"name": "ga-debug",
+			"hidden": false,
+			"displayName": "Debug GA",
+			"description": "Debug test ARM GNU Arm compiler on Linux.",
+			"inherits": [
+				".test",
+				".lnx-only"
+			],
+			"configurePreset": "ga-debug"
+		},
+		{
 			"name": "gnu-coverage",
 			"hidden": false,
 			"displayName": "Coverage GNU",
@@ -441,15 +668,15 @@
 			"configurePreset": "gnu-release"
 		},
 		{
-			"name": "ga-debug",
+			"name": "ga-release",
 			"hidden": false,
-			"displayName": "Debug GA",
-			"description": "Debug test ARM GA compiler on Linux.",
+			"displayName": "Release GA",
+			"description": "Release with GNU Arm compiler on Linux.",
 			"inherits": [
 				".test",
 				".lnx-only"
 			],
-			"configurePreset": "ga-debug"
+			"configurePreset": "ga-release"
 		},
 		{
 			"name": "gw-debug",
@@ -505,6 +732,28 @@
 				".test"
 			],
 			"configurePreset": "mingw-release"
+		},
+		{
+			"name": "msvc-debug",
+			"hidden": false,
+			"displayName": "Debug MSVC",
+			"description": "Debug test MSVC compiler on Windows.",
+			"inherits": [
+				".w64-only",
+				".test"
+			],
+			"configurePreset": "msvc-debug"
+		},
+		{
+			"name": "msvc-release",
+			"hidden": false,
+			"displayName": "Release MSVC",
+			"description": "Release test MSVC compiler on Windows.",
+			"inherits": [
+				".w64-only",
+				".test"
+			],
+			"configurePreset": "msvc-release"
 		}
 	],
 	"packagePresets": [
@@ -554,6 +803,22 @@
 			]
 		},
 		{
+			"name": "ga-debug",
+			"hidden": false,
+			"inherits": [
+				".pack",
+				".lnx-only"
+			],
+			"displayName": "Debug GA",
+			"description": "GA ZIP + NSIS package debug.",
+			"configurePreset": "ga-debug",
+			"packageDirectory": "${sourceDir}/bin/pkg",
+			"generators": [
+				"DEB",
+				"RPM"
+			]
+		},
+		{
 			"name": "gw-debug",
 			"hidden": false,
 			"inherits": [
@@ -570,21 +835,6 @@
 			]
 		},
 		{
-			"name": "ga-debug",
-			"hidden": false,
-			"inherits": [
-				".pack",
-				".lnx-only"
-			],
-			"displayName": "Debug GA",
-			"description": "GA ZIP + NSIS package debug.",
-			"configurePreset": "ga-debug",
-			"packageDirectory": "${sourceDir}/bin/pkg",
-			"generators": [
-				"DEB"
-			]
-		},
-		{
 			"name": "gnu-release",
 			"hidden": false,
 			"displayName": "Release GNU",
@@ -594,6 +844,22 @@
 				".lnx-only"
 			],
 			"configurePreset": "gnu-release",
+			"packageDirectory": "${sourceDir}/bin/pkg",
+			"generators": [
+				"DEB",
+				"RPM"
+			]
+		},
+		{
+			"name": "ga-release",
+			"hidden": false,
+			"displayName": "Release GA",
+			"description": "GA Debian package release.",
+			"inherits": [
+				".pack",
+				".lnx-only"
+			],
+			"configurePreset": "ga-release",
 			"packageDirectory": "${sourceDir}/bin/pkg",
 			"generators": [
 				"DEB",
@@ -642,6 +908,38 @@
 			"displayName": "MinGW ZIP + NSIS",
 			"description": "MinGW ZIP + NSIS package debug.",
 			"configurePreset": "mingw-release",
+			"packageDirectory": "${sourceDir}/bin/pkg",
+			"generators": [
+				"NSIS64",
+				"ZIP"
+			]
+		},
+		{
+			"name": "msvc-debug",
+			"hidden": false,
+			"inherits": [
+				".w64-only",
+				".pack"
+			],
+			"displayName": "MSVC ZIP + NSIS",
+			"description": "MSVC ZIP + NSIS package debug.",
+			"configurePreset": "msvc-debug",
+			"packageDirectory": "${sourceDir}/bin/pkg",
+			"generators": [
+				"NSIS64",
+				"ZIP"
+			]
+		},
+		{
+			"name": "msvc-release",
+			"hidden": false,
+			"inherits": [
+				".w64-only",
+				".pack"
+			],
+			"displayName": "MSVC ZIP + NSIS",
+			"description": "MSVC ZIP + NSIS package debug.",
+			"configurePreset": "msvc-release",
 			"packageDirectory": "${sourceDir}/bin/pkg",
 			"generators": [
 				"NSIS64",
@@ -751,6 +1049,32 @@
 			}
 		},
 		{
+			"name": "ga-release",
+			"displayName": "Release GA",
+			"description": "Release workflow.",
+			"steps": [
+				{
+					"type": "configure",
+					"name": "ga-release"
+				},
+				{
+					"type": "build",
+					"name": "ga-release"
+				},
+				{
+					"type": "test",
+					"name": "ga-release"
+				},
+				{
+					"type": "package",
+					"name": "ga-release"
+				}
+			],
+			"vendor": {
+				"target_os": "GNU/Linux"
+			}
+		},
+		{
 			"name": "gw-debug",
 			"displayName": "Debug GW",
 			"description": "Debug workflow.",
@@ -875,6 +1199,52 @@
 			"vendor": {
 				"target_os": "Cygwin"
 			}
+		},
+		{
+			"name": "msvc-debug",
+			"displayName": "Debug MSVC",
+			"description": "Debug workflow.",
+			"steps": [
+				{
+					"type": "configure",
+					"name": "msvc-debug"
+				},
+				{
+					"type": "build",
+					"name": "msvc-debug"
+				},
+				{
+					"type": "test",
+					"name": "msvc-debug"
+				},
+				{
+					"type": "package",
+					"name": "msvc-debug"
+				}
+			]
+		},
+		{
+			"name": "msvc-release",
+			"displayName": "Release MSVC",
+			"description": "Release workflow.",
+			"steps": [
+				{
+					"type": "configure",
+					"name": "msvc-release"
+				},
+				{
+					"type": "build",
+					"name": "msvc-release"
+				},
+				{
+					"type": "test",
+					"name": "msvc-release"
+				},
+				{
+					"type": "package",
+					"name": "msvc-release"
+				}
+			]
 		}
 	]
 }

@@ -23,3 +23,9 @@ lightning_logs/
 
 # Application location
 /bin
+
+lib/
+download/
+cmake-build/
+
+/CMakeUserPresets.json

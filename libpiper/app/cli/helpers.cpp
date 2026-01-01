@@ -13,6 +13,20 @@
 #include <unistd.h>
 #endif
 
+#ifdef _MSC_VER
+#  define PACKED_STRUCT(name) \
+__pragma(pack(push, 1)) struct name
+#  define PACKED_STRUCT_END \
+__pragma(pack(pop))
+#elif defined(__GNUC__) || defined(__clang__)
+#  define PACKED_STRUCT(name) \
+struct __attribute__((packed)) name
+#  define PACKED_STRUCT_END
+#else
+#  define PACKED_STRUCT(name) struct name
+#  define PACKED_STRUCT_END
+#endif
+
 #if WIN32
 bool isWine() {
     const auto handle = ::GetModuleHandleA("ntdll.dll");
@@ -61,7 +75,7 @@ std::filesystem::path getExecutablePath() {
 #endif
 }
 
-struct Header {
+PACKED_STRUCT(Header) {
     // RIFF Chunk
     uint8_t RIFF[4] = {'R', 'I', 'F', 'F'};
     uint32_t chunkSize;
@@ -82,7 +96,7 @@ struct Header {
     // data Chunk
     uint8_t data[4] = {'d', 'a', 't', 'a'};
     uint32_t dataSize;
-} __attribute__((packed));
+} PACKED_STRUCT_END;
 
 void writeWavHeader(int sample_rate,
                     uint32_t number_of_samples,

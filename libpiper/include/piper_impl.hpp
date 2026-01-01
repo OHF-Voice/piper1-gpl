@@ -35,7 +35,10 @@ const float DEFAULT_NOISE_W_SCALE = 0.8f;
 const int DEFAULT_HOP_LENGTH = 256;
 
 // onnx
-Ort::Env ort_env{ORT_LOGGING_LEVEL_WARNING, "piper"};
+inline Ort::Env& get_ort_env() {
+    static Ort::Env env{ORT_LOGGING_LEVEL_WARNING, "piper"};
+    return env;
+}
 
 // espeak
 #define CLAUSE_INTONATION_FULL_STOP 0x00000000

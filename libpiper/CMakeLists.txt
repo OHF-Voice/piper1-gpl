@@ -1,5 +1,15 @@
 # Builds libpiper
 cmake_minimum_required(VERSION 3.26)
+
+message(STATUS "SF_COMPILER: ${SF_COMPILER}")
+message(STATUS "SF_EXEC_DIR_SUFFIX: $ENV{SF_EXEC_DIR_SUFFIX}")
+message(STATUS "SF_EXECUTABLE_DIR: $ENV{SF_EXECUTABLE_DIR}")
+message(STATUS "SF_LIBRARY_DIR: $ENV{SF_LIBRARY_DIR}")
+message(STATUS "CMAKE_BINARY_DIR: ${CMAKE_BINARY_DIR}")
+message(STATUS "CMAKE_RUNTIME_OUTPUT_DIRECTORY: ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
+message(STATUS "CMAKE_LIBRARY_OUTPUT_DIRECTORY: ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}")
+
+
 project(piper LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -13,7 +23,7 @@ set(ESPEAKNG_INSTALL_DIR ${CMAKE_BINARY_DIR}/espeak_ng-install)
 
 if (NOT TARGET espeak_ng_external)
 
-if(WIN32 AND NOT CMAKE_CROSSCOMPILING)
+if(WIN32 AND MSVC)
     # Special handling for Windows
     set(ESPEAKNG_STATIC_LIB ${ESPEAKNG_INSTALL_DIR}/lib/espeak-ng.lib)
     set(UCD_STATIC_LIB ${ESPEAKNG_BUILD_DIR}/src/espeak_ng_external-build/src/ucd-tools/ucd.lib)

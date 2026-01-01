@@ -6,10 +6,10 @@
 #include <limits>
 
 // TODO: A static library for espeak-ng library for Windows is impossible?
-#if defined(__MINGW32__) || defined(__MINGW64__)
+//#if defined(__MINGW32__) || defined(__MINGW64__)
     // This prevents declaring imports by declaring exports which are ignored.
     #define LIBESPEAK_NG_EXPORT
-#endif
+//#endif
 #include <espeak-ng/speak_lib.h>
 
 #include <string>
@@ -133,10 +133,10 @@ struct piper_synthesizer *piper_create(const char *model_path,
 
 #if ORT_API_VERSION >= 23 && WIN32
     synth->session = std::make_unique<Ort::Session>(
-        Ort::Session(ort_env, to_wstring(model_path).data(), synth->session_options));
+        Ort::Session(get_ort_env(), to_wstring(model_path).data(), synth->session_options));
 #else
     synth->session = std::make_unique<Ort::Session>(
-        Ort::Session(ort_env, model_path, synth->session_options));
+        Ort::Session(get_ort_env(), model_path, synth->session_options));
 #endif
     return synth;
 }

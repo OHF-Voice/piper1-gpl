@@ -1,8 +1,9 @@
 #include "CommandLine.h"
-
 #include <algorithm>
 #include <iomanip>
 #include <variant>
+#include <iosfwd>
+#include <sstream>
 
 CommandLine::CommandLine(std::string description)
     : mDescription(std::move(description)) {}

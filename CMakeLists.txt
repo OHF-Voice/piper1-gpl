@@ -1,7 +1,7 @@
+cmake_minimum_required(VERSION 3.26)
 # Builds Python module for Piper using espeak-ng and cmake.
 #
 # This is called automatically by scikit-build from setup.py.
-cmake_minimum_required(VERSION 3.26)
 project(piper LANGUAGES C CXX)
 
 option(BUILD_TESTING "Enable project tests" ON)
@@ -11,16 +11,19 @@ endif()
 
 include(ExternalProject)
 
-if (NOT CMAKE_CROSSCOMPILING)
+if (NOT BUILD_LIB_ONLY)
 # scikit-build-core will forward Python_* variables
     find_package(Python COMPONENTS Development.Module Development.SABIModule REQUIRED)
+#    include(CMakePrintHelpers)
+#    cmake_print_variables(Python_VERSION Python_INCLUDE_DIRS Python_LIBRARIES)
 endif ()
+
 
 # Install location for espeak-ng
 set(ESPEAKNG_BUILD_DIR ${CMAKE_BINARY_DIR}/espeak_ng)
 set(ESPEAKNG_INSTALL_DIR ${CMAKE_BINARY_DIR}/espeak_ng-install)
 
-if(WIN32 AND NOT CMAKE_CROSSCOMPILING)
+if(WIN32 AND MSVC)
     # Special handling for Windows
     set(ESPEAKNG_STATIC_LIB ${ESPEAKNG_INSTALL_DIR}/lib/espeak-ng.lib)
     set(UCD_STATIC_LIB ${ESPEAKNG_BUILD_DIR}/src/espeak_ng_external-build/src/ucd-tools/ucd.lib)
@@ -34,6 +37,7 @@ ExternalProject_Add(espeak_ng_external
     GIT_TAG 212928b394a96e8fd2096616bfd54e17845c48f6  # 2025-Mar-22
     PREFIX ${ESPEAKNG_BUILD_DIR}
     CMAKE_ARGS
+        -DCMAKE_CROSSCOMPILING:BOOL=${CMAKE_CROSSCOMPILING}
         # Forward the current toolchain file.
         -DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE}
         -DCMAKE_SYSTEM_NAME=${CMAKE_SYSTEM_NAME}
@@ -61,7 +65,7 @@ include_directories(
     ${ESPEAKNG_INSTALL_DIR}/include
 )
 
-if (NOT CMAKE_CROSSCOMPILING)
+if (NOT BUILD_LIB_ONLY)
 
 # espeak bridge
 add_library(espeakbridge MODULE
@@ -98,16 +102,27 @@ install(TARGETS espeakbridge
     RUNTIME DESTINATION .
 )
 
+endif()
+
 # Copy espeak-ng-data
 set(DATA_SRC ${CMAKE_BINARY_DIR}/espeak_ng-install/share/espeak-ng-data)
 set(DATA_DST ${CMAKE_CURRENT_SOURCE_DIR}/src/piper/espeak-ng-data)
 
+# The native compiled should have done the copy first.
+if (NOT CMAKE_CROSSCOMPILING)
 add_custom_target(copy_espeak_ng_data ALL
-    COMMAND ${CMAKE_COMMAND} -E copy_directory ${DATA_SRC} ${DATA_DST}
+    COMMAND ${CMAKE_COMMAND} -E copy_directory "${DATA_SRC}" "${DATA_DST}"
     DEPENDS espeak_ng_external
     COMMENT "Copying espeak-ng-data after espeak-ng external project builds"
 )
+else ()
+    if (NOT EXISTS "${DATA_DST}")
+        message(FATAL_ERROR "Compile native first to create directory: ${DATA_DST}")
+    else ()
+        message(VERBOSE "Found required directory: ${DATA_DST}")
+    endif ()
+endif ()
 
-endif()
+message(STATUS "Compiling from ${CMAKE_HOST_SYSTEM_PROCESSOR} for ${CMAKE_SYSTEM_PROCESSOR}")
 
 add_subdirectory(libpiper)

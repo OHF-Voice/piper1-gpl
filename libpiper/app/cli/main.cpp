@@ -15,13 +15,8 @@ int main(int argc, char *argv[]) {
     std::string filename("en_US-hfc_female-medium");
     auto wav_file =
         std::filesystem::current_path().append("output.wav").string();
-    auto espeak_ng_data =
-        std::filesystem::canonical(std::filesystem::current_path()
-                                       .append("..")
-                                       .append("src")
-                                       .append("piper")
-                                       .append("espeak-ng-data"))
-            .string();
+
+    std::string espeak_ng_data;
     std::string text(R"(
 The quick brown fox jumps over the lazy dog.
 A shimmering lake reflected the golden hues of the setting sun,
@@ -55,20 +50,57 @@ Somewhere in the distance, a bird chirped a melody that seemed to echo through t
         args.printHelp();
         return 0;
     }
-    //
-    auto model_data = std::filesystem::current_path()
-                          .append("models")
-                          .append(filename + ".onnx")
-                          .string();
+    // Set the development location for the directory.
+    if (!espeak_ng_data.length())
+        espeak_ng_data = getExecutablePath()
+                             .parent_path()
+                             .parent_path()
+                             .parent_path()
+                             .append("src")
+                             .append("piper")
+                             .append("espeak-ng-data")
+                             .string();
 
-    auto *synth =
-        piper_create(model_data.data(), nullptr, espeak_ng_data.data());
+    // Try finding the 'models' directory one directory up.
+    if (!std::filesystem::exists(std::filesystem::path(espeak_ng_data))) {
+        std::cerr << "Subdirectory 'espeak-ng-data' not found at:"
+                  << espeak_ng_data << std::endl;
+        return 1;
+    }
+
+    std::clog << "Directory 'espeak-ng-data' at: " << espeak_ng_data
+              << std::endl;
+
+    // Set the base of the model directory, which is the executable directory.
+    auto model_dir = getExecutablePath().parent_path();
+    // Try finding the 'models' directory there.
+    if (!std::filesystem::exists(
+            std::filesystem::path(model_dir).append("models")))
+        model_dir = model_dir.parent_path();
+    // Try finding the 'models' directory one directory up.
+    if (!std::filesystem::exists(
+            std::filesystem::path(model_dir).append("models"))) {
+        std::cerr << "Subdirectory 'models' not found !" << std::endl;
+        return 1;
+    }
+    // Check if the directory contains the
+    auto model_data = model_dir.append("models").append(filename + ".onnx");
+    if (!std::filesystem::exists(model_data)) {
+        std::cerr << "Model file not found at: " << model_data << std::endl;
+        return 1;
+    }
+
+    std::clog << "Filepath (model_data): " << model_data << std::endl;
+
+    auto *synth = piper_create(model_data.string().data(),
+                               (model_data.string() + ".json").data(),
+                               espeak_ng_data.data());
 
     piper_synthesize_options options = piper_default_synthesize_options(synth);
     // Set the default or selected speaker.
     options.speaker_id = speaker_id;
     // Start synthesizing.
-    piper_synthesize_start(synth, text.data(), &options);
+    piper_synthesize_start(synth, text.c_str(), &options);
 
     std::ofstream audio_stream(wav_file, std::ios::binary);
 
@@ -116,8 +148,9 @@ Somewhere in the distance, a bird chirped a melody that seemed to echo through t
             std::cout << "Command: " << cmd << std::endl;
             return std::system(cmd.data());
         }
-        return std::system(
-            std::string("start \"").append(file.filename().string() +"\"").data());
+        std::string cmd("start");
+        cmd += " " + file.filename().string();
+        return std::system(cmd.data());
 #else
         auto cmd = std::string("xdg-open ").append(wav_file);
         std::cout << "Command: " << cmd << std::endl;
