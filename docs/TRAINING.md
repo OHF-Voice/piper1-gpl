@@ -41,7 +41,7 @@ utt2.wav|Text for utterance 2.
 
 The first column is the name of the audio file (any format supported by [librosa][]), which must be located in `--data.audio_dir` (see below).
 
-The second column is the text that will be passed to [espeak-ng][] for phonemization (similar to `espeak-ng --ipa=3`).
+The second column is the text that will be passed to [espeak-ng][] for phonemization (similar to `espeak-ng --ipa=3`). (This can be bypassed to directly train on IPA phonemes by passing `--data.phoneme_type TEXT` to the training script.)
 
 Run the training script:
 

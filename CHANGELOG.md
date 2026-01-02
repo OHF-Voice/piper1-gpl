@@ -5,6 +5,7 @@
 - Add experimental support for alignments (see docs/ALIGNMENTS.md)
 - Raw phonemes no longer split sentences
 - Fix training for multi-speaker voices
+- Add `--data.phoneme_type TEXT` training parameter to use IPA phonemes directly without espeak-ng phonemization
 
 ## 1.3.0
 

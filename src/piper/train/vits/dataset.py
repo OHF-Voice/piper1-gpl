@@ -5,6 +5,7 @@ import itertools
 import json
 import logging
 import math
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Union
@@ -61,6 +62,7 @@ class VitsDataModule(L.LightningDataModule):
         trim_silence: bool = True,
         keep_seconds_before_silence: float = 0.25,
         keep_seconds_after_silence: float = 0.25,
+        phoneme_type: PhonemeType = PhonemeType.ESPEAK,
     ) -> None:
         super().__init__()
 
@@ -69,6 +71,7 @@ class VitsDataModule(L.LightningDataModule):
         self.espeak_voice = espeak_voice
         self.config_path = Path(config_path)
         self.voice_name = voice_name
+        self.phoneme_type = phoneme_type
 
         self.sample_rate = sample_rate
         self.num_symbols = num_symbols
@@ -113,7 +116,7 @@ class VitsDataModule(L.LightningDataModule):
             sample_rate=self.sample_rate,
             espeak_voice=self.espeak_voice,
             phoneme_id_map=DEFAULT_PHONEME_ID_MAP,
-            phoneme_type=PhonemeType.ESPEAK,
+            phoneme_type=self.phoneme_type,
             piper_version="1.3.0",
         )
 
@@ -155,7 +158,7 @@ class VitsDataModule(L.LightningDataModule):
                 indent=2,
             )
 
-        phonemizer = EspeakPhonemizer()
+        phonemizer = EspeakPhonemizer() if self.phoneme_type == PhonemeType.ESPEAK else None
         vad = SileroVoiceActivityDetector()
 
         num_utterances = 0
@@ -191,7 +194,12 @@ class VitsDataModule(L.LightningDataModule):
                 phonemes: Optional[List[List[str]]] = None
                 phonemes_path = self.cache_dir / f"{cache_id}.phonemes.txt"
                 if not phonemes_path.exists():
-                    phonemes = phonemizer.phonemize(self.espeak_voice, text)
+                    if self.phoneme_type == PhonemeType.TEXT:
+                        # Split text into characters (NFD normalized)
+                        phonemes = [list(unicodedata.normalize("NFD", text))]
+                    else:
+                        phonemes = phonemizer.phonemize(self.espeak_voice, text)
+
                     with open(phonemes_path, "w", encoding="utf-8") as phonemes_file:
                         for sentence_phonemes in phonemes:
                             print("".join(sentence_phonemes), file=phonemes_file)
@@ -203,7 +211,10 @@ class VitsDataModule(L.LightningDataModule):
                 phoneme_ids_path = self.cache_dir / f"{cache_id}.phonemes.pt"
                 if not phoneme_ids_path.exists():
                     if phonemes is None:
-                        phonemes = phonemizer.phonemize(self.espeak_voice, text)
+                        if self.phoneme_type == PhonemeType.TEXT:
+                            phonemes = [list(unicodedata.normalize("NFD", text))]
+                        else:
+                            phonemes = phonemizer.phonemize(self.espeak_voice, text)
 
                     phoneme_ids = list(
                         itertools.chain(
