@@ -71,6 +71,7 @@ class VitsDataModule(L.LightningDataModule):
         keep_seconds_after_silence: float = 0.25,
         phoneme_type: Optional[str] = None,
         dataset_type: Union[str, DatasetType] = DatasetType.TEXT,
+        phonemes_path: Optional[Union[str, Path]] = None,
     ) -> None:
         super().__init__()
 
@@ -121,6 +122,10 @@ class VitsDataModule(L.LightningDataModule):
             self.phoneme_type = PhonemeType(phoneme_type)
         self.dataset_type = DatasetType(dataset_type)
 
+        self.phonemes_path: Optional[Path] = None
+        if phonemes_path is not None:
+            self.phonemes_path = Path(phonemes_path)
+
     def prepare_data(self):
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
@@ -128,6 +133,26 @@ class VitsDataModule(L.LightningDataModule):
             from piper.phonemize_chinese import PHONEME_TO_ID
 
             phoneme_id_map = PHONEME_TO_ID
+
+        if self.phonemes_path:
+            _LOGGER.debug("Loading phoneme map from %s", self.phonemes_path)
+            with open(self.phonemes_path, "r", encoding="utf-8") as phonemes_file:
+                phoneme_id_map = json.load(phonemes_file)
+
+            # Ensure ids are lists
+            max_phoneme_id = 0
+            for phoneme, phoneme_ids in list(phoneme_id_map.items()):
+                if not isinstance(phoneme_ids, list):
+                    phoneme_ids = [phoneme_ids]
+                    phoneme_id_map[phoneme] = phoneme_ids
+
+                max_phoneme_id = max(max_phoneme_id, max(phoneme_ids))
+
+            if self.num_symbols == 0:
+                self.num_symbols = max_phoneme_id + 1
+                _LOGGER.info(
+                    "Automatically set number of symbols to %s", self.num_symbols
+                )
         else:
             phoneme_id_map = DEFAULT_PHONEME_ID_MAP
 
