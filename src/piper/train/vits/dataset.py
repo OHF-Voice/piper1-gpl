@@ -252,9 +252,20 @@ class VitsDataModule(L.LightningDataModule):
 
                 if self.dataset_type == DatasetType.PHONEME_IDS:
                     # utt_id|text|phoneme_ids or utt_id|speaker_id|text|phoneme_ids
-                    phoneme_ids_str = row[-1]
                     text = row[-2]
-                    cache_id = get_cache_id(row_number, text, speaker_id=speaker_id)
+                else:
+                    # utt_id|text or utt_id|speaker_id|text
+                    text = row[-1]
+
+                cache_id = get_cache_id(row_number, text, speaker_id=speaker_id)
+
+                # text
+                text_path = self.cache_dir / f"{cache_id}.txt"
+                if not text_path.exists():
+                    text_path.write_text(text, encoding="utf-8")
+
+                if self.dataset_type == DatasetType.PHONEME_IDS:
+                    phoneme_ids_str = row[-1]
 
                     # ids separated by whitespace
                     phoneme_ids = [int(p_id) for p_id in phoneme_ids_str.split()]
@@ -270,15 +281,6 @@ class VitsDataModule(L.LightningDataModule):
                         if report_prepare is None:
                             report_prepare = True
                 else:
-                    # utt_id|text or utt_id|speaker_id|text
-                    text = row[-1]
-                    cache_id = get_cache_id(row_number, text, speaker_id=speaker_id)
-
-                    # text
-                    text_path = self.cache_dir / f"{cache_id}.txt"
-                    if not text_path.exists():
-                        text_path.write_text(text, encoding="utf-8")
-
                     # phonemes
                     phonemes: Optional[List[List[str]]] = None
                     phonemes_path = self.cache_dir / f"{cache_id}.phonemes.txt"
@@ -378,7 +380,7 @@ class VitsDataModule(L.LightningDataModule):
         with open(self.csv_path, "r", encoding="utf-8") as csv_file:
             reader = csv.reader(csv_file, delimiter="|")
             for row_number, row in enumerate(reader, start=1):
-                utt_id, text = row[0], row[-1]
+                utt_id = row[0]
                 speaker_id: Optional[int] = None
                 if self.is_multispeaker:
                     assert (
@@ -394,6 +396,13 @@ class VitsDataModule(L.LightningDataModule):
                 if not audio_path.exists():
                     _LOGGER.warning("Missing audio file: %s", audio_path)
                     continue
+
+                if self.dataset_type == DatasetType.PHONEME_IDS:
+                    # utt_id|text|phoneme_ids or utt_id|speaker_id|text|phoneme_ids
+                    text = row[-2]
+                else:
+                    # utt_id|text or utt_id|speaker_id|text
+                    text = row[-1]
 
                 cache_id = get_cache_id(row_number, text, speaker_id=speaker_id)
 
