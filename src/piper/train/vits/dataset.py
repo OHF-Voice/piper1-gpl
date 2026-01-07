@@ -7,6 +7,7 @@ import logging
 import math
 import unicodedata
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Union
 
@@ -39,6 +40,11 @@ class CachedUtterance:
     speaker_id: Optional[int] = None
 
 
+class DatasetType(str, Enum):
+    TEXT = "text"
+    PHONEME_IDS = "phoneme_ids"
+
+
 class VitsDataModule(L.LightningDataModule):
     def __init__(
         self,
@@ -64,6 +70,7 @@ class VitsDataModule(L.LightningDataModule):
         keep_seconds_before_silence: float = 0.25,
         keep_seconds_after_silence: float = 0.25,
         phoneme_type: Optional[str] = None,
+        dataset_type: Union[str, DatasetType] = DatasetType.TEXT,
     ) -> None:
         super().__init__()
 
@@ -112,6 +119,7 @@ class VitsDataModule(L.LightningDataModule):
             self.phoneme_type = PhonemeType.ESPEAK
         else:
             self.phoneme_type = PhonemeType(phoneme_type)
+        self.dataset_type = DatasetType(dataset_type)
 
     def prepare_data(self):
         self.cache_dir.mkdir(parents=True, exist_ok=True)
@@ -200,7 +208,7 @@ class VitsDataModule(L.LightningDataModule):
         with open(self.csv_path, "r", encoding="utf-8") as csv_file:
             reader = csv.reader(csv_file, delimiter="|")
             for row_number, row in enumerate(reader, start=1):
-                utt_id, text = row[0], row[-1]
+                utt_id = row[0]
                 speaker_id: Optional[int] = None
                 if self.is_multispeaker:
                     assert (
@@ -217,51 +225,66 @@ class VitsDataModule(L.LightningDataModule):
                     _LOGGER.warning("Missing audio file: %s", audio_path)
                     continue
 
-                cache_id = get_cache_id(row_number, text, speaker_id=speaker_id)
+                if self.dataset_type == DatasetType.PHONEME_IDS:
+                    # utt_id|text|phoneme_ids or utt_id|speaker_id|text|phoneme_ids
+                    phoneme_ids_str = row[-1]
+                    text = row[-2]
+                    cache_id = get_cache_id(row_number, text, speaker_id=speaker_id)
 
-                # text
-                text_path = self.cache_dir / f"{cache_id}.txt"
-                if not text_path.exists():
-                    text_path.write_text(text, encoding="utf-8")
+                    # ids separated by whitespace
+                    phoneme_ids = [int(p_id) for p_id in phoneme_ids_str.split()]
+                    max_phoneme_id = max(phoneme_ids)
+                    assert (
+                        self.num_symbols > max_phoneme_id
+                    ), f"Number of symbols ({self.num_symbols}) must be greater than max phoneme id ({max_phoneme_id})"
 
-                # phonemes
-                phonemes: Optional[List[List[str]]] = None
-                phonemes_path = self.cache_dir / f"{cache_id}.phonemes.txt"
-                if not phonemes_path.exists():
-                    phonemes = phonemize(text)
-                    with open(phonemes_path, "w", encoding="utf-8") as phonemes_file:
-                        for sentence_phonemes in phonemes:
-                            print("".join(sentence_phonemes), file=phonemes_file)
+                    # phoneme ids
+                    phoneme_ids_path = self.cache_dir / f"{cache_id}.phonemes.pt"
+                    if not phoneme_ids_path.exists():
+                        torch.save(torch.LongTensor(phoneme_ids), phoneme_ids_path)
+                        if report_prepare is None:
+                            report_prepare = True
+                else:
+                    # utt_id|text or utt_id|speaker_id|text
+                    text = row[-1]
+                    cache_id = get_cache_id(row_number, text, speaker_id=speaker_id)
 
-                    if report_prepare is None:
-                        report_prepare = True
+                    # text
+                    text_path = self.cache_dir / f"{cache_id}.txt"
+                    if not text_path.exists():
+                        text_path.write_text(text, encoding="utf-8")
 
-                # phoneme ids
-                phoneme_ids_path = self.cache_dir / f"{cache_id}.phonemes.pt"
-                if not phoneme_ids_path.exists():
-                    if phonemes is None:
-                        phonemes = phonemize(text)
+                    # phonemes
+                    phonemes: Optional[List[List[str]]] = None
+                    phonemes_path = self.cache_dir / f"{cache_id}.phonemes.txt"
+                    if not phonemes_path.exists():
+                        phonemes = phonemizer.phonemize(self.espeak_voice, text)
+                        with open(
+                            phonemes_path, "w", encoding="utf-8"
+                        ) as phonemes_file:
+                            for sentence_phonemes in phonemes:
+                                print("".join(sentence_phonemes), file=phonemes_file)
 
-                    if self.phoneme_type == PhonemeType.PINYIN:
-                        from piper.phonemize_chinese import (
-                            phonemes_to_ids as chinese_phonemes_to_ids,
-                        )
+                        if report_prepare is None:
+                            report_prepare = True
 
-                        phonemes_to_ids = chinese_phonemes_to_ids
-                    else:
-                        phonemes_to_ids = default_phonemes_to_ids
+                    # phoneme ids
+                    phoneme_ids_path = self.cache_dir / f"{cache_id}.phonemes.pt"
+                    if not phoneme_ids_path.exists():
+                        if phonemes is None:
+                            phonemes = phonemizer.phonemize(self.espeak_voice, text)
 
-                    phoneme_ids = list(
-                        itertools.chain(
-                            *(
-                                phonemes_to_ids(sentence_phonemes)
-                                for sentence_phonemes in phonemes
+                        phoneme_ids = list(
+                            itertools.chain(
+                                *(
+                                    phonemes_to_ids(sentence_phonemes)
+                                    for sentence_phonemes in phonemes
+                                )
                             )
                         )
-                    )
-                    torch.save(torch.LongTensor(phoneme_ids), phoneme_ids_path)
-                    if report_prepare is None:
-                        report_prepare = True
+                        torch.save(torch.LongTensor(phoneme_ids), phoneme_ids_path)
+                        if report_prepare is None:
+                            report_prepare = True
 
                 # normalized audio
                 norm_audio_path = self.cache_dir / f"{cache_id}.audio.pt"
