@@ -147,12 +147,6 @@ class VitsDataModule(L.LightningDataModule):
                     phoneme_id_map[phoneme] = phoneme_ids
 
                 max_phoneme_id = max(max_phoneme_id, max(phoneme_ids))
-
-            if self.num_symbols == 0:
-                self.num_symbols = max_phoneme_id + 1
-                _LOGGER.info(
-                    "Automatically set number of symbols to %s", self.num_symbols
-                )
         else:
             phoneme_id_map = DEFAULT_PHONEME_ID_MAP
 
