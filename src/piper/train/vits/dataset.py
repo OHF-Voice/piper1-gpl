@@ -120,7 +120,11 @@ class VitsDataModule(L.LightningDataModule):
             self.phoneme_type = PhonemeType.ESPEAK
         else:
             self.phoneme_type = PhonemeType(phoneme_type)
-        self.dataset_type = DatasetType(dataset_type)
+
+        if isinstance(dataset_type, DatasetType):
+            self.dataset_type = dataset_type
+        else:
+            self.dataset_type = DatasetType(dataset_type)
 
         self.phonemes_path: Optional[Path] = None
         if phonemes_path is not None:
