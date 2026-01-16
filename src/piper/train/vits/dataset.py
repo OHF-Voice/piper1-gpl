@@ -70,7 +70,7 @@ class VitsDataModule(L.LightningDataModule):
         keep_seconds_before_silence: float = 0.25,
         keep_seconds_after_silence: float = 0.25,
         phoneme_type: Optional[str] = None,
-        dataset_type: Union[str, DatasetType] = DatasetType.TEXT,
+        dataset_type: Union[str, DatasetType] = DatasetType.TEXT.value,
         phonemes_path: Optional[Union[str, Path]] = None,
     ) -> None:
         super().__init__()
