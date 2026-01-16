@@ -133,6 +133,9 @@ class VitsDataModule(L.LightningDataModule):
     def prepare_data(self):
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
+        phoneme_id_map = DEFAULT_PHONEME_ID_MAP
+        phonemes_to_ids = default_phonemes_to_ids
+
         if self.phonemes_path:
             _LOGGER.debug("Loading phoneme map from %s", self.phonemes_path)
             with open(self.phonemes_path, "r", encoding="utf-8") as phonemes_file:
@@ -147,11 +150,13 @@ class VitsDataModule(L.LightningDataModule):
 
                 max_phoneme_id = max(max_phoneme_id, max(phoneme_ids))
         elif self.phoneme_type == PhonemeType.PINYIN:
-            from piper.phonemize_chinese import PHONEME_TO_ID
+            from piper.phonemize_chinese import (
+                PHONEME_TO_ID,
+                phonemes_to_ids as chinese_phonemes_to_ids,
+            )
 
             phoneme_id_map = PHONEME_TO_ID
-        else:
-            phoneme_id_map = DEFAULT_PHONEME_ID_MAP
+            phonemes_to_ids = chinese_phonemes_to_ids
 
         self.piper_config = PiperConfig(
             num_symbols=self.num_symbols,
@@ -282,7 +287,7 @@ class VitsDataModule(L.LightningDataModule):
                     phonemes: Optional[List[List[str]]] = None
                     phonemes_path = self.cache_dir / f"{cache_id}.phonemes.txt"
                     if not phonemes_path.exists():
-                        phonemes = phonemizer.phonemize(self.espeak_voice, text)
+                        phonemes = phonemize(text)
                         with open(
                             phonemes_path, "w", encoding="utf-8"
                         ) as phonemes_file:
@@ -296,7 +301,7 @@ class VitsDataModule(L.LightningDataModule):
                     phoneme_ids_path = self.cache_dir / f"{cache_id}.phonemes.pt"
                     if not phoneme_ids_path.exists():
                         if phonemes is None:
-                            phonemes = phonemizer.phonemize(self.espeak_voice, text)
+                            phonemes = phonemize(text)
 
                         phoneme_ids = list(
                             itertools.chain(
