@@ -21,6 +21,7 @@ from .phoneme_ids import DEFAULT_PHONEME_ID_MAP
 
 _LOGGER = logging.getLogger(__name__)
 
+# NOTE: Must be sorted longest to shortest
 PINYIN_INITIALS = [
     "zh",
     "ch",
@@ -157,20 +158,32 @@ PHONEME_TO_ID: dict[str, list[int]] = {
 }
 
 GROUP_END_PHONEMES = {
+    # tones
     "1",
     "2",
     "3",
     "4",
     "5",
+    # full-width long pauses
     "。",
     "？",
     "！",
+    # half-width long pauses
+    ".",
+    "?",
+    "!",
+    # full-width short pauses
     "—",
     "…",
     "、",
     "，",
     "：",
     "；",
+    # half-width short pauses
+    ",",
+    ":",
+    ";",
+    # space
     " ",
 }
 
@@ -216,7 +229,7 @@ class ChinesePhonemizer:
                 if not fin_p:
                     # Not a normal pinyin syllable
                     sentence_phonemes.append(syl)
-                    break
+                    continue
 
                 if not ini_p:
                     ini_p = "Ø"
@@ -252,10 +265,9 @@ def phonemes_to_ids(
 
     ids: list[int] = []
     ids.extend(id_map[BOS])
-    ids.extend(id_map[PAD])
 
     for phoneme in phonemes:
-        if phoneme not in PHONEME_TO_ID:
+        if phoneme not in id_map:
             _LOGGER.warning("Missing phoneme from id map: %s", phoneme)
             continue
 
@@ -272,18 +284,22 @@ def phonemes_to_ids(
 
 def _normalize_g2pw_syllable(syl: str) -> str:
     """
-    - Keep only syllables like [a-z:]+[1-5]
-    - Convert g2pW's 'u:' -> 'v' (ü-family)
+    - Keep only syllables like [a-züv:]+[1-5]
+    - Convert g2pW's 'u:' and 'ü' -> 'v' (ü-family)
       nu:3   -> nv3        (n + v)
       lu:e4  -> lve4       (l + ve)
       ju:an3 -> jvan3      (j + van)
       ju:n3  -> jvn3       (j + vn)
     """
-    m = re.match(r"^([a-z:]+?)([1-5])$", syl)
+    m = re.match(r"^([a-züv:]+?)([1-5])$", syl)
     if not m:
         return syl
+
     base, tone = m.group(1), m.group(2)
-    base = base.replace("u:", "v")
+
+    # Normalize ü-family to ASCII-friendly 'v'
+    base = base.replace("u:", "v").replace("ü", "v")
+
     return base + tone
 
 
@@ -292,9 +308,10 @@ def _split_initial_final_tone(syl: str):
     'hang2' -> ('h', 'ang', '2')
     'ai3'   -> ('', 'ai', '3')
     """
-    m = re.match(r"^([a-züv]+?)([1-5])$", syl)
+    m = re.match(r"^([a-zvü]+?)([1-5])$", syl)
     if not m:
         return "", "", None
+
     base, tone = m.group(1), m.group(2)
 
     ini = ""

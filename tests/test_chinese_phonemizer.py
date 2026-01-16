@@ -106,7 +106,6 @@ def test_phonemize(phonemizer: ChinesePhonemizer) -> None:
 
     assert phonemes_to_ids(phonemes[0]) == [
         BOS_ID,
-        PAD_ID,
         # k a 3
         13,
         27,
