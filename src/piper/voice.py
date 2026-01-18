@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Iterable, Optional, Sequence, Tuple, Union
 
 import numpy as np
+import torch
 import onnxruntime
 
 from .config import PhonemeType, PiperConfig, SynthesisConfig
@@ -121,6 +122,7 @@ class PiperVoice:
         model_path: Union[str, Path],
         config_path: Optional[Union[str, Path]] = None,
         use_cuda: bool = False,
+        use_rocm: bool = False,
         espeak_data_dir: Union[str, Path] = ESPEAK_DATA_DIR,
     ) -> "PiperVoice":
         """
@@ -148,6 +150,13 @@ class PiperVoice:
                 )
             ]
             _LOGGER.debug("Using CUDA")
+        elif use_rocm:
+            providers = [
+                (
+                    "ROCMExecutionProvider"
+                )
+            ]
+            _LOGGER.debug("Using ROCm")
         else:
             providers = ["CPUExecutionProvider"]
 
