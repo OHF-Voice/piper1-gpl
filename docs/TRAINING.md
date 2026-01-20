@@ -16,7 +16,7 @@ git clone https://github.com/OHF-voice/piper1-gpl.git
 cd piper1-gpl
 python3 -m venv .venv
 source .venv/bin/activate
-python3 -m pip install -e .[train]
+python3 -m pip install -e '.[train]'
 ```
 
 and then build the cython extension:
