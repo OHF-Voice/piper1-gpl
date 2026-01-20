@@ -5,7 +5,9 @@ import itertools
 import json
 import logging
 import math
+import unicodedata
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Union
 
@@ -18,7 +20,8 @@ from torch import FloatTensor, LongTensor
 from torch.utils.data import DataLoader, Dataset, random_split
 
 from piper.config import PhonemeType, PiperConfig
-from piper.phoneme_ids import DEFAULT_PHONEME_ID_MAP, phonemes_to_ids
+from piper.phoneme_ids import DEFAULT_PHONEME_ID_MAP
+from piper.phoneme_ids import phonemes_to_ids as default_phonemes_to_ids
 from piper.phonemize_espeak import EspeakPhonemizer
 
 from .mel_processing import spectrogram_torch
@@ -35,6 +38,11 @@ class CachedUtterance:
     audio_spec_path: Path
     text: Optional[str] = None
     speaker_id: Optional[int] = None
+
+
+class DatasetType(str, Enum):
+    TEXT = "text"
+    PHONEME_IDS = "phoneme_ids"
 
 
 class VitsDataModule(L.LightningDataModule):
@@ -61,6 +69,9 @@ class VitsDataModule(L.LightningDataModule):
         trim_silence: bool = True,
         keep_seconds_before_silence: float = 0.25,
         keep_seconds_after_silence: float = 0.25,
+        phoneme_type: Optional[str] = None,
+        dataset_type: Union[str, DatasetType] = DatasetType.TEXT.value,
+        phonemes_path: Optional[Union[str, Path]] = None,
     ) -> None:
         super().__init__()
 
@@ -104,16 +115,56 @@ class VitsDataModule(L.LightningDataModule):
         self.piper_config: Optional[PiperConfig] = None
         self.is_multispeaker = self.num_speakers > 1
 
+        # Phonemes
+        if phoneme_type is None:
+            self.phoneme_type = PhonemeType.ESPEAK
+        else:
+            self.phoneme_type = PhonemeType(phoneme_type)
+
+        if isinstance(dataset_type, DatasetType):
+            self.dataset_type = dataset_type
+        else:
+            self.dataset_type = DatasetType(dataset_type)
+
+        self.phonemes_path: Optional[Path] = None
+        if phonemes_path is not None:
+            self.phonemes_path = Path(phonemes_path)
+
     def prepare_data(self):
         self.cache_dir.mkdir(parents=True, exist_ok=True)
+
+        phoneme_id_map = DEFAULT_PHONEME_ID_MAP
+        phonemes_to_ids = default_phonemes_to_ids
+
+        if self.phonemes_path:
+            _LOGGER.debug("Loading phoneme map from %s", self.phonemes_path)
+            with open(self.phonemes_path, "r", encoding="utf-8") as phonemes_file:
+                phoneme_id_map = json.load(phonemes_file)
+
+            # Ensure ids are lists
+            max_phoneme_id = 0
+            for phoneme, phoneme_ids in list(phoneme_id_map.items()):
+                if not isinstance(phoneme_ids, list):
+                    phoneme_ids = [phoneme_ids]
+                    phoneme_id_map[phoneme] = phoneme_ids
+
+                max_phoneme_id = max(max_phoneme_id, max(phoneme_ids))
+        elif self.phoneme_type == PhonemeType.PINYIN:
+            from piper.phonemize_chinese import (
+                PHONEME_TO_ID,
+                phonemes_to_ids as chinese_phonemes_to_ids,
+            )
+
+            phoneme_id_map = PHONEME_TO_ID
+            phonemes_to_ids = chinese_phonemes_to_ids
 
         self.piper_config = PiperConfig(
             num_symbols=self.num_symbols,
             num_speakers=self.num_speakers,
             sample_rate=self.sample_rate,
             espeak_voice=self.espeak_voice,
-            phoneme_id_map=DEFAULT_PHONEME_ID_MAP,
-            phoneme_type=PhonemeType.ESPEAK,
+            phoneme_id_map=phoneme_id_map,
+            phoneme_type=self.phoneme_type,
             piper_version="1.3.0",
         )
 
@@ -155,7 +206,28 @@ class VitsDataModule(L.LightningDataModule):
                 indent=2,
             )
 
-        phonemizer = EspeakPhonemizer()
+        if self.phoneme_type == PhonemeType.PINYIN:
+            from piper.phonemize_chinese import ChinesePhonemizer
+
+            # g2pW -> pinyin -> phonemes
+            phonemizer = ChinesePhonemizer(model_dir=Path.cwd() / "local" / "g2pW")
+
+            def phonemize(text: str) -> list[list[str]]:
+                return phonemizer.phonemize(text)
+
+        elif self.phoneme_type == PhonemeType.TEXT:
+            # text = phonemes
+
+            def phonemize(text: str) -> list[list[str]]:
+                return [list(unicodedata.normalize("NFD", text))]
+
+        else:
+            # espeak-ng
+            phonemizer = EspeakPhonemizer()
+
+            def phonemize(text: str) -> list[list[str]]:
+                return phonemizer.phonemize(self.espeak_voice, text)
+
         vad = SileroVoiceActivityDetector()
 
         num_utterances = 0
@@ -163,7 +235,7 @@ class VitsDataModule(L.LightningDataModule):
         with open(self.csv_path, "r", encoding="utf-8") as csv_file:
             reader = csv.reader(csv_file, delimiter="|")
             for row_number, row in enumerate(reader, start=1):
-                utt_id, text = row[0], row[-1]
+                utt_id = row[0]
                 speaker_id: Optional[int] = None
                 if self.is_multispeaker:
                     assert (
@@ -180,6 +252,13 @@ class VitsDataModule(L.LightningDataModule):
                     _LOGGER.warning("Missing audio file: %s", audio_path)
                     continue
 
+                if self.dataset_type == DatasetType.PHONEME_IDS:
+                    # utt_id|text|phoneme_ids or utt_id|speaker_id|text|phoneme_ids
+                    text = row[-2]
+                else:
+                    # utt_id|text or utt_id|speaker_id|text
+                    text = row[-1]
+
                 cache_id = get_cache_id(row_number, text, speaker_id=speaker_id)
 
                 # text
@@ -187,35 +266,54 @@ class VitsDataModule(L.LightningDataModule):
                 if not text_path.exists():
                     text_path.write_text(text, encoding="utf-8")
 
-                # phonemes
-                phonemes: Optional[List[List[str]]] = None
-                phonemes_path = self.cache_dir / f"{cache_id}.phonemes.txt"
-                if not phonemes_path.exists():
-                    phonemes = phonemizer.phonemize(self.espeak_voice, text)
-                    with open(phonemes_path, "w", encoding="utf-8") as phonemes_file:
-                        for sentence_phonemes in phonemes:
-                            print("".join(sentence_phonemes), file=phonemes_file)
+                if self.dataset_type == DatasetType.PHONEME_IDS:
+                    phoneme_ids_str = row[-1]
 
-                    if report_prepare is None:
-                        report_prepare = True
+                    # ids separated by whitespace
+                    phoneme_ids = [int(p_id) for p_id in phoneme_ids_str.split()]
+                    max_phoneme_id = max(phoneme_ids)
+                    assert (
+                        self.num_symbols > max_phoneme_id
+                    ), f"Number of symbols ({self.num_symbols}) must be greater than max phoneme id ({max_phoneme_id})"
 
-                # phoneme ids
-                phoneme_ids_path = self.cache_dir / f"{cache_id}.phonemes.pt"
-                if not phoneme_ids_path.exists():
-                    if phonemes is None:
-                        phonemes = phonemizer.phonemize(self.espeak_voice, text)
+                    # phoneme ids
+                    phoneme_ids_path = self.cache_dir / f"{cache_id}.phonemes.pt"
+                    if not phoneme_ids_path.exists():
+                        torch.save(torch.LongTensor(phoneme_ids), phoneme_ids_path)
+                        if report_prepare is None:
+                            report_prepare = True
+                else:
+                    # phonemes
+                    phonemes: Optional[List[List[str]]] = None
+                    phonemes_path = self.cache_dir / f"{cache_id}.phonemes.txt"
+                    if not phonemes_path.exists():
+                        phonemes = phonemize(text)
+                        with open(
+                            phonemes_path, "w", encoding="utf-8"
+                        ) as phonemes_file:
+                            for sentence_phonemes in phonemes:
+                                print("".join(sentence_phonemes), file=phonemes_file)
 
-                    phoneme_ids = list(
-                        itertools.chain(
-                            *(
-                                phonemes_to_ids(sentence_phonemes)
-                                for sentence_phonemes in phonemes
+                        if report_prepare is None:
+                            report_prepare = True
+
+                    # phoneme ids
+                    phoneme_ids_path = self.cache_dir / f"{cache_id}.phonemes.pt"
+                    if not phoneme_ids_path.exists():
+                        if phonemes is None:
+                            phonemes = phonemize(text)
+
+                        phoneme_ids = list(
+                            itertools.chain(
+                                *(
+                                    phonemes_to_ids(sentence_phonemes)
+                                    for sentence_phonemes in phonemes
+                                )
                             )
                         )
-                    )
-                    torch.save(torch.LongTensor(phoneme_ids), phoneme_ids_path)
-                    if report_prepare is None:
-                        report_prepare = True
+                        torch.save(torch.LongTensor(phoneme_ids), phoneme_ids_path)
+                        if report_prepare is None:
+                            report_prepare = True
 
                 # normalized audio
                 norm_audio_path = self.cache_dir / f"{cache_id}.audio.pt"
@@ -252,6 +350,8 @@ class VitsDataModule(L.LightningDataModule):
                         # Load audio from cache
                         audio_norm_tensor = torch.load(norm_audio_path)
 
+                    assert audio_norm_tensor is not None
+
                     torch.save(
                         spectrogram_torch(
                             y=audio_norm_tensor.unsqueeze(0),
@@ -282,7 +382,7 @@ class VitsDataModule(L.LightningDataModule):
         with open(self.csv_path, "r", encoding="utf-8") as csv_file:
             reader = csv.reader(csv_file, delimiter="|")
             for row_number, row in enumerate(reader, start=1):
-                utt_id, text = row[0], row[-1]
+                utt_id = row[0]
                 speaker_id: Optional[int] = None
                 if self.is_multispeaker:
                     assert (
@@ -298,6 +398,13 @@ class VitsDataModule(L.LightningDataModule):
                 if not audio_path.exists():
                     _LOGGER.warning("Missing audio file: %s", audio_path)
                     continue
+
+                if self.dataset_type == DatasetType.PHONEME_IDS:
+                    # utt_id|text|phoneme_ids or utt_id|speaker_id|text|phoneme_ids
+                    text = row[-2]
+                else:
+                    # utt_id|text or utt_id|speaker_id|text
+                    text = row[-1]
 
                 cache_id = get_cache_id(row_number, text, speaker_id=speaker_id)
 

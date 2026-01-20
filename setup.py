@@ -24,7 +24,7 @@ TASHKEEL_DATA_FILES = [
 
 setup(
     name="piper-tts",
-    version="1.3.1",
+    version="1.4.0",
     description="Fast and local neural text-to-speech engine",
     url="http://github.com/OHF-voice/piper1-gpl",
     license="GPL-3.0-or-later",
@@ -74,6 +74,12 @@ setup(
         ],
         "alignment": [
             "onnx>=1,<2",
+        ],
+        "zh": [
+            "g2pW>=0.1.1,<1",
+            "sentence-stream>=1.2.1,<2",
+            "unicode-rbnf>=2.4.0,<3",
+            "torch>=2,<3",
         ],
     },
     packages=["piper", "piper.tashkeel", "piper.train"],

@@ -111,6 +111,9 @@ class PiperVoice:
     espeak_data_dir: Path = ESPEAK_DATA_DIR
     """Path to espeak-ng data directory."""
 
+    download_dir: Path = Path.cwd()
+    """Path to download resources."""
+
     # For Arabic text only
     use_tashkeel: bool = True
     tashkeel_diacritizier: Optional[TashkeelDiacritizer] = None
@@ -122,6 +125,7 @@ class PiperVoice:
         config_path: Optional[Union[str, Path]] = None,
         use_cuda: bool = False,
         espeak_data_dir: Union[str, Path] = ESPEAK_DATA_DIR,
+        download_dir: Optional[Union[str, Path]] = None,
     ) -> "PiperVoice":
         """
         Load an ONNX model and config.
@@ -130,6 +134,7 @@ class PiperVoice:
         :param config_path: Path to JSON voice config (defaults to model_path + ".json").
         :param use_cuda: True if CUDA (GPU) should be used instead of CPU.
         :param espeak_data_dir: Path to espeak-ng data dir (defaults to internal data).
+        :param download_dir: Path to download resources (defaults to current directory).
         :return: Voice object.
         """
         if config_path is None:
@@ -151,6 +156,9 @@ class PiperVoice:
         else:
             providers = ["CPUExecutionProvider"]
 
+        if download_dir is None:
+            download_dir = Path.cwd()
+
         return PiperVoice(
             config=PiperConfig.from_dict(config_dict),
             session=onnxruntime.InferenceSession(
@@ -159,6 +167,7 @@ class PiperVoice:
                 providers=providers,
             ),
             espeak_data_dir=Path(espeak_data_dir),
+            download_dir=Path(download_dir),
         )
 
     def phonemize(self, text: str) -> list[list[str]]:
@@ -173,6 +182,17 @@ class PiperVoice:
         if self.config.phoneme_type == PhonemeType.TEXT:
             # Phonemes = codepoints
             return [list(unicodedata.normalize("NFD", text))]
+
+        if self.config.phoneme_type == PhonemeType.PINYIN:
+            from .phonemize_chinese import ChinesePhonemizer
+
+            # Use g2pW-based phonemizer
+            phonemizer = getattr(self, "_chinese_phonemizer", None)
+            if phonemizer is None:
+                phonemizer = ChinesePhonemizer(self.download_dir / "g2pW")
+                setattr(self, "_chinese_phonemizer", phonemizer)
+
+            return phonemizer.phonemize(text)
 
         if self.config.phoneme_type != PhonemeType.ESPEAK:
             raise ValueError(f"Unexpected phoneme type: {self.config.phoneme_type}")
