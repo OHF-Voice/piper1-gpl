@@ -4,7 +4,12 @@
 
 - Add Chinese phonemizer based on [g2pW](https://github.com/GitYCC/g2pW/)
     - Using a quantized version of the original model with `quantize_dynamic`
-- Add `pinyin` phoneme type for Chinese (zh_CN)
+- Add `--data.phoneme_type pinyin` for Chinese phonemization using g2pW
+- Add `--data.phoneme_type text` for using IPA phonemes directly (no espeak-ng)
+- Add `--model.vocoder_warmstart_ckpt <CHECKPOINT>` to restore vocoder params only
+- Add `--data.dataset_type 'phoneme_ids'` to train with pre-generated phoneme ids
+    - Use `--data.num_symbols <N>` to set number of phonemes
+    - Use `--data.phonemes_path "/path/to/phonemes.json"` for phoneme/id map
 
 ## 1.3.1
 

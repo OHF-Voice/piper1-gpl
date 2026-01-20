@@ -253,10 +253,14 @@ class VitsDataModule(L.LightningDataModule):
                     continue
 
                 if self.dataset_type == DatasetType.PHONEME_IDS:
-                    # utt_id|text|phoneme_ids or utt_id|speaker_id|text|phoneme_ids
+                    # utt_id|text|phoneme_ids
+                    # or
+                    # utt_id|speaker_id|text|phoneme_ids
                     text = row[-2]
                 else:
-                    # utt_id|text or utt_id|speaker_id|text
+                    # utt_id|text
+                    # or
+                    # utt_id|speaker_id|text
                     text = row[-1]
 
                 cache_id = get_cache_id(row_number, text, speaker_id=speaker_id)
