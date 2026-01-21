@@ -258,6 +258,12 @@ class PiperVoice:
         :param phonemes: List of phonemes.
         :return: List of phoneme ids.
         """
+
+        if self.config.phoneme_type == PhonemeType.PINYIN:
+            from .phonemize_chinese import phonemes_to_ids as chinese_phonemes_to_ids
+
+            return chinese_phonemes_to_ids(phonemes, self.config.phoneme_id_map)
+
         return phonemes_to_ids(phonemes, self.config.phoneme_id_map)
 
     def synthesize(

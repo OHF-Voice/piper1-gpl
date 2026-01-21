@@ -150,8 +150,8 @@ class VitsDataModule(L.LightningDataModule):
 
                 max_phoneme_id = max(max_phoneme_id, max(phoneme_ids))
         elif self.phoneme_type == PhonemeType.PINYIN:
+            from piper.phonemize_chinese import PHONEME_TO_ID
             from piper.phonemize_chinese import (
-                PHONEME_TO_ID,
                 phonemes_to_ids as chinese_phonemes_to_ids,
             )
 
