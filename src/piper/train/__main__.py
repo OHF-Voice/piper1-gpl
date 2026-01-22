@@ -3,9 +3,11 @@ import sys
 import os
 import pathlib
 from pathlib import Path
+from urllib.parse import urlparse
 
 import torch
 from lightning.pytorch.cli import LightningCLI
+from lightning.fabric.utilities.cloud_io import get_filesystem
 
 from .vits.dataset import VitsDataModule
 from .vits.lightning import VitsModel
@@ -29,6 +31,7 @@ class VitsLightningCLI(LightningCLI):
         if not self.config.get("subcommand"):
             return
         ckpt_path = self.config[self.config.subcommand].get("ckpt_path")
+        ckpt_path = self.ensure_local_checkpoint(ckpt_path)
         ckpt_path = self.process_checkpoint(ckpt_path, "checkpoint/")
         self.config[self.config.subcommand]["ckpt_path"] = ckpt_path
         if ckpt_path and Path(ckpt_path).is_file():
@@ -48,6 +51,28 @@ class VitsLightningCLI(LightningCLI):
             except SystemExit:
                 sys.stderr.write("Parsing of ckpt_path hyperparameters failed!\n")
                 raise
+    
+    def ensure_local_checkpoint(self, path):
+        if os.path.exists(path):
+            return path
+        
+        checkpoints_dir = "checkpoints"
+        filename = os.path.basename(urlparse(path).path)
+        os.makedirs(checkpoints_dir, exist_ok=True)
+        local_path = os.path.join(checkpoints_dir, filename)
+
+        # If already downloaded, reuse it
+        if os.path.isfile(local_path):
+            return local_path
+        
+        # Otherwise download it
+        fs = get_filesystem(path)
+
+        with fs.open(path, "rb") as src, open(local_path, "wb") as dst:
+            dst.write(src.read())
+
+        return local_path
+
 
     def convert_paths(self, obj):
         """Recursively convert Path objects to strings"""
@@ -89,9 +114,9 @@ class VitsLightningCLI(LightningCLI):
                 removed.append(key)
         
         if removed:
-            _LOGGER.info(f"\n✓ Removed conflicting parameters: {', '.join(removed)}")
+            _LOGGER.info(f"\nRemoved conflicting parameters: {', '.join(removed)}")
         else:
-            _LOGGER.info("\n⚠ No conflicting parameters found to remove")
+            _LOGGER.info("\nNo conflicting parameters found to remove")
         
         _LOGGER.info("\nRemaining hyperparameters:")
         for key, value in checkpoint['hyper_parameters'].items():
@@ -137,7 +162,7 @@ class VitsLightningCLI(LightningCLI):
             # Clean up temporary file
             if os.path.exists(temp_checkpoint):
                 os.remove(temp_checkpoint)
-                print("✓ Temporary file cleaned up")
+                print("Temporary file cleaned up")
             
             return output_checkpoint
             
