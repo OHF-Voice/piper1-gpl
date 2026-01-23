@@ -36,6 +36,7 @@ The JSON data fields area:
 * `length_scale` (optional) - speaking speed; defaults to 1
 * `noise_scale` (optional) - speaking variability
 * `noise_w_scale` (optional) - phoneme width variability
+* `realtime` (optional) - stream with a provisional WAV header and zero‑padding for low‑latency playback
 
 Get the available voices with:
 
