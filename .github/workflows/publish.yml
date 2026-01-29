@@ -29,7 +29,7 @@ jobs:
 
       - name: Get version from setup.py
         run: |
-          VERSION=$(python setup.py --version)
+          VERSION=$(sed -n "s/.*version=['\"]\([^'\"]*\)['\"].*/\1/p" setup.py)
           echo "VERSION=$VERSION" >> $GITHUB_ENV
 
       - name: Verify tag
