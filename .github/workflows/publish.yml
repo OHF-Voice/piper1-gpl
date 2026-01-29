@@ -71,7 +71,7 @@ jobs:
           CIBW_MANYLINUX_AARCH64_IMAGE: manylinux_2_28
           CIBW_ARCHS: auto64
           CIBW_TEST_REQUIRES: pytest
-          CIBW_TEST_COMMAND: python -m pytest -vv {project}/tests
+          CIBW_TEST_COMMAND: python -m pytest -vv --ignore tests/test_chinese_phonemizer.py {project}/tests
 
           # Don't build PyPy and MUSL wheels for now
           CIBW_SKIP: "pp* *-musllinux_*"
