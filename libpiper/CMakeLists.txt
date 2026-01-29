@@ -14,7 +14,7 @@ set(ESPEAKNG_INSTALL_DIR ${CMAKE_BINARY_DIR}/espeak_ng-install)
 if(WIN32)
     # Special handling for Windows
     set(ESPEAKNG_STATIC_LIB ${ESPEAKNG_INSTALL_DIR}/lib/espeak-ng.lib)
-    set(UCD_STATIC_LIB ${ESPEAKNG_BUILD_DIR}/src/espeak_ng_external-build/src/ucd-tools/ucd.lib)
+    set(UCD_STATIC_LIB ${ESPEAKNG_BUILD_DIR}/src/espeak_ng_external-build/src/ucd-tools/Release/ucd.lib)
 else()
     set(ESPEAKNG_STATIC_LIB ${ESPEAKNG_INSTALL_DIR}/lib/libespeak-ng.a)
     set(UCD_STATIC_LIB ${ESPEAKNG_BUILD_DIR}/src/espeak_ng_external-build/src/ucd-tools/libucd.a)
@@ -125,6 +125,13 @@ target_include_directories(piper PUBLIC
 target_link_directories(piper PUBLIC
     ${ONNXRUNTIME_DIR}/lib
 )
+
+if(WIN32)
+    # Fix dll thunk issue (__imp_SYMBOL not found) when linking static espeak-ng
+    # PIPER_BUILDING_DLL enables __declspec(dllexport) for piper API functions
+    target_compile_definitions(piper PRIVATE LIBESPEAK_NG_EXPORT PIPER_BUILDING_DLL)
+endif()
+
 target_link_libraries(piper
     ${ESPEAKNG_STATIC_LIB}
     ${UCD_STATIC_LIB}

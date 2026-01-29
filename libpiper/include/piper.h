@@ -6,6 +6,17 @@
 #include <stdint.h>
 #include <uchar.h>
 
+// DLL export/import macros for Windows
+#ifdef _WIN32
+  #ifdef PIPER_BUILDING_DLL
+    #define PIPER_API __declspec(dllexport)
+  #else
+    #define PIPER_API __declspec(dllimport)
+  #endif
+#else
+  #define PIPER_API
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -155,7 +166,7 @@ typedef struct piper_synthesize_options {
  *
  * \return a Piper text-to-speech synthesizer for the voice model.
  */
-piper_synthesizer *piper_create(const char *model_path, const char *config_path,
+PIPER_API piper_synthesizer *piper_create(const char *model_path, const char *config_path,
                                 const char *espeak_data_path);
 
 /**
@@ -163,7 +174,7 @@ piper_synthesizer *piper_create(const char *model_path, const char *config_path,
  *
  * \param synth Piper synthesizer.
  */
-void piper_free(piper_synthesizer *synth);
+PIPER_API void piper_free(piper_synthesizer *synth);
 
 /**
  * \brief Get the default synthesis options for a Piper synthesizer.
@@ -172,7 +183,7 @@ void piper_free(piper_synthesizer *synth);
  *
  * \return synthesis options from voice config.
  */
-piper_synthesize_options
+PIPER_API piper_synthesize_options
 piper_default_synthesize_options(piper_synthesizer *synth);
 
 /**
@@ -188,7 +199,7 @@ piper_default_synthesize_options(piper_synthesizer *synth);
  *
  * \return PIPER_OK or error code.
  */
-int piper_synthesize_start(piper_synthesizer *synth, const char *text,
+PIPER_API int piper_synthesize_start(piper_synthesizer *synth, const char *text,
                            const piper_synthesize_options *options);
 
 /**
@@ -208,7 +219,7 @@ int piper_synthesize_start(piper_synthesizer *synth, const char *text,
  *
  * \return PIPER_DONE when complete, otherwise PIPER_OK or error code.
  */
-int piper_synthesize_next(piper_synthesizer *synth, piper_audio_chunk *chunk);
+PIPER_API int piper_synthesize_next(piper_synthesizer *synth, piper_audio_chunk *chunk);
 
 #ifdef __cplusplus
 }
