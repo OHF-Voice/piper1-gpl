@@ -115,78 +115,78 @@ jobs:
       - name: Install wheel
         run: |
           python -m pip install pytest
-          python -m pip install --no-index --only-binary :all: --find-links dist/ 'piper-tts[zh]'
+          python -m pip install --no-index --only-binary :all: --find-links wheelhouse/ 'piper-tts[zh]'
 
       - name: Test wheel
         run: |
           python -m pytest tests
 
-  changelog:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+  # changelog:
+  #   needs: build
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
 
-      - name: Extract release notes (fail if missing)
-        id: notes
-        shell: python
-        env:
-          TAG: ${{ needs.build.outputs.tag }}
-        run: |
-          import os, sys, re, pathlib
-          ver = os.environ["TAG"]                          # e.g., 1.0.2
-          chlog_path = pathlib.Path("CHANGELOG.md")
-          if not chlog_path.exists():
-              print("CHANGELOG.md not found", file=sys.stderr)
-              sys.exit(2)
+  #     - name: Extract release notes (fail if missing)
+  #       id: notes
+  #       shell: python
+  #       env:
+  #         TAG: ${{ needs.build.outputs.tag }}
+  #       run: |
+  #         import os, sys, re, pathlib
+  #         ver = os.environ["TAG"]                          # e.g., 1.0.2
+  #         chlog_path = pathlib.Path("CHANGELOG.md")
+  #         if not chlog_path.exists():
+  #             print("CHANGELOG.md not found", file=sys.stderr)
+  #             sys.exit(2)
 
-          lines = chlog_path.read_text(encoding="utf-8").splitlines()
+  #         lines = chlog_path.read_text(encoding="utf-8").splitlines()
 
-          def is_heading_for_version(s: str) -> bool:
-              s = s.strip()
-              if not s.startswith("##"):
-                  return False
-              s = s[2:].strip()                  # drop "##"
-              s = s.strip("[]")                  # allow [1.0.2]
-              s = re.sub(r"\s*-\s*.*$", "", s)   # drop " - date"
-              s = s.lstrip("v")                  # allow v1.0.2
-              return s == ver
+  #         def is_heading_for_version(s: str) -> bool:
+  #             s = s.strip()
+  #             if not s.startswith("##"):
+  #                 return False
+  #             s = s[2:].strip()                  # drop "##"
+  #             s = s.strip("[]")                  # allow [1.0.2]
+  #             s = re.sub(r"\s*-\s*.*$", "", s)   # drop " - date"
+  #             s = s.lstrip("v")                  # allow v1.0.2
+  #             return s == ver
 
-          start_idx = None
-          for i, line in enumerate(lines):
-              if is_heading_for_version(line):
-                  start_idx = i + 1              # start AFTER heading
-                  break
+  #         start_idx = None
+  #         for i, line in enumerate(lines):
+  #             if is_heading_for_version(line):
+  #                 start_idx = i + 1              # start AFTER heading
+  #                 break
 
-          if start_idx is None:
-              print(f"No changelog section found for {ver}", file=sys.stderr)
-              sys.exit(3)
+  #         if start_idx is None:
+  #             print(f"No changelog section found for {ver}", file=sys.stderr)
+  #             sys.exit(3)
 
-          end_idx = len(lines)
-          for j in range(start_idx, len(lines)):
-              if lines[j].lstrip().startswith("## "):
-                  end_idx = j
-                  break
+  #         end_idx = len(lines)
+  #         for j in range(start_idx, len(lines)):
+  #             if lines[j].lstrip().startswith("## "):
+  #                 end_idx = j
+  #                 break
 
-          section_lines = lines[start_idx:end_idx]
-          while section_lines and not section_lines[0].strip():
-              section_lines.pop(0)
-          while section_lines and not section_lines[-1].strip():
-              section_lines.pop()
+  #         section_lines = lines[start_idx:end_idx]
+  #         while section_lines and not section_lines[0].strip():
+  #             section_lines.pop(0)
+  #         while section_lines and not section_lines[-1].strip():
+  #             section_lines.pop()
 
-          section = "\n".join(section_lines)
-          only_links = re.fullmatch(r"(?:\[[^\]]+\]:\s*\S+\s*(?:\n|$))*", section or "", flags=re.MULTILINE)
-          if not section or only_links:
-              print(f"Changelog section for {ver} is empty", file=sys.stderr)
-              sys.exit(4)
+  #         section = "\n".join(section_lines)
+  #         only_links = re.fullmatch(r"(?:\[[^\]]+\]:\s*\S+\s*(?:\n|$))*", section or "", flags=re.MULTILINE)
+  #         if not section or only_links:
+  #             print(f"Changelog section for {ver} is empty", file=sys.stderr)
+  #             sys.exit(4)
 
-          pathlib.Path("RELEASE_NOTES.md").write_text(section, encoding="utf-8")
+  #         pathlib.Path("RELEASE_NOTES.md").write_text(section, encoding="utf-8")
 
-      - name: Upload release notes
-        uses: actions/upload-artifact@v4
-        with:
-          name: release-notes
-          path: RELEASE_NOTES.md
+  #     - name: Upload release notes
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: release-notes
+  #         path: RELEASE_NOTES.md
 
   # publish:
   #   needs: [build, test, changelog]
