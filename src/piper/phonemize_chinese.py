@@ -189,6 +189,16 @@ GROUP_END_PHONEMES = {
 
 G2PW_URL = "https://huggingface.co/datasets/rhasspy/piper-checkpoints/resolve/main/zh/zh_CN/_resources/g2pw.tar.gz?download=true"
 
+TEMP_PATTERN = re.compile(
+    r"(?P<sign>[-−])?(?P<num>\d+)\s*(?:°\s*C|℃)",  # handles "-7°C", "7℃", "−3°C"
+)
+
+# 98.76% / -7% / 77％
+# 九十八点七六% / 七十七％
+PERCENT_PATTERN = re.compile(
+    r"(?P<num>-?\d+(?:\.\d+)?|[零〇一二三四五六七八九十百千万亿两点]+)\s*(?:%|％)"
+)
+
 
 class ChinesePhonemizer:
     """Phonemize Chinese text using g2pW."""
@@ -244,11 +254,43 @@ class ChinesePhonemizer:
 
     def _numbers_to_words(self, text: str) -> str:
         # TODO: dates/times/ordinals
+
+        # 1) Temperatures: -7°C → 零下七度; 7°C → 七度
+        def replace_temp(m: re.Match) -> str:
+            sign = m.group("sign")
+            num_str = m.group("num")
+            # use absolute value for words, we handle sign ourselves
+            num_words = self._zh_number(num_str)
+
+            if sign:
+                # For temperatures, "零下" is more natural than "负"
+                return f"零下{num_words}度"
+
+            return f"{num_words}度"
+
+        text = TEMP_PATTERN.sub(replace_temp, text)
+
+        # 2) Percentages: 77% → 百分之七十七
+        def replace_percent(m: re.Match) -> str:
+            num_str = m.group("num")
+            if re.fullmatch(r"-?\d+(?:\.\d+)?", num_str):
+                # Expand digits
+                num_words = self._zh_number(num_str)
+            else:
+                num_words = num_str
+
+            return f"百分之{num_words}"
+
+        text = PERCENT_PATTERN.sub(replace_percent, text)
+
         return re.sub(
             r"-?\d+(?:\.\d+)?",
-            lambda m: self.number_engine.format_number(m.group(0)).text,
+            lambda m: self._zh_number(m.group(0)),
             text,
         )
+
+    def _zh_number(self, text: str) -> str:
+        return self.number_engine.format_number(text).text
 
 
 def phonemes_to_ids(
