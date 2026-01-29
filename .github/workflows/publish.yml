@@ -1,0 +1,235 @@
+---
+name: Release (PyPI + GitHub)
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*.*.*" # e.g. v1.2.3
+
+jobs:
+  build:
+    name: Build wheels on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, macos-13, macos-latest]
+    outputs:
+      tag: ${{ steps.read_ver.outputs.tag }}
+      file_ver: ${{ steps.read_ver.outputs.file_ver }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build tools
+        run: pip install setuptools wheel build tomli auditwheel
+
+      - name: Read version from pyproject.toml & verify tag
+        id: read_ver
+        shell: python
+        run: |
+          import os, sys
+          try:
+              import tomllib as toml   # Python 3.11+
+          except Exception:
+              import tomli as toml     # fallback
+
+          # Read pyproject version
+          with open("pyproject.toml","rb") as f:
+              ver = toml.load(f)["project"]["version"]
+
+          # Extract tag from GITHUB_REF (e.g. "refs/tags/v1.2.3" -> "1.2.3")
+          ref = os.environ["GITHUB_REF"]
+          # Safety checks & strip prefix
+          prefix = "refs/tags/v"
+          if not ref.startswith(prefix):
+              print(f"Unexpected GITHUB_REF: {ref}", file=sys.stderr)
+              sys.exit(1)
+          tag = ref[len(prefix):]
+
+          #if tag != ver:
+          #    print(f"Tag ({tag}) != pyproject.toml ({ver})", file=sys.stderr)
+          #    sys.exit(1)
+
+          # Expose outputs
+          with open(os.environ["GITHUB_OUTPUT"], "a") as fh:
+              fh.write(f"tag={tag}\n")
+              fh.write(f"file_ver={ver}\n")
+
+          print(f"Version OK: tag={tag} matches pyproject.toml={ver}")
+
+      - name: Install cibuildwheel
+        run: python -m pip install cibuildwheel==2.23.2
+
+      - name: Build wheels
+        run: python -m cibuildwheel --output-dir wheelhouse
+        env:
+          CIBW_BUILD: "cp39-*"
+          CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
+          CIBW_MANYLINUX_AARCH64_IMAGE: manylinux_2_28
+          CIBW_ARCHS: auto64
+          CIBW_TEST_REQUIRES: pytest
+          CIBW_TEST_COMMAND: python -m pytest -vv {project}/tests
+
+          # Don't build PyPy and MUSL wheels for now
+          CIBW_SKIP: "pp* *-musllinux_*"
+
+      - name: Build sdist (once)
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        run: python -m build --sdist
+
+      - name: Upload wheels and sdist
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.os }}
+          path: |
+            wheelhouse/*.whl
+            dist/*.tar.gz
+          if-no-files-found: error
+
+  test:
+    needs: build
+    name: Test wheels on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, macos-13, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: tests/
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Download all dists
+        uses: actions/download-artifact@v4
+        with:
+          pattern: dist-*
+          merge-multiple: true
+          path: dist
+
+      - name: Install wheel
+        run: |
+          python -m pip install pytest
+          python -m pip install --no-index --only-binary :all: --find-links dist/ 'piper-tts[zh]'
+
+      - name: Test wheel
+        run: |
+          python -m pytest tests
+
+  changelog:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract release notes (fail if missing)
+        id: notes
+        shell: python
+        env:
+          TAG: ${{ needs.build.outputs.tag }}
+        run: |
+          import os, sys, re, pathlib
+          ver = os.environ["TAG"]                          # e.g., 1.0.2
+          chlog_path = pathlib.Path("CHANGELOG.md")
+          if not chlog_path.exists():
+              print("CHANGELOG.md not found", file=sys.stderr)
+              sys.exit(2)
+
+          lines = chlog_path.read_text(encoding="utf-8").splitlines()
+
+          def is_heading_for_version(s: str) -> bool:
+              s = s.strip()
+              if not s.startswith("##"):
+                  return False
+              s = s[2:].strip()                  # drop "##"
+              s = s.strip("[]")                  # allow [1.0.2]
+              s = re.sub(r"\s*-\s*.*$", "", s)   # drop " - date"
+              s = s.lstrip("v")                  # allow v1.0.2
+              return s == ver
+
+          start_idx = None
+          for i, line in enumerate(lines):
+              if is_heading_for_version(line):
+                  start_idx = i + 1              # start AFTER heading
+                  break
+
+          if start_idx is None:
+              print(f"No changelog section found for {ver}", file=sys.stderr)
+              sys.exit(3)
+
+          end_idx = len(lines)
+          for j in range(start_idx, len(lines)):
+              if lines[j].lstrip().startswith("## "):
+                  end_idx = j
+                  break
+
+          section_lines = lines[start_idx:end_idx]
+          while section_lines and not section_lines[0].strip():
+              section_lines.pop(0)
+          while section_lines and not section_lines[-1].strip():
+              section_lines.pop()
+
+          section = "\n".join(section_lines)
+          only_links = re.fullmatch(r"(?:\[[^\]]+\]:\s*\S+\s*(?:\n|$))*", section or "", flags=re.MULTILINE)
+          if not section or only_links:
+              print(f"Changelog section for {ver} is empty", file=sys.stderr)
+              sys.exit(4)
+
+          pathlib.Path("RELEASE_NOTES.md").write_text(section, encoding="utf-8")
+
+      - name: Upload release notes
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: RELEASE_NOTES.md
+
+  # publish:
+  #   needs: [build, test, changelog]
+  #   runs-on: ubuntu-latest
+  #   environment: pypi
+  #   permissions:
+  #     id-token: write # required for PyPI Trusted Publishing (OIDC)
+  #     contents: read
+  #   steps:
+  #     - name: Download all dists
+  #       uses: actions/download-artifact@v4
+  #       with:
+  #         pattern: dist-*
+  #         merge-multiple: true
+  #         path: dist
+
+  #     - name: Publish to PyPI via OIDC
+  #       uses: pypa/gh-action-pypi-publish@release/v1
+  #       with:
+  #         verbose: true
+
+  # github_release:
+  #   needs: [build, test, changelog, publish]
+  #   runs-on: ubuntu-latest
+  #   permissions:
+  #     contents: write
+  #   steps:
+  #     - name: Download all dists
+  #       uses: actions/download-artifact@v4
+  #       with:
+  #         pattern: dist-*
+  #         merge-multiple: true
+  #         path: dist
+  #     - uses: actions/download-artifact@v4
+  #       with:
+  #         name: release-notes
+  #         path: .
+  #     - name: Create GitHub Release
+  #       uses: softprops/action-gh-release@v2
+  #       with:
+  #         tag_name: ${{ github.ref_name }}
+  #         name: ${{ github.ref_name }}
+  #         body_path: RELEASE_NOTES.md
+  #         files: |
+  #           dist/*
