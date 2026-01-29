@@ -80,12 +80,15 @@ jobs:
         if: ${{ matrix.os == 'ubuntu-latest' }}
         run: python -m build --sdist
 
+      - name: Move wheels
+        run: mv wheelhouse/*.whl dist/
+
       - name: Upload wheels and sdist
         uses: actions/upload-artifact@v4
         with:
           name: dist-${{ matrix.os }}
           path: |
-            wheelhouse/*.whl
+            dist/*.whl
             dist/*.tar.gz
           if-no-files-found: error
 
@@ -115,7 +118,7 @@ jobs:
       - name: Install wheel
         run: |
           python -m pip install pytest
-          python -m pip install --no-index --only-binary :all: --find-links wheelhouse/ 'piper-tts[zh]'
+          python -m pip install --no-index --only-binary :all: --find-links dist/ 'piper-tts[zh]'
 
       - name: Test wheel
         run: |
