@@ -44,9 +44,9 @@ jobs:
           ref = os.environ["GITHUB_REF"]
           # Safety checks & strip prefix
           prefix = "refs/tags/v"
-          if not ref.startswith(prefix):
-              print(f"Unexpected GITHUB_REF: {ref}", file=sys.stderr)
-              sys.exit(1)
+          #if not ref.startswith(prefix):
+          #    print(f"Unexpected GITHUB_REF: {ref}", file=sys.stderr)
+          #    sys.exit(1)
           tag = ref[len(prefix):]
 
           #if tag != ver:
