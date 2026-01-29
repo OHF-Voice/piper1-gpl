@@ -13,7 +13,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, macos-13, macos-latest]
+        os: [ubuntu-latest] #, ubuntu-24.04-arm, windows-latest, macos-13, macos-latest]
     outputs:
       tag: ${{ steps.read_ver.outputs.tag }}
       file_ver: ${{ steps.read_ver.outputs.file_ver }}
@@ -25,21 +25,20 @@ jobs:
           python-version: "3.12"
 
       - name: Install build tools
-        run: pip install setuptools wheel build tomli auditwheel
+        run: pip install setuptools wheel build
 
-      - name: Read version from pyproject.toml & verify tag
+      - name: Get version from setup.py
+        run: |
+          VERSION=$(python setup.py --version)
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+      - name: Verify tag
         id: read_ver
         shell: python
         run: |
           import os, sys
-          try:
-              import tomllib as toml   # Python 3.11+
-          except Exception:
-              import tomli as toml     # fallback
 
-          # Read pyproject version
-          with open("pyproject.toml","rb") as f:
-              ver = toml.load(f)["project"]["version"]
+          ver = os.environ["VERSION"]
 
           # Extract tag from GITHUB_REF (e.g. "refs/tags/v1.2.3" -> "1.2.3")
           ref = os.environ["GITHUB_REF"]
@@ -96,7 +95,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, macos-13, macos-latest]
+        os: [ubuntu-latest] #, ubuntu-24.04-arm, windows-latest, macos-13, macos-latest]
     steps:
       - uses: actions/checkout@v4
         with:
