@@ -158,10 +158,9 @@ def main() -> None:
 
     wav_file: wave.Wave_write
 
-    # 16-bit samples for silence
-    silence_int16_bytes = bytes(
-        int(voice.config.sample_rate * args.sentence_silence * 2)
-    )
+    # 16-bit samples for silence (each sample is 2 bytes)
+    silence_samples = int(voice.config.sample_rate * args.sentence_silence)
+    silence_int16_bytes = b'\x00\x00' * silence_samples
 
     def lines_to_wav() -> None:
         wav_params_set = False

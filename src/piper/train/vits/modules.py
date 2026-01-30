@@ -80,7 +80,7 @@ class ConvReluNorm(nn.Module):
 
 class DDSConv(nn.Module):
     """
-    Dialted and Depth-Separable Convolution
+    Dilated and Depth-Separable Convolution
     """
 
     def __init__(

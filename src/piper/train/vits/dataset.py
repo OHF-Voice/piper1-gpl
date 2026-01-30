@@ -413,7 +413,7 @@ class VitsDataModule(L.LightningDataModule):
                 cache_id = get_cache_id(row_number, text, speaker_id=speaker_id)
 
                 phoneme_ids_path = self.cache_dir / f"{cache_id}.phonemes.pt"
-                if not phoneme_ids_path:
+                if not phoneme_ids_path.exists():
                     _LOGGER.warning(
                         "Missing phoneme ids for %s: %s",
                         audio_path,
@@ -422,7 +422,7 @@ class VitsDataModule(L.LightningDataModule):
                     continue
 
                 audio_norm_path = self.cache_dir / f"{cache_id}.audio.pt"
-                if not audio_norm_path:
+                if not audio_norm_path.exists():
                     _LOGGER.warning(
                         "Missing normalized audio for %s: %s",
                         audio_path,
@@ -431,7 +431,7 @@ class VitsDataModule(L.LightningDataModule):
                     continue
 
                 audio_spec_path = self.cache_dir / f"{cache_id}.spec.pt"
-                if not audio_spec_path:
+                if not audio_spec_path.exists():
                     _LOGGER.warning(
                         "Missing mel spec for %s: %s",
                         audio_path,
@@ -539,7 +539,7 @@ class VitsDataModule(L.LightningDataModule):
             first_sec = first_chunk * seconds_per_chunk
             first_sec = max(0, first_sec - self.keep_seconds_before_silence)
             first_sample = int(
-                math.floor(num_original_samples * (offset_sec / audio_seconds))
+                math.floor(num_original_samples * (first_sec / audio_seconds))
             )
 
             last_sec = (last_chunk + 1) * seconds_per_chunk
