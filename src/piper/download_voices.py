@@ -18,6 +18,10 @@ VOICE_PATTERN = re.compile(
 
 _LOGGER = logging.getLogger(__name__)
 
+# Constants for progress tracking
+_CHUNK_SIZE = 8192
+_LOG_FREQUENCY_PERCENT = 5.0  # Log progress every 5%
+
 
 def main() -> None:
     """Download Piper voices."""
@@ -103,7 +107,7 @@ def download_voice(
         _LOGGER.debug("Downloading model from '%s' to '%s'", model_url, model_path)
         with urlopen(model_url) as response:
             with open(model_path, "wb") as model_file:
-                shutil.copyfileobj(response, model_file)
+                _copyfileobj_with_progress(response, model_file, model_path.name)
 
         _LOGGER.debug("Downloaded: '%s'", model_path)
 
@@ -113,7 +117,7 @@ def download_voice(
         _LOGGER.debug("Downloading config from '%s' to '%s'", config_url, config_path)
         with urlopen(config_url) as response:
             with open(config_path, "wb") as config_file:
-                shutil.copyfileobj(response, config_file)
+                _copyfileobj_with_progress(response, config_file, config_path.name)
 
         _LOGGER.debug("Downloaded: '%s'", config_path)
 
@@ -130,6 +134,62 @@ def _needs_download(path: Path) -> bool:
         return True
 
     return False
+
+
+def _copyfileobj_with_progress(response, dest_file, filename: str):
+    """
+    Copies data from response to dest_file, logging progress at DEBUG level.
+    This replaces shutil.copyfileobj to allow progress tracking.
+    """
+    total_size_str = response.info().get("Content-Length")
+    total_size_bytes = int(total_size_str) if total_size_str else 0
+    downloaded_bytes = 0
+    last_logged_percent = -_LOG_FREQUENCY_PERCENT
+
+    if total_size_bytes > 0:
+        _LOGGER.debug(
+            "Starting download for %s: Total size %s bytes", filename, total_size_bytes
+        )
+    
+    while True:
+        chunk = response.read(_CHUNK_SIZE)
+        if not chunk:
+            break
+        
+        dest_file.write(chunk)
+        downloaded_bytes += len(chunk)
+        
+        if not _LOGGER.isEnabledFor(logging.DEBUG):
+            continue
+
+        if total_size_bytes > 0:
+            current_percent = (downloaded_bytes / total_size_bytes) * 100
+            
+            # Log only if percentage crossed the threshold or download is complete
+            if current_percent - last_logged_percent >= _LOG_FREQUENCY_PERCENT or downloaded_bytes == total_size_bytes:
+                 _LOGGER.debug(
+                    "Downloading %s: %s/%s bytes (%.2f%%)", 
+                    filename, 
+                    downloaded_bytes, 
+                    total_size_bytes, 
+                    current_percent
+                )
+                 last_logged_percent = current_percent
+        # Log size if total is unknown (e.g., log every 1MB)
+        elif downloaded_bytes % (1024 * 1024) == 0:
+             _LOGGER.debug("Downloading %s: %s bytes downloaded", filename, downloaded_bytes)
+             
+    # Ensure a 100% log if total size was known and logging was active
+    if total_size_bytes > 0 and _LOGGER.isEnabledFor(logging.DEBUG) and downloaded_bytes > 0:
+        if downloaded_bytes == total_size_bytes and last_logged_percent < 100.0 - _LOG_FREQUENCY_PERCENT:
+             _LOGGER.debug(
+                "Downloading %s: %s/%s bytes (100.00%%)", 
+                filename, 
+                downloaded_bytes, 
+                total_size_bytes
+            )
+
+    return downloaded_bytes
 
 
 # -----------------------------------------------------------------------------
