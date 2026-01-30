@@ -118,7 +118,7 @@ jobs:
       - name: Install wheel
         run: |
           python -m pip install pytest
-          python -m pip install --no-index --only-binary :all: --find-links dist/ 'piper-tts[zh]'
+          python -m pip install --only-binary :all: --find-links dist/ 'piper-tts[zh]'
 
       - name: Test wheel
         run: |
