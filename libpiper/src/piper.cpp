@@ -129,6 +129,29 @@ piper_default_synthesize_options(piper_synthesizer *synth) {
     return options;
 }
 
+std::string categorize_terminator(int terminator) {
+    if ((terminator & CLAUSE_TYPE_EOF) != CLAUSE_TYPE_EOF) {
+        int pause = terminator & CLAUSE_PAUSE;
+
+        if (pause >= PERIOD_PAUSE) {
+            switch (terminator & CLAUSE_INTONATION_TYPE) {
+                case CLAUSE_INTONATION_EXCLAMATION: return "!";
+                case CLAUSE_INTONATION_QUESTION: return "?";
+                default: return ".";
+            }
+        } else if (pause >= SEMICOLON_PAUSE) {
+            switch (terminator & CLAUSE_INTONATION_TYPE) {
+                case CLAUSE_INTONATION_FULL_STOP: return ":";
+                default: return ";";
+            }
+        } else if (pause >= COMMA_PAUSE) {
+            return ",";
+        }
+    }
+
+    return "";
+}
+
 int piper_synthesize_start(struct piper_synthesizer *synth, const char *text,
                            const piper_synthesize_options *options) {
     if (!synth) {
@@ -163,7 +186,6 @@ int piper_synthesize_start(struct piper_synthesizer *synth, const char *text,
     const void *text_ptr = text;
     while (text_ptr != nullptr) {
         int terminator = 0;
-        std::string terminator_str = "";
 
         const char *phonemes = espeak_TextToPhonemesWithTerminator(
             &text_ptr, espeakCHARS_AUTO, espeakPHONEMES_IPA, &terminator);
@@ -172,22 +194,7 @@ int piper_synthesize_start(struct piper_synthesizer *synth, const char *text,
             sentence_phonemes[current_idx] += phonemes;
         }
 
-        // Categorize terminator
-        terminator &= 0x000FFFFF;
-
-        if (terminator == CLAUSE_PERIOD) {
-            terminator_str = ".";
-        } else if (terminator == CLAUSE_QUESTION) {
-            terminator_str = "?";
-        } else if (terminator == CLAUSE_EXCLAMATION) {
-            terminator_str = "!";
-        } else if (terminator == CLAUSE_COMMA) {
-            terminator_str = ", ";
-        } else if (terminator == CLAUSE_COLON) {
-            terminator_str = ": ";
-        } else if (terminator == CLAUSE_SEMICOLON) {
-            terminator_str = "; ";
-        }
+        std::string terminator_str = categorize_terminator(terminator);
 
         sentence_phonemes[current_idx] += terminator_str;
 
