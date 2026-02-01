@@ -47,7 +47,7 @@ setup(
     ],
     extras_require={
         "train": [
-            "torch>=2,<3",
+            "torch==2.8.0",
             "lightning>=2,<3",
             "tensorboard>=2,<3",
             "tensorboardX>=2,<3",
@@ -57,6 +57,7 @@ setup(
             "pysilero-vad>=2.1,<3",
             "cython>=3,<4",
             "librosa<1",
+            "scikit-build>=0.18.1",
         ],
         "dev": [
             "black==24.8.0",
