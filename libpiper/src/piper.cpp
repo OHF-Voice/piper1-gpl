@@ -7,6 +7,11 @@
 
 #include <espeak-ng/speak_lib.h>
 
+#ifdef _WIN32
+#include <codecvt>
+#include <locale>
+#endif
+
 using json = nlohmann::json;
 
 struct piper_synthesizer *piper_create(const char *model_path,
@@ -96,8 +101,16 @@ struct piper_synthesizer *piper_create(const char *model_path,
     synth->session_options.DisableMemPattern();
     synth->session_options.DisableProfiling();
 
+#ifdef _WIN32
+    // Windows requires wide character path
+    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+    std::wstring wide_model_path = converter.from_bytes(model_path);
+    synth->session = std::make_unique<Ort::Session>(
+        Ort::Session(ort_env, wide_model_path.c_str(), synth->session_options));
+#else
     synth->session = std::make_unique<Ort::Session>(
         Ort::Session(ort_env, model_path, synth->session_options));
+#endif
 
     return synth;
 }
