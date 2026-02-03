@@ -132,8 +132,10 @@ target_link_directories(piper PUBLIC
 if(WIN32)
     # Define LIBESPEAK_NG_EXPORT to avoid __declspec(dllimport) for static linking
     # The headers check for this macro and use dllexport instead, which works for static linking
+    # Define PIPER_EXPORTS so our public API functions are exported from the DLL
     target_compile_definitions(piper PRIVATE
         LIBESPEAK_NG_EXPORT
+        PIPER_EXPORTS
     )
     # Try multi-config path first, fall back to single-config
     target_link_libraries(piper
