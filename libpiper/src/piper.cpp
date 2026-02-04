@@ -106,10 +106,10 @@ struct piper_synthesizer *piper_create(const char *model_path,
     std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
     std::wstring wide_model_path = converter.from_bytes(model_path);
     synth->session = std::make_unique<Ort::Session>(
-        Ort::Session(ort_env, wide_model_path.c_str(), synth->session_options));
+        Ort::Session(get_ort_env(), wide_model_path.c_str(), synth->session_options));
 #else
     synth->session = std::make_unique<Ort::Session>(
-        Ort::Session(ort_env, model_path, synth->session_options));
+        Ort::Session(get_ort_env(), model_path, synth->session_options));
 #endif
 
     return synth;
@@ -353,11 +353,13 @@ int piper_synthesize_next(struct piper_synthesizer *synth,
                                                "scales", "sid"};
 
     // Get all output names
-    std::vector<std::string> output_names_strs =
-        synth->session->GetOutputNames();
+    std::vector<Ort::AllocatedStringPtr> output_name_ptrs;
     std::vector<const char *> output_names;
-    for (const auto &name : output_names_strs) {
-        output_names.push_back(name.c_str());
+    size_t num_outputs = synth->session->GetOutputCount();
+    for (size_t i = 0; i < num_outputs; i++) {
+        output_name_ptrs.push_back(
+            synth->session->GetOutputNameAllocated(i, synth->session_allocator));
+        output_names.push_back(output_name_ptrs.back().get());
     }
 
     // Infer
