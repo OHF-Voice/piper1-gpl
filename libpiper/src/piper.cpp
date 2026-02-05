@@ -7,25 +7,13 @@
 #include <limits>
 
 #if defined(WIN32)
-#include <windows.h>
-#ifdef min
-#undef min
+#define WIN32_LEAN_AND_MEAN
+#if !defined(NOMINMAX)
+#define NOMINMAX
 #endif
-#ifdef max
-#undef max
+#include <windows.h> // for MultiByteToWideChar below
+#define LIBESPEAK_NG_EXPORT // espeak is exported from piper dll
 #endif
-#endif
-
-#if defined (WIN32) // MSVC compile of espeak gives a STATIC library.
-// tell espeak-ng/speak_lib.h to use unadorned entry points
-#if defined (_WIN32)
-#undef _WIN32
-#endif
-#if defined (_WIN64)
-#undef _WIN64
-#endif
-#endif
-
 
 #include <espeak-ng/speak_lib.h>
 
