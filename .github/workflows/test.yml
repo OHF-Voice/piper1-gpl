@@ -2,6 +2,7 @@
 name: Test
 
 on:
+  workflow_dispatch:
   pull_request:
     branches:
       - main
@@ -23,7 +24,7 @@ jobs:
 
       - name: Install Piper
         run: |
-          script/setup --dev
+          script/setup --dev --zh --torch-cpu
           script/dev_build
 
       - name: Run tests

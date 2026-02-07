@@ -20,6 +20,12 @@ pip install piper-tts
 
 ---
 
+## Looking for Maintainers
+
+The Open Home Foundation is looking for maintainers for Piper! If you're interested, please send a message to voice@openhomefoundation.org
+
+---
+
 People/projects using Piper:
 
 * [Home Assistant](https://github.com/home-assistant/addons/blob/master/piper/README.md)
