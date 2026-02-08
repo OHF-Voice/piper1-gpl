@@ -14,17 +14,14 @@
 #endif
 
 #ifdef _MSC_VER
-#  define PACKED_STRUCT(name) \
-__pragma(pack(push, 1)) struct name
-#  define PACKED_STRUCT_END \
-__pragma(pack(pop))
+#define PACKED_STRUCT(name) __pragma(pack(push, 1)) struct name
+#define PACKED_STRUCT_END __pragma(pack(pop))
 #elif defined(__GNUC__) || defined(__clang__)
-#  define PACKED_STRUCT(name) \
-struct __attribute__((packed)) name
-#  define PACKED_STRUCT_END
+#define PACKED_STRUCT(name) struct __attribute__((packed)) name
+#define PACKED_STRUCT_END
 #else
-#  define PACKED_STRUCT(name) struct name
-#  define PACKED_STRUCT_END
+#define PACKED_STRUCT(name) struct name
+#define PACKED_STRUCT_END
 #endif
 
 #if WIN32
@@ -36,7 +33,16 @@ bool isWine() {
     }
     return false;
 }
+
 #endif
+
+bool isDocker() {
+#if WIN32
+    return std::filesystem::exists(std::filesystem::path("Z:") / ".dockerenv");
+#else
+    return std::filesystem::exists(std::filesystem::path("/") / ".dockerenv");
+#endif
+}
 
 std::filesystem::path getLibraryPath(void *func = nullptr) {
     if (!func)
@@ -47,7 +53,7 @@ std::filesystem::path getLibraryPath(void *func = nullptr) {
     if (func &&
         ::GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
                                  GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-                             (LPCSTR)func,
+                             static_cast<LPCSTR>(func),
                              &handle)) {
         std::string rv(MAX_PATH, '\0');
         rv.resize(::GetModuleFileNameA(handle, rv.data(), rv.capacity()));
@@ -96,7 +102,8 @@ PACKED_STRUCT(Header) {
     // data Chunk
     uint8_t data[4] = {'d', 'a', 't', 'a'};
     uint32_t dataSize;
-} PACKED_STRUCT_END;
+}
+PACKED_STRUCT_END;
 
 void writeWavHeader(int sample_rate,
                     uint32_t number_of_samples,

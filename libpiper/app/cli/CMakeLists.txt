@@ -29,6 +29,13 @@ function(Sf_PiperDownloadModel _models_dir _language _region _dataset _quality)
 endfunction()
 
 if (BUILD_TESTING)
+	# Check if running in Docker
+	if (EXISTS "/.dockerenv")
+		set(IN_DOCKER TRUE)
+	else()
+		set(IN_DOCKER FALSE)
+	endif()
+
 	Sf_PiperDownloadModel("${CMAKE_SOURCE_DIR}/bin/models" "en" "US" "hfc_female" "medium")
 	Sf_PiperDownloadModel("${CMAKE_SOURCE_DIR}/bin/models" "en" "US" "hfc_male" "medium")
 	#[[
@@ -48,8 +55,8 @@ if (BUILD_TESTING)
 				# Add the test using the target executable filename.
 				add_test(NAME "win-${APP_TARGET}"
 					COMMAND ${CMAKE_COMMAND} -E env wine "$<TARGET_FILE_NAME:${APP_TARGET}>"
-					# Skipping playing when in a pipeline.
-					$<$<NOT:$<BOOL:$ENV{CI}>>:--play>
+					# Skipping playing when in a pipeline or docker.
+					$<$<AND:$<NOT:$<BOOL:$ENV{CI}>>,$<NOT:$<BOOL:${IN_DOCKER}>>>:--play>
 					--text "Success! When you here this text is looks like the for Windows cross-compiled 'Piper' library is working."
 					WORKING_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
 				)
@@ -65,8 +72,8 @@ if (BUILD_TESTING)
 				# Add the test using the target executable filename.
 				add_test(NAME "win-${APP_TARGET}"
 					COMMAND ${CMAKE_COMMAND} -E env "$<TARGET_FILE_NAME:${APP_TARGET}>"
-					# Skipping playing when in a pipeline.
-					$<$<NOT:$<BOOL:$ENV{CI}>>:--play>
+					# Skipping playing when in a pipeline or docker.
+					$<$<AND:$<NOT:$<BOOL:$ENV{CI}>>,$<NOT:$<BOOL:${IN_DOCKER}>>>:--play>
 					--text "Success! When you here this text is looks like the for Minimalist Gnu for Windows compiled 'Piper' library is working."
 					WORKING_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
 				)
@@ -74,8 +81,8 @@ if (BUILD_TESTING)
 				# Add the test using the target executable filename.
 				add_test(NAME "win-${APP_TARGET}"
 					COMMAND ${CMAKE_COMMAND} -E env "$<TARGET_FILE_NAME:${APP_TARGET}>"
-					# Skipping playing when in a pipeline.
-					$<$<NOT:$<BOOL:$ENV{CI}>>:--play>
+					# Skipping playing when in a pipeline or docker.
+					$<$<AND:$<NOT:$<BOOL:$ENV{CI}>>,$<NOT:$<BOOL:${IN_DOCKER}>>>:--play>
 					--text "Success! When you here this text is looks like the for  Windows with Microsoft Visual C++ compiled 'Piper' library is working."
 					WORKING_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
 				)
@@ -85,8 +92,8 @@ if (BUILD_TESTING)
 		# Add the test using the target executable filename.
 		add_test(NAME "win-${APP_TARGET}"
 			COMMAND "$<TARGET_FILE_NAME:${APP_TARGET}>"
-			# Skipping playing when in a pipeline.
-			$<$<NOT:$<BOOL:$ENV{CI}>>:--play>
+			# Skipping playing when in a pipeline or docker.
+			$<$<AND:$<NOT:$<BOOL:$ENV{CI}>>,$<NOT:$<BOOL:${IN_DOCKER}>>>:--play>
 			--text "Success! When you here this text is looks like the for Linux compiled 'Piper' library is working."
 			WORKING_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
 		)

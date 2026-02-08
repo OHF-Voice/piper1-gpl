@@ -10,6 +10,12 @@ bool isWine();
 #endif
 
 /**
+ * Determines if the application is running in Docker
+ * @return True when running Wine.
+ */
+bool isDocker();
+
+/**
  * Gets the path to a dynamic library containing the given function.
  * @param func A pointer to a function in the library.
  * @return Path to the library.
