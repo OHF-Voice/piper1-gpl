@@ -1963,8 +1963,18 @@ Choices are depended on the host platform:
 						elif repo[-4:] == ".zip":
 							with urlopen(repo) as response:
 								# Use BytesIO to treat the downloaded bytes as a file-like object
-								with ZipFile(io.BytesIO(response.read())) as zip_file:
-									zip_file.extractall(RUN_DIR)
+								with zipfile.ZipFile(io.BytesIO(response.read()), 'r') as zf:
+									for info in zf.infolist():
+										extracted_path = zf.extract(info, RUN_DIR)
+										# Only attempt to restore Unix permissions if on a Unix-like system
+										if sys.platform != "win32" and info.create_system == 3:
+											unix_attributes = info.external_attr >> 16
+											if unix_attributes > 0:
+												try:
+													os.chmod(extracted_path, unix_attributes)
+												except OSError:
+													# Handle cases where chmod might fail (e.g., read-only filesystem)
+													pass
 					else:
 						logger.info("# Breaking by skipping git submodule '{'/'.join(CMAKE_LIB_SUBDIR)}' installation.")
 						return False
