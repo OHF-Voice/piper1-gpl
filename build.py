@@ -1931,16 +1931,17 @@ Choices are:
 		else:
 			choices = ["dce", "dio", "lnx", "win"]
 			if platform.processor() == 'x86_64':
-				choices.append("arm")
+				choices += ["arm", "qemu"]
 		parser.add_argument("-r", "--required", type=str, choices=choices,
 			help="""Install required packages using the Debian 'apt' package manager on Linux or 'WinGet' for Windows.
 Choices are depended on the host platform:
   Linux:
-    dce - Install 'docker-ce' latest version using an external source.
-    dio - Install 'docker.io' package bundled with the distro.
-    lnx - Packages for architecture x86_64 or aarch64.
-    arm - Packages x86_64 for aarch64 GCC x86_64 cross-compile.
-    win - Packages x86_64 for Windows MinGW x86_64 cross-compile.
+    dce    - Install 'docker-ce' latest version using an external source.
+    dio    - Install 'docker.io' package bundled with the distro.
+    qemu   - Packages for running another architecture in a docker container.
+    lnx    - Packages for architecture x86_64 or aarch64.
+    arm    - Packages x86_64 for aarch64 GCC x86_64 cross-compile.
+    win    - Packages x86_64 for Windows MinGW x86_64 cross-compile.
   Windows: 
     win - Windows WinGet packages for build tools except a compiler(s).
 """)
@@ -2301,6 +2302,9 @@ Signed-By:
 					"libgl1-mesa-dev", "libglu1-mesa-dev", "libxkbcommon-dev", "libxkbfile-dev", "libvulkan-dev", "libssl-dev",
 					"default-jre-headless", "chrpath", "clang-format"]
 				run_command(["sudo", "apt-get", "--yes", "install"] + main_pkgs, dbg_mode=DebugMode.REPORT_ONLY)
+
+			elif target == "linux/qemu":
+				run_command(["sudo", "apt-get", "install", "-y", "qemu-user-static", "binfmt-support", "qemu-user-binfmt"], dbg_mode=DebugMode.REPORT_ONLY)
 
 			elif target == "linux/win":
 				run_command(["sudo", "apt-get", "install", "-y", "mingw-w64"], dbg_mode=DebugMode.REPORT_ONLY)
