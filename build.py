@@ -41,14 +41,14 @@ import threading
 import ctypes
 import zipfile
 import tempfile
+import fnmatch
+import io
 from enum import Enum, auto
 from string import Template
-from typing import List, Any, Dict
+from typing import List, Any, Dict, Optional
 from pathlib import Path
 from abc import ABC, abstractmethod
-import io
 from urllib.request import urlopen
-from zipfile import ZipFile
 
 # Auto-install for Windows the not standard 'curses' required module.
 try:
@@ -477,6 +477,140 @@ QT_VER = "6.10.1"
 CMAKE_LIB_SUBDIR = ["cmake", "lib"]
 
 
+def get_github_release(owner: str, repo: str, assets_wildcard: Optional[str] = None, release_tag: Optional[str] = None) -> Optional[Dict[str, any]]:
+	"""
+	Fetch GitHub release information and assets.
+	:param owner: Repository owner
+	:param repo: Repository name
+	:param assets_wildcard: Filter assets by wildcard.
+	:param release_tag: Specific release version (e.g., "1.2.3"). If None, fetches the latest release.
+	:return: Dictionary with 'release', 'assets', and 'url' fields, or None if not found.
+		- release: Release version string
+		- assets: List of asset download info (name, url, size)
+		- url: Base URL for the release
+	"""
+	import requests
+	try:
+		if release_tag is None:
+			# Fetch the latest release.
+			api_url = f"https://api.github.com/repos/{owner}/{repo}/releases/latest"
+		else:
+			# Fetch the specific release by tag
+			api_url = f"https://api.github.com/repos/{owner}/{repo}/releases/tags/{release_tag}"
+		resp = requests.get(api_url, headers={"Accept": "application/vnd.github.v3+json"}, timeout=15)
+		if resp.status_code == 404:
+			return None
+		resp.raise_for_status()
+		data = resp.json()
+		# Extract release info
+		release_tag = data.get("tag_name", "").lstrip('v')
+		assets_list = []
+		for asset in data.get("assets", []):
+			asset_name = asset.get("name", "")
+			if assets_wildcard and not fnmatch.fnmatch(asset_name, assets_wildcard):
+				continue
+			assets_list.append({
+				"name": asset_name,
+				"url": asset.get("browser_download_url", ""),
+				"size": asset.get("size", 0),
+				"digest": asset.get("digest", None)
+			})
+		return {
+			"release": release_tag,
+			"assets": assets_list,
+			"url": data.get("html_url", "")
+		}
+	except requests.RequestException:
+		return None
+
+
+def extract_by_url(url: str, dest_dir: str, new_dir_name: Optional[str] = None, digest:Optional[str] = None) -> bool:
+	"""
+	Extracts the url of a given compressed file to the given destination directory.
+	After extraction the directory is renamed to new_dir_name.
+	"""
+	import tarfile
+	import requests
+	import hashlib
+
+	try:
+		# Create the destination directory if it doesn't exist.
+		dest_path = Path(dest_dir)
+		dest_path.mkdir(parents=True, exist_ok=True)
+		# Download the file
+		resp = requests.get(url, timeout=60, stream=True)
+		resp.raise_for_status()
+		# Determine file extension from URL
+		filename = url.split('/')[-1]
+		# Download to the temporary file.
+		sha256_hash = hashlib.sha256() if digest else None
+		with tempfile.NamedTemporaryFile(delete=False, suffix=f"_{filename}") as tmp_file:
+			for chunk in resp.iter_content(chunk_size=1024*4):
+				tmp_file.write(chunk)
+				if sha256_hash:
+					sha256_hash.update(chunk)
+			tmp_path = tmp_file.name
+		# Verify digest if provided.
+		if digest:
+			computed_digest = sha256_hash.hexdigest()
+			expected_digest = digest.split(':', 1)[1] if ':' in digest else digest
+			if computed_digest != expected_digest:
+				Path(tmp_path).unlink(missing_ok=True)
+				logger.error(f"! Digest mismatch (expected/got):  {expected_digest} / {computed_digest}")
+				return False
+			else:
+				logger.info(f"= Digest matches: {computed_digest}")
+		else:
+			logger.warning(f": No digest for this download: {filename}")
+		try:
+			# Extract based on the file type.
+			if filename.endswith(('.tar.gz', '.tgz')):
+				with tarfile.open(tmp_path, 'r:gz') as tar:
+					tar.extractall(dest_path)
+					# Get the root directory name from the archive
+					members = tar.getmembers()
+					if members:
+						root_dir = members[0].name.split('/')[0]
+					else:
+						return False
+			elif filename.endswith('.tar.bz2'):
+				with tarfile.open(tmp_path, 'r:bz2') as tar:
+					tar.extractall(dest_path)
+					members = tar.getmembers()
+					if members:
+						root_dir = members[0].name.split('/')[0]
+					else:
+						return False
+			elif filename.endswith('.zip'):
+				with zipfile.ZipFile(tmp_path, 'r') as zip_ref:
+					zip_ref.extractall(dest_path)
+					# Get the root directory name from the archive.
+					names = zip_ref.namelist()
+					if names:
+						root_dir = names[0].split('/')[0]
+					else:
+						return False
+			else:
+				return False
+			# Rename the extracted directory if new_dir_name is provided
+			if new_dir_name and root_dir != new_dir_name:
+				old_path = dest_path / root_dir
+				new_path = dest_path / new_dir_name
+				if old_path.exists():
+					# Remove destination if it exists
+					if new_path.exists():
+						shutil.rmtree(new_path)
+					old_path.rename(new_path)
+			# Signal success.
+			return True
+		finally:
+			# Clean up temporary file
+			Path(tmp_path).unlink(missing_ok=True)
+
+	except Exception as e:
+		logger.error(f"Error extracting {url}: {e}")
+		return False
+
 def get_config_section(section: str, fail: bool = True) -> Dict[str, str]:
 	"""
 	Gets a configuration section as Dict of key-value pairs.
@@ -789,6 +923,22 @@ def set_environment(compiler_type: str | None = None) -> None:
 	# Key name used for inheritance.
 	inherit_key = "__inherit__"
 
+	def fix_wine_path(wine_path: str) -> str:
+		"""
+		Fixes the given Wine path by resolving nested symlinks into a usable path.
+		This is useful when sharing toolchain directories between projects using symlinks.
+		"""
+		result: List[str] = []
+		for d in wine_path.split(";"):
+			if d.startswith("Z:"):
+				d = os.path.realpath(d[2:].replace("\\", "/"))
+				result += ["Z:" + d.replace("/", "\\")]
+			else:
+				if d.startswith("/"):
+					d = "Z:" + d.replace("/", "\\")
+				result += [d]
+		return ";".join(result)
+
 	def get_config_inheritance(_section: str) -> List[str]:
 		"""
 		Gets the inheritance of the passed section.
@@ -835,6 +985,9 @@ def set_environment(compiler_type: str | None = None) -> None:
 			if key not in ENV_IGNORED:
 				RUN_ENV[key] = Template(value).safe_substitute(
 					CallbackEnvironment(environment=RUN_ENV, note_str=f"Configuration section: {section}"))
+				# Fix the path since it must be with Windows backslashes only.
+				if key == "WINEPATH":
+					RUN_ENV[key] = fix_wine_path(RUN_ENV.get(key, ""))
 				logger.info(f"~ Environment Set: {key}={RUN_ENV[key]}")
 			else:
 				logger.info(f"~ Environment Ignored: {key}")
@@ -880,7 +1033,6 @@ def set_environment_by_preset(preset_name: str, preset_type: PresetTypes = Prese
 		return True
 	return False
 
-
 def expand_macros(preset: dict, value: Any, is_path: bool = False, context: Dict[str, str] = None) -> Any:
 	"""
 	Recursively expands macros, substituting environment variables in strings from CMakePresets.json.
@@ -899,7 +1051,6 @@ def expand_macros(preset: dict, value: Any, is_path: bool = False, context: Dict
 	value = value.replace("${sourceParentDir}", os.path.dirname(RUN_DIR))
 	value = value.replace("${fileDir}", RUN_DIR)
 	value = value.replace("${pathListSep}", os.pathsep)
-	value = value.replace("${sourceParentDir}", Path(RUN_DIR).parent.name)
 	value = value.replace("${hostSystemName}", "Windows" if sys.platform == 'win32' else "Linux")
 	value = value.replace("${dollar}", "$")
 
@@ -1563,28 +1714,10 @@ class SubCommandWine(SubCommand):
 			# Suppress Wine fix-me messages when 'WINEDEBUG' is not set.
 			if "WINEDEBUG" not in RUN_ENV:
 				RUN_ENV["WINEDEBUG"] = 'fixme-all'
-			# Fix the path since it must be with Windows backslashes only.
-			RUN_ENV["WINEPATH"] = self.fix_wine_path(RUN_ENV.get("WINEPATH", ""))
 			arguments = ["wine", "python", self.script] + args_right
 			logger.debug(f"# Running: WINEPATH='{RUN_ENV.get("WINEPATH", "")}' {' '.join(arguments)}")
 			return run_command(arguments, dbg_mode=DebugMode.REPORT_ONLY).returncode
 		return 0
-
-	@staticmethod
-	def fix_wine_path(wine_path: str) -> str:
-		"""
-		Fixes the given Wine path by resolving nested symlinks into a usable path.
-		This is useful when sharing toolchain directories between projects using symlinks.
-		"""
-		paths = wine_path.replace("/", "\\").split(";")
-		result: List[str] = []
-		for d in paths:
-			if d.startswith("Z:"):
-				d = os.path.realpath(d[2:].replace("\\", "/"))
-				result += ["Z:" + d.replace("/", "\\")]
-			else:
-				result += [d]
-		return ";".join(result)
 
 
 class SubCommandDocker(SubCommand):
@@ -1780,13 +1913,17 @@ class SubCommandInstall(SubCommand):
 		# Configure the command line options.
 		parser.add_argument("-p", "--project", action="store_true",
 			help="Install the cmake project directories and files from the template repository.")
-		parser.add_argument("-t", "--toolchain", type=str, choices=["tools", "mingw", "msvc", "msvc-alt"],
+		choices: List[str] = ["tools", "mingw", "msvc", "msvc-alt"]
+		if sys.platform != "win32":
+			choices.append("doxygen")
+		parser.add_argument("-t", "--toolchain", type=str, choices=choices,
 			help="""Install a portable toolchains for in Windows or Wine with which the Qt library is build.
 Choices are:
   tools    - Multiple tools as CMake, Ninja, NSIS and Git client for Wine(Linux Only).
   mingw    - MinGW x86_64 v13.2.0 posix + msvcrt compiler compatible with the Qt library.
   msvc     - MSVC 2022 x86_64 compatible with the Qt library preassembled from a Nexus repository.
   msvc-alt - MSVC 2022 x86_64 compatible with the Qt library from Microsoft itself. (Windows only)
+  doxygen  - Doxygen latest released version. (Linux only)
 """)
 		choices: List[str] = []
 		if sys.platform == "win32":
@@ -1899,6 +2036,17 @@ Choices are depended on the host platform:
 					cwd=install_dir, dbg_mode=DebugMode.REPORT_ONLY).returncode != 0:
 					logger.error("! Failed to execute installer script.")
 					return False
+
+			case "doxygen":
+				logger.info("# Installing Doxygen latest released version.")
+				doxygen_dir = os.path.join(install_dir,  "doxygen")
+				if os.path.exists(doxygen_dir):
+					logger.warning(f": Doxygen directory already exists: {doxygen_dir}")
+					return False
+				release = get_github_release("doxygen", "doxygen", "*.linux.bin.tar.gz")
+				if release["assets"]:
+					extract_by_url(release["assets"][0]["url"], install_dir, "doxygen", release["assets"][0]["digest"])
+				return False
 
 		# Signal success.
 		return True
@@ -2370,7 +2518,7 @@ def main() -> int:
 	Main entry point for the build script.
 	:return: Exit code.
 	"""
-	# Get the scipt name.
+	# Get the script's name.
 	script = os.path.basename(__file__)
 	# Strip other first argument which is the script itself.
 	arguments = sys.argv[1:]
