@@ -135,6 +135,18 @@ if(NOT DEFINED ONNXRUNTIME_DIR)
         # Extract .zip or .tgz to a directory like lib/onnxruntime-linux-x64-1.22.0/
         file(ARCHIVE_EXTRACT INPUT "download/${ONNXRUNTIME_FILENAME}" DESTINATION "${CMAKE_CURRENT_LIST_DIR}/lib")
     endif()
+    # Get the dynamic library files.
+    file(GLOB _DynLibFiles "${ONNXRUNTIME_DIR}/lib/*.so*" "${ONNXRUNTIME_DIR}/lib/*.dll")
+    # Check if the global library output directory has been set.
+    if (DEFINED CMAKE_LIBRARY_OUTPUT_DIRECTORY)
+        # Copy the files to the output directory.
+        message(STATUS "Copying onnxruntime dynlibs to: ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}")
+        file(COPY ${_DynLibFiles} DESTINATION "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}")
+    else ()
+        # When not able to copy files, set a cache entry.
+        message(STATUS "Writting onnxruntime cache entry 'ONNXRUNTIME_DYNLIB_FILES' with dynlibs.")
+       set(ONNXRUNTIME_DYNLIB_FILES "${_DynLibFiles}" CACHE INTERNAL "Location of the onnxruntime dynamic-library files.")
+    endif ()
 endif()
 
 # ---- libpiper ---
