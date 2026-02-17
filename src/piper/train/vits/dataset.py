@@ -378,7 +378,16 @@ class VitsDataModule(L.LightningDataModule):
         _LOGGER.info("Processed %s utterance(s)", num_utterances)
 
     def setup(self, stage: str) -> None:
-        assert self.piper_config is not None
+        # In DDP mode, prepare_data() only runs on rank 0, so piper_config
+        # will be None on other ranks. Load it from the JSON file that
+        # prepare_data() wrote to disk.
+        if self.piper_config is None:
+            assert self.config_path.exists(), (
+                f"Config file not found: {self.config_path}. "
+                "Ensure prepare_data() has completed on rank 0."
+            )
+            with open(self.config_path, "r", encoding="utf-8") as config_file:
+                self.piper_config = PiperConfig.from_dict(json.load(config_file))
 
         all_utts: list[CachedUtterance] = []
         speaker_id_map = self.piper_config.speaker_id_map
