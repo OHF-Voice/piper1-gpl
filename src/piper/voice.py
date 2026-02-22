@@ -377,6 +377,42 @@ class PiperVoice:
                 phoneme_alignments=phoneme_alignments,
             )
 
+    def synthesize_stream(
+        self,
+        text_stream: Iterable[str],
+        syn_config: Optional[SynthesisConfig] = None,
+    ) -> Iterable[AudioChunk]:
+        """
+        Synthesize audio from a stream of text chunks.
+
+        Text chunks are accumulated in an internal buffer.  Whenever a
+        sentence-ending boundary (one of ``. ! ? \\n``) is detected, all
+        complete sentences are phonemized and synthesized immediately,
+        yielding :class:`AudioChunk` objects as soon as they are ready.
+        Any remaining text is flushed when the iterator is exhausted.
+
+        The voice model is **not** reloaded between chunks, so the
+        setup cost is paid only once.
+
+        :param text_stream: Iterable of text strings (words, lines, …).
+        :param syn_config: Synthesis configuration.
+        """
+        _SENTENCE_BOUNDARY = re.compile(r"(?<=[.!?\n])\s+")
+        buffer = ""
+        for chunk in text_stream:
+            buffer += chunk
+            parts = _SENTENCE_BOUNDARY.split(buffer)
+            if len(parts) > 1:
+                for sentence in parts[:-1]:
+                    sentence = sentence.strip()
+                    if sentence:
+                        yield from self.synthesize(sentence, syn_config)
+                buffer = parts[-1]
+        # Flush remaining text
+        buffer = buffer.strip()
+        if buffer:
+            yield from self.synthesize(buffer, syn_config)
+
     def synthesize_wav(
         self,
         text: str,

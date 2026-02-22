@@ -282,10 +282,14 @@ def main() -> None:
             # Rough speech rate: ~15 chars/sec. Add 0.5s margin and scale by safety factor.
             char_rate = 15.0
             base_seconds = max(1.0, len(text) / char_rate)
-            silence_seconds = max(0.0, (sentence_count - 1) * float(args.sentence_silence))
+            silence_seconds = max(
+                0.0, (sentence_count - 1) * float(args.sentence_silence)
+            )
             safety_factor = 1.5
             margin_seconds = 0.5
-            est_seconds = (base_seconds + silence_seconds + margin_seconds) * safety_factor
+            est_seconds = (
+                base_seconds + silence_seconds + margin_seconds
+            ) * safety_factor
             est_data_bytes = int(est_seconds * bytes_per_second)
 
             def _wav_header_pcm16(nchannels: int, srate: int, data_bytes: int) -> bytes:
@@ -296,12 +300,23 @@ def main() -> None:
                     + struct.pack("<I", 36 + data_bytes)
                     + b"WAVE"
                     + b"fmt "
-                    + struct.pack("<IHHIIHH", 16, 1, nchannels, srate, byte_rate, block_align, 8 * sample_width)
+                    + struct.pack(
+                        "<IHHIIHH",
+                        16,
+                        1,
+                        nchannels,
+                        srate,
+                        byte_rate,
+                        block_align,
+                        8 * sample_width,
+                    )
                     + b"data"
                     + struct.pack("<I", data_bytes)
                 )
 
-            silence_bytes_between = int(sample_rate * float(args.sentence_silence) * sample_width)
+            silence_bytes_between = int(
+                sample_rate * float(args.sentence_silence) * sample_width
+            )
 
             def generate():
                 # Send header first
@@ -326,7 +341,9 @@ def main() -> None:
                     # In the unlikely event of underrun (estimate too small), we cannot fix the header.
                     # Prefer to end stream; clients may truncate the tail.
                     _LOGGER.warning(
-                        "Realtime estimate too small: wrote=%s, est=%s", total_written, est_data_bytes
+                        "Realtime estimate too small: wrote=%s, est=%s",
+                        total_written,
+                        est_data_bytes,
                     )
 
             return Response(stream_with_context(generate()), mimetype="audio/wav")
@@ -355,6 +372,106 @@ def main() -> None:
                     wav_file.writeframes(audio_chunk.audio_int16_bytes)
 
             return wav_io.getvalue()
+
+    @app.route("/stream", methods=["POST"])
+    def app_stream() -> Any:
+        """Stream synthesis from streamed text input.
+
+        Accepts newline-delimited text as the POST body
+        (Content-Type: text/plain).  Each line is fed into
+        ``PiperVoice.synthesize_stream`` which buffers until a
+        sentence boundary is detected and synthesizes immediately.
+
+        Returns streaming ``audio/wav`` with a provisional WAV header.
+        """
+        voice = default_voice
+        syn_config = SynthesisConfig(
+            speaker_id=args.speaker,
+            length_scale=(
+                args.length_scale
+                if args.length_scale is not None
+                else voice.config.length_scale
+            ),
+            noise_scale=(
+                args.noise_scale
+                if args.noise_scale is not None
+                else voice.config.noise_scale
+            ),
+            noise_w_scale=(
+                args.noise_w_scale
+                if args.noise_w_scale is not None
+                else voice.config.noise_w_scale
+            ),
+        )
+
+        sample_rate = voice.config.sample_rate
+        sample_width = 2
+        data_size = 0x7FFFFFFF
+
+        input_stream = request.stream
+
+        def text_lines():
+            """Yield text lines from the request body."""
+            buf = b""
+            while True:
+                chunk = input_stream.read(4096)
+                if not chunk:
+                    break
+                buf += chunk
+                while b"\n" in buf:
+                    line, buf = buf.split(b"\n", 1)
+                    text = line.decode("utf-8", errors="replace")
+                    if text.strip():
+                        yield text
+            # Flush remaining
+            text = buf.decode("utf-8", errors="replace")
+            if text.strip():
+                yield text
+
+        silence_bytes = int(
+            voice.config.sample_rate * float(args.sentence_silence) * sample_width
+        )
+
+        def generate():
+            # Provisional WAV header
+            block_align = sample_width
+            byte_rate = sample_rate * block_align
+            yield (
+                b"RIFF"
+                + struct.pack("<I", 36 + data_size)
+                + b"WAVE"
+                + b"fmt "
+                + struct.pack(
+                    "<IHHIIHH",
+                    16,
+                    1,
+                    1,
+                    sample_rate,
+                    byte_rate,
+                    block_align,
+                    8 * sample_width,
+                )
+                + b"data"
+                + struct.pack("<I", data_size)
+            )
+
+            total = 0
+            for i, audio_chunk in enumerate(
+                voice.synthesize_stream(text_lines(), syn_config)
+            ):
+                if i > 0 and silence_bytes > 0:
+                    pad = bytes(silence_bytes)
+                    total += len(pad)
+                    yield pad
+                pcm = audio_chunk.audio_int16_bytes
+                total += len(pcm)
+                yield pcm
+
+            # Pad to match declared data size
+            if total < data_size:
+                yield bytes(min(data_size - total, 8192))
+
+        return Response(stream_with_context(generate()), mimetype="audio/wav")
 
     app.run(host=args.host, port=args.port)
 
