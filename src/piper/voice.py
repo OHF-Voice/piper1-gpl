@@ -389,7 +389,10 @@ class PiperVoice:
         sentence-ending boundary (one of ``. ! ? \\n``) is detected, all
         complete sentences are phonemized and synthesized immediately,
         yielding :class:`AudioChunk` objects as soon as they are ready.
-        Any remaining text is flushed when the iterator is exhausted.
+
+        Send an empty string ``""`` to flush the buffer — any accumulated
+        text is synthesized immediately regardless of sentence boundaries.
+        The buffer is also flushed when the iterator is exhausted.
 
         The voice model is **not** reloaded between chunks, so the
         setup cost is paid only once.
@@ -400,6 +403,13 @@ class PiperVoice:
         _SENTENCE_BOUNDARY = re.compile(r"(?<=[.!?\n])\s+")
         buffer = ""
         for chunk in text_stream:
+            if not chunk:
+                # Empty string = flush buffer
+                buffer = buffer.strip()
+                if buffer:
+                    yield from self.synthesize(buffer, syn_config)
+                    buffer = ""
+                continue
             buffer += chunk
             parts = _SENTENCE_BOUNDARY.split(buffer)
             if len(parts) > 1:
