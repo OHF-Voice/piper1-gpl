@@ -52,3 +52,22 @@ for chunk in voice.synthesize("..."):
     set_audio_format(chunk.sample_rate, chunk.sample_width, chunk.sample_channels)
     write_raw_data(chunk.audio_int16_bytes)
 ```
+
+For input streaming (e.g. from an LLM), use `PiperVoice.synthesize_stream`:
+
+``` python
+import sys
+from piper import PiperVoice
+
+voice = PiperVoice.load("/path/to/en_US-lessac-medium.onnx")
+
+# Feed text incrementally; audio is yielded as soon as
+# a complete sentence is detected.
+for chunk in voice.synthesize_stream(sys.stdin):
+    write_raw_data(chunk.audio_int16_bytes)
+```
+
+`synthesize_stream` accepts any `Iterable[str]` — a file, a generator
+yielding lines from a network stream, or any other source of text
+chunks.  The voice model is loaded once; only phonemization and
+inference run per sentence.
