@@ -11,6 +11,7 @@
 int main(int argc, char *argv[]) {
     bool print_help = false;
     bool play_file = false;
+    float scale_factor = 1.0f;
     int speaker_id = 0;
     std::string filename("en_US-hfc_female-medium");
     auto wav_file =
@@ -37,6 +38,10 @@ Somewhere in the distance, a bird chirped a melody that seemed to echo through t
                      &espeak_ng_data,
                      "Location of the espeak-ng-data directory.");
     args.addArgument({"-t", "--text"}, &text, "Text to synthesize.");
+    args.addArgument({"-f", "--factor"},
+                     &scale_factor,
+                     "Scale factor (0.5 - 2.0) for changing the length of the "
+                     "output audio.");
     args.addArgument({"-h", "--help"}, &print_help, "Print this help.");
     // Do the actual parsing.
     try {
@@ -99,15 +104,24 @@ Somewhere in the distance, a bird chirped a melody that seemed to echo through t
     piper_synthesize_options options = piper_default_synthesize_options(synth);
     // Set the default or selected speaker.
     options.speaker_id = speaker_id;
+    options.length_scale *= 1.0f / scale_factor;
     // Start synthesizing.
-    piper_synthesize_start(synth, text.c_str(), &options);
+    int result = piper_synthesize_start(synth, text.c_str(), &options);
+    if (result == PIPER_ERR_GENERIC) {
+        std::cerr << "Synthesis start failed!" << std::endl;
+        return 1;
+    }
 
     std::ofstream audio_stream(wav_file, std::ios::binary);
 
     piper_audio_chunk chunk;
 
     int sample_total = 0;
-    while (piper_synthesize_next(synth, &chunk) != PIPER_DONE) {
+    while ((result = piper_synthesize_next(synth, &chunk)) != PIPER_DONE) {
+        if (result == PIPER_ERR_GENERIC) {
+            std::cerr << "Synthesis next failed!" << std::endl;
+            return 1;
+        }
         // Write header the first time.
         if (!sample_total) {
             writeWavHeader(chunk.sample_rate, chunk.num_samples, audio_stream);

@@ -144,7 +144,7 @@ if(NOT DEFINED ONNXRUNTIME_DIR)
         file(COPY ${_DynLibFiles} DESTINATION "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}")
     else ()
         # When not able to copy files, set a cache entry.
-        message(STATUS "Writting onnxruntime cache entry 'ONNXRUNTIME_DYNLIB_FILES' with dynlibs.")
+        message(STATUS "Writing onnxruntime cache entry 'ONNXRUNTIME_DYNLIB_FILES' with dynlibs.")
        set(ONNXRUNTIME_DYNLIB_FILES "${_DynLibFiles}" CACHE INTERNAL "Location of the onnxruntime dynamic-library files.")
     endif ()
 endif()

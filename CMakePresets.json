@@ -43,7 +43,7 @@
 					"type": "STRING",
 					"value": "1.23.2"
 				},
-				"BUILD_LIB_ONLY": {
+				"PIPER_BUILD_LIB_ONLY": {
 					"type": "BOOL",
 					"value": "ON"
 				},
