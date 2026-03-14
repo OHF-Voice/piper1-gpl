@@ -43,6 +43,10 @@ ExternalProject_Add(espeak_ng_external
         -DCMAKE_SYSTEM_NAME=${CMAKE_SYSTEM_NAME}
         -DCMAKE_INSTALL_PREFIX=${ESPEAKNG_INSTALL_DIR}
         -DBUILD_SHARED_LIBS:BOOL=OFF
+        # Do not compile intonation files when Piper used as a module in another project.
+        -DCOMPILE_INTONATIONS:BOOL=${PROJECT_IS_TOP_LEVEL}
+        # When not disabling tests when not the top level project, the build fails.
+        -DENABLE_TESTS:BOOL=${PROJECT_IS_TOP_LEVEL}
         -DCMAKE_POSITION_INDEPENDENT_CODE:BOOL=ON
         -DUSE_ASYNC:BOOL=OFF
         -DUSE_MBROLA:BOOL=OFF
