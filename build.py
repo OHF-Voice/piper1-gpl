@@ -152,10 +152,15 @@ __inherit__=qt-ver
 SF_EXEC_DIR_SUFFIX=-mingw
 ; Only the path is required. Notice that some of the distributed MinGW compiler include older versions of Ninja and CMake.
 PATH=${RUN_DIR}\lib\toolchain\w64-x86_64-mingw-1320-posix\bin;${RUN_DIR}\lib\qt\w64-x86_64\${RUN_QT_VER}\mingw_64\bin;lib;${PATH}
-;PATH=P:\toolchain\mingw1320_64-posix\bin;${PATH}
 
 [env.mingw.wine@]
 __inherit__=env.mingw@
+
+; Environment added before running the 'mingw' compiler in Docker and Wine.
+[env.mingw.wine.docker@]
+__inherit__=qt-ver
+SF_EXEC_DIR_SUFFIX=-mingw
+PATH=Z:\home\${USER}\toolchain\w64-x86_64-mingw-1320-posix\bin;Z:\home\${USER}\lib\qt\w64-x86_64\${RUN_QT_VER}\mingw_64\bin;lib;${PATH}
 
 ; Environment added before running the 'ga' compiler in Docker.
 [env.ga.docker@]
