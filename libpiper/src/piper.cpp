@@ -5,7 +5,42 @@
 #include <fstream>
 #include <limits>
 
+// TODO: A static library for espeak-ng library for Windows is impossible?
+//#if defined(__MINGW32__) || defined(__MINGW64__)
+    // This prevents declaring imports by declaring exports which are ignored.
+    #define LIBESPEAK_NG_EXPORT
+//#endif
 #include <espeak-ng/speak_lib.h>
+
+#include <string>
+#include <vector>
+#include <cwchar>
+
+// TODO: For some reason Ort::Session(...) needs a wchar_t pointer when using the Windows libraries.
+#if ORT_API_VERSION >= 23 && WIN32
+/**
+ * Converts a narrow std::string to a wide std::wstring using the system locale.
+ * Note: Call std::setlocale(LC_ALL, "") once at the start of your program
+ * to ensure the correct locale is used for conversion.
+ */
+std::wstring to_wstring(const std::string& input) {
+    if (input.empty()) {
+        return L"";
+    }
+    // Determine the required size for the destination buffer
+    // std::mbstowcs returns (size_t)-1 if it encounters an invalid multibyte character
+    size_t size_needed = std::mbstowcs(nullptr, input.c_str(), 0);
+    if (size_needed == static_cast<size_t>(-1)) {
+        return L""; // Or throw an exception for invalid encoding
+    }
+    // Allocate buffer (including null terminator)
+    std::vector<wchar_t> buffer(size_needed + 1);
+    // Perform the actual conversion
+    std::mbstowcs(buffer.data(), input.c_str(), size_needed + 1);
+    //
+    return std::wstring(buffer.data());
+}
+#endif
 
 using json = nlohmann::json;
 
@@ -96,9 +131,13 @@ struct piper_synthesizer *piper_create(const char *model_path,
     synth->session_options.DisableMemPattern();
     synth->session_options.DisableProfiling();
 
+#if ORT_API_VERSION >= 23 && WIN32
     synth->session = std::make_unique<Ort::Session>(
-        Ort::Session(ort_env, model_path, synth->session_options));
-
+        Ort::Session(get_ort_env(), to_wstring(model_path).data(), synth->session_options));
+#else
+    synth->session = std::make_unique<Ort::Session>(
+        Ort::Session(get_ort_env(), model_path, synth->session_options));
+#endif
     return synth;
 }
 
