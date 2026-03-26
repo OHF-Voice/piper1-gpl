@@ -76,6 +76,74 @@
 			}
 		},
 		{
+			"name": ".tc-gnu",
+			"description": "Toolchain for generic GNU",
+			"hidden": true,
+			"toolchainFile": "${sourceDir}/libpiper/cmake/toolchain-gnu.cmake",
+			"cacheVariables": {
+				"SF_COMPILER": {
+					"type": "STRING",
+					"value": "gnu"
+				}
+			},
+			"vendor": {
+				"jetbrains.com/clion": {
+					"toolchain": "GNU"
+				}
+			}
+		},
+		{
+			"name": ".tc-ga",
+			"description": "Toolchain for generic GA",
+			"hidden": true,
+			"toolchainFile": "${sourceDir}/libpiper/cmake/toolchain-ga.cmake",
+			"cacheVariables": {
+				"SF_COMPILER": {
+					"type": "STRING",
+					"value": "ga"
+				}
+			},
+			"vendor": {
+				"jetbrains.com/clion": {
+					"toolchain": "GA"
+				}
+			}
+		},
+		{
+			"name": ".tc-gw",
+			"description": "Toolchain for generic GW",
+			"hidden": true,
+			"toolchainFile": "${sourceDir}/libpiper/cmake/toolchain-gw.cmake",
+			"cacheVariables": {
+				"SF_COMPILER": {
+					"type": "STRING",
+					"value": "gw"
+				}
+			},
+			"vendor": {
+				"jetbrains.com/clion": {
+					"toolchain": "GW"
+				}
+			}
+		},
+		{
+			"name": ".tc-mingw",
+			"description": "Toolchain for generic MinGW",
+			"hidden": true,
+			"toolchainFile": "${sourceDir}/libpiper/cmake/toolchain-mingw.cmake",
+			"cacheVariables": {
+				"SF_COMPILER": {
+					"type": "STRING",
+					"value": "mingw"
+				}
+			},
+			"vendor": {
+				"jetbrains.com/clion": {
+					"toolchain": "MinGW"
+				}
+			}
+		},
+		{
 			"name": ".tc-msvc",
 			"description": "Toolchain for generic MSVC",
 			"hidden": true,
@@ -89,12 +157,18 @@
 				"WindowsSdkBinPath": "$env{MSVC_ROOT}\\Windows Kits\\10\\bin",
 				"LIB": "$env{MSVC_ROOT}\\VC\\Tools\\MSVC\\$env{VCToolsVersion}\\lib\\$env{VSCMD_ARG_TGT_ARCH};$env{MSVC_ROOT}\\Windows Kits\\10\\Lib\\$env{WindowsSDKVersion}\\ucrt\\$env{VSCMD_ARG_TGT_ARCH};$env{MSVC_ROOT}\\Windows Kits\\10\\Lib\\$env{WindowsSDKVersion}\\um\\$env{VSCMD_ARG_TGT_ARCH}",
 				"INCLUDE": "$env{MSVC_ROOT}\\VC\\Tools\\MSVC\\$env{VCToolsVersion}\\include;$env{MSVC_ROOT}\\Windows Kits\\10\\Include\\$env{WindowsSDKVersion}\\ucrt;$env{MSVC_ROOT}\\Windows Kits\\10\\Include\\$env{WindowsSDKVersion}\\shared;$env{MSVC_ROOT}\\Windows Kits\\10\\Include\\$env{WindowsSDKVersion}\\um;$env{MSVC_ROOT}\\Windows Kits\\10\\Include\\$env{WindowsSDKVersion}\\winrt;$env{MSVC_ROOT}\\Windows Kits\\10\\Include\\$env{WindowsSDKVersion}\\cppwinrt",
-				"PATH": "$env{SF_LIBRARY_DIR};$env{MSVC_ROOT}\\VC\\Tools\\MSVC\\$env{VCToolsVersion}\\bin\\Host$env{VSCMD_ARG_TGT_ARCH}\\$env{VSCMD_ARG_TGT_ARCH};$env{MSVC_ROOT}\\Windows Kits\\10\\bin\\$env{WindowsSDKVersion}\\$env{VSCMD_ARG_TGT_ARCH};$env{MSVC_ROOT}\\Windows Kits\\10\\bin\\$env{WindowsSDKVersion}\\$env{VSCMD_ARG_TGT_ARCH}\\ucrt;$penv{PATH}"
+				"LD_LIBRARY_PATH": "$env{SF_LIBRARY_DIR};$env{MSVC_ROOT}\\VC\\Tools\\MSVC\\$env{VCToolsVersion}\\bin\\Host$env{VSCMD_ARG_TGT_ARCH}\\$env{VSCMD_ARG_TGT_ARCH};$env{MSVC_ROOT}\\Windows Kits\\10\\bin\\$env{WindowsSDKVersion}\\$env{VSCMD_ARG_TGT_ARCH}\\ucrt;$penv{LD_LIBRARY_PATH}",
+				"PATH": "$env{LD_LIBRARY_PATH};$env{MSVC_ROOT}\\Windows Kits\\10\\bin\\$env{WindowsSDKVersion}\\$env{VSCMD_ARG_TGT_ARCH};$penv{PATH}"
 			},
 			"cacheVariables": {
 				"SF_COMPILER": {
 					"type": "STRING",
 					"value": "msvc"
+				}
+			},
+			"vendor": {
+				"jetbrains.com/clion": {
+					"toolchain": "MSVC"
 				}
 			}
 		},
@@ -126,10 +200,6 @@
 			"name": ".qt",
 			"hidden": true,
 			"cacheVariables": {
-				"SF_BUILD_QT": {
-					"type": "BOOL",
-					"value": "ON"
-				}
 			}
 		},
 		{
@@ -141,7 +211,6 @@
 			"hidden": true,
 			"displayName": "Debug Linux Template",
 			"description": "Debug config Linux template.",
-			"toolchainFile": "${sourceDir}/libpiper/cmake/toolchain-gnu.cmake",
 			"environment": {
 				"SF_EXECUTABLE_DIR": "${sourceDir}/bin/lnx64$penv{SF_EXEC_DIR_SUFFIX}",
 				"LD_LIBRARY_PATH": "$env{SF_LIBRARY_DIR}:$penv{LD_LIBRARY_PATH}"
@@ -150,32 +219,7 @@
 				"BUILD_APPS": {
 					"type": "BOOL",
 					"value": "ON"
-				},
-				"SF_COMPILER": {
-					"type": "STRING",
-					"value": "gnu"
 				}
-			},
-			"vendor": {
-				"compiler": "gnu"
-			}
-		},
-		{
-			"name": ".cfg-lnx-arm",
-			"inherits": [
-				".cfg-lnx"
-			],
-			"hidden": true,
-			"displayName": "Debug Linux Template",
-			"description": "Debug config Linux template.",
-			"cacheVariables": {
-				"SF_COMPILER": {
-					"type": "STRING",
-					"value": "ga"
-				}
-			},
-			"vendor": {
-				"compiler": "ga"
 			}
 		},
 		{
@@ -187,7 +231,6 @@
 			"hidden": true,
 			"displayName": "Debug Windows Template",
 			"description": "Debug config Windows template.",
-			"toolchainFile": "${sourceDir}/libpiper/cmake/toolchain-gw.cmake",
 			"environment": {
 				"SF_EXECUTABLE_DIR": "${sourceDir}/bin/win64$penv{SF_EXEC_DIR_SUFFIX}"
 			},
@@ -195,14 +238,7 @@
 				"BUILD_APPS": {
 					"type": "BOOL",
 					"value": "ON"
-				},
-				"SF_COMPILER": {
-					"type": "STRING",
-					"value": "gw"
 				}
-			},
-			"vendor": {
-				"compiler": "gw"
 			}
 		},
 		{
@@ -214,7 +250,6 @@
 			"hidden": true,
 			"displayName": "Debug Windows Template",
 			"description": "Debug config Windows template.",
-			"toolchainFile": "${sourceDir}/libpiper/cmake/toolchain-mingw.cmake",
 			"environment": {
 				"SF_EXECUTABLE_DIR": "${sourceDir}/bin/win64$penv{SF_EXEC_DIR_SUFFIX}",
 				"PATH": "$env{SF_LIBRARY_DIR};$penv{PATH}"
@@ -223,10 +258,6 @@
 				"BUILD_APPS": {
 					"type": "BOOL",
 					"value": "ON"
-				},
-				"SF_COMPILER": {
-					"type": "STRING",
-					"value": "mingw"
 				}
 			}
 		},
@@ -236,6 +267,8 @@
 			"displayName": "Debug GNU",
 			"description": "Debug config GNU compiler on Linux.",
 			"inherits": [
+				".qt",
+				".tc-gnu",
 				".cfg-lnx"
 			],
 			"cacheVariables": {
@@ -246,10 +279,10 @@
 			"hidden": false,
 			"displayName": "Debug GA",
 			"description": "Debug config GNU Arm compiler on Linux.",
-			"toolchainFile": "${sourceDir}/libpiper/cmake/toolchain-ga.cmake",
 			"inherits": [
 				".qt",
-				".cfg-lnx-arm"
+				".tc-ga",
+				".cfg-lnx"
 			],
 			"cacheVariables": {
 			}
@@ -260,6 +293,8 @@
 			"displayName": "Coverage GNU",
 			"description": "Coverage config GNU compiler on Linux.",
 			"inherits": [
+				".qt",
+				".tc-gnu",
 				".cfg-lnx"
 			],
 			"cacheVariables": {
@@ -275,6 +310,8 @@
 			"displayName": "Coverage GW",
 			"description": "Coverage config Windows GW compiler on Linux.",
 			"inherits": [
+				".qt",
+				".tc-gw",
 				".cfg-win"
 			],
 			"cacheVariables": {
@@ -285,20 +322,13 @@
 			}
 		},
 		{
-			"name": "gw-debug",
-			"hidden": false,
-			"displayName": "Debug GW",
-			"description": "Debug config for Windows GW compiler on Linux.",
-			"inherits": [
-				".cfg-win"
-			]
-		},
-		{
 			"name": "gnu-release",
 			"hidden": false,
 			"displayName": "Release GNU",
 			"description": "Release config GNU compiler on Linux.",
 			"inherits": [
+				".qt",
+				".tc-gnu",
 				".cfg-lnx"
 			],
 			"cacheVariables": {
@@ -315,7 +345,8 @@
 			"description": "Release config GNU Arm compiler on Linux.",
 			"inherits": [
 				".qt",
-				".cfg-lnx-arm"
+				".tc-ga",
+				".cfg-lnx"
 			],
 			"cacheVariables": {
 				"CMAKE_BUILD_TYPE": {
@@ -325,11 +356,24 @@
 			}
 		},
 		{
+			"name": "gw-debug",
+			"hidden": false,
+			"displayName": "Debug GW",
+			"description": "Debug config for Windows GW compiler on Linux.",
+			"inherits": [
+				".qt",
+				".tc-gw",
+				".cfg-win"
+			]
+		},
+		{
 			"name": "gw-release",
 			"hidden": false,
 			"displayName": "Release GW",
 			"description": "Release config for Windows GW compiler on Linux.",
 			"inherits": [
+				".qt",
+				".tc-gw",
 				".cfg-win"
 			],
 			"cacheVariables": {
@@ -345,19 +389,10 @@
 			"displayName": "Debug MinGW",
 			"description": "Debug config for MinGW compiler on Windows.",
 			"inherits": [
+				".qt",
+				".tc-mingw",
 				".cfg-w64"
-			],
-			"cacheVariables": {
-				"SF_COMPILER": {
-					"type": "STRING",
-					"value": "mingw"
-				}
-			},
-			"vendor": {
-				"jetbrains.com/clion": {
-					"toolchain": "MinGW"
-				}
-			}
+			]
 		},
 		{
 			"name": "mingw-release",
@@ -365,21 +400,14 @@
 			"displayName": "Release MinGW",
 			"description": "Release config for MinGW compiler on Windows.",
 			"inherits": [
+				".qt",
+				".tc-mingw",
 				".cfg-w64"
 			],
 			"cacheVariables": {
 				"CMAKE_BUILD_TYPE": {
 					"type": "STRING",
 					"value": "Release"
-				},
-				"SF_COMPILER": {
-					"type": "STRING",
-					"value": "mingw"
-				}
-			},
-			"vendor": {
-				"jetbrains.com/clion": {
-					"toolchain": "MinGW"
 				}
 			}
 		},
@@ -388,21 +416,12 @@
 			"hidden": false,
 			"displayName": "Debug MSVC",
 			"description": "Debug config for MSVC compiler on Windows.",
-			"toolchainFile": "${sourceDir}/libpiper/cmake/toolchain-msvc.cmake",
 			"inherits": [
+				".qt",
 				".tc-msvc-2022",
 				".cfg-w64"
 			],
 			"cacheVariables": {
-				"SF_COMPILER": {
-					"type": "STRING",
-					"value": "msvc"
-				}
-			},
-			"vendor": {
-				"jetbrains.com/clion": {
-					"toolchain": "MSVC"
-				}
 			}
 		},
 		{
@@ -411,6 +430,7 @@
 			"displayName": "Release MSVC",
 			"description": "Release config for MSVC compiler on Windows.",
 			"inherits": [
+				".qt",
 				".tc-msvc-2022",
 				".cfg-w64"
 			],
@@ -418,15 +438,6 @@
 				"CMAKE_BUILD_TYPE": {
 					"type": "STRING",
 					"value": "Release"
-				},
-				"SF_COMPILER": {
-					"type": "STRING",
-					"value": "msvc"
-				}
-			},
-			"vendor": {
-				"jetbrains.com/clion": {
-					"toolchain": "MSVC"
 				}
 			}
 		}

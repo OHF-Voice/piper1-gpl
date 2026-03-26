@@ -26,6 +26,8 @@ Author: Arjan van Olphen <arjan@scanframe.nl>
 from __future__ import annotations
 import argparse
 import configparser
+import copy
+import hashlib
 import logging
 import stat
 import platform
@@ -74,6 +76,7 @@ cmake-run-file=cmake/lib/run-executable.cmake
 ; Override the default docker image using a smaller one without the QT libraries.
 ;docker-image=nexus.scanframe.com/amd64/gnu-cpp:24.04
 ;docker-image=avolphen/amd64-gnu-cpp:24.04
+;docker-image=amd64/gnu-cpp:24.04
 
 ; Section for optional include file which is merged.
 [__include__]
@@ -101,28 +104,25 @@ WINEPATH=${TOOL_ROOT}\cmake\bin;${TOOL_ROOT}\bin;${TOOL_ROOT}\python;${TOOL_ROOT
 
 ; Environment added before running with the compiler msvc natively.
 [env.msvc@]
+__inherit__=qt-ver
+SF_EXEC_DIR_SUFFIX=-msvc
 ; Location of the root of the MSVC toolchain in the Wine environment.
 ; The rest is environment as below is configured in the file CMakePresets.json to allow multiple compilers to be configured in the same project.
 MSVC_ROOT=${RUN_DIR}\lib\toolchain\w64-x86_64-msvc-2022
-;MSVC_ROOT=P:\toolchain\w64-x86_64-msvc-2022
-PATH=${RUN_DIR}\lib\qt\w64-x86_64\6.10.1\msvc_64\bin;${PATH}
-; Puts the binary in 'bin/win64-msvc'.
-SF_EXEC_DIR_SUFFIX=-msvc
+; Overrides QT_VER_DIR for subcommand 'run'.
+RUN_QT_VER_DIR=${RUN_DIR}\lib\qt\w64-x86_64\${RUN_QT_VER}
+; Even though this variable is not used by Windows it is used to locate the DLL's for running the application.
+LD_LIBRARY_PATH=${RUN_QT_VER_DIR}\msvc_64\bin
+PATH=${LD_LIBRARY_PATH};${PATH}
 
 ; Environment added before running with the compiler msvc in Wine.
 [env.msvc.wine@]
-__inherit__=qt-ver
-; Location of the root of the MSVC toolchain in the Wine environment.
-; The rest is environment as below is configured in the file CMakePresets.json to allow multiple compilers to be configured in the same project.
-MSVC_ROOT=${RUN_DIR}\lib\toolchain\w64-x86_64-msvc-2022
-; Overrides QT_VER_DIR in the for subcommand 'run'.
-RUN_QT_VER_DIR=${RUN_DIR}\lib\qt\w64-x86_64\${RUN_QT_VER}
-SF_EXEC_DIR_SUFFIX=-msvc
+__inherit__=env.msvc@
 
 ; Environment added before running Wine in the Docker container.
 [env.wine.docker@]
 __inherit__=qt-ver
-; Overrides QT_VER_DIR in the for subcommand 'run'.
+; Overrides QT_VER_DIR for subcommand 'run'.
 RUN_QT_VER_DIR=Z:\home\${USER}\lib\qt\w64-x86_64\${RUN_QT_VER}
 
 ; Environment added before running with the compiler msvc in Wine in the Docker container.
@@ -138,20 +138,28 @@ SF_EXEC_DIR_SUFFIX=-gnu
 # Normally the RUN_PATH is dealing with this but when compiled differently it must be set.
 LD_LIBRARY_PATH=${RUN_DIR}/lib/qt/lnx-x86_64/${RUN_QT_VER}/gcc_64/lib
 
+; Environment added before running the 'gnu' compiler in the Docker container.
+[env.gnu.docker@]
+__inherit__=qt-ver
+SF_EXEC_DIR_SUFFIX=-gnu
+# Normally the RUN_PATH is dealing with this but when compiled differently it must be set.
+LD_LIBRARY_PATH=/home/${USER}/lib/qt/lnx-x86_64/${RUN_QT_VER}/gcc_64/lib
+
 ; Environment added when running wine natively to execute the Windows cross-compiled targets.
 [env.gw@]
 __inherit__=qt-ver
 SF_EXEC_DIR_SUFFIX=-gw
 WINEPATH=Z:\usr\x86_64-w64-mingw32\lib;Z:\usr\lib\gcc\x86_64-w64-mingw32\13-posix
-; Overrides QT_VER_DIR in the for subcommand 'run'.
+; Overrides QT_VER_DIR for subcommand 'run'.
 RUN_QT_VER_DIR=${RUN_DIR}/lib/qt/win-x86_64/${RUN_QT_VER}
 
 ; Environment added before running the 'mingw' compiler natively.
 [env.mingw@]
 __inherit__=qt-ver
 SF_EXEC_DIR_SUFFIX=-mingw
-; Only the path is required. Notice that some of the distributed MinGW compiler include older versions of Ninja and CMake.
-PATH=${RUN_DIR}\lib\toolchain\w64-x86_64-mingw-1320-posix\bin;${RUN_DIR}\lib\qt\w64-x86_64\${RUN_QT_VER}\mingw_64\bin;lib;${PATH}
+; Even though this variable is not used by Windows it is used to locate the DLL's for running the application.
+LD_LIBRARY_PATH=${RUN_DIR}\lib\toolchain\w64-x86_64-mingw-1320-posix\bin;${RUN_DIR}\lib\qt\w64-x86_64\${RUN_QT_VER}\mingw_64\bin;lib
+PATH=${LD_LIBRARY_PATH};${PATH}
 
 [env.mingw.wine@]
 __inherit__=env.mingw@
@@ -172,18 +180,13 @@ SF_EXEC_DIR_SUFFIX=-ga
 __inherit__=qt-ver
 SF_EXEC_DIR_SUFFIX=-gw
 ; Provides compiler std libraries to be found.
-WINEPATH=Z:\usr\x86_64-w64-mingw32\lib;Z:\usr\lib\gcc\x86_64-w64-mingw32\13-posix
+WINEPATH=Z:\usr\x86_64-w64-mingw32\lib;Z:\usr\lib\gcc\x86_64-w64-mingw32\13-posix;
+; Prevent displaying Wine warnings.
+WINEDEBUG=fixme-all
 # Optional for allowing the .exe files to be executed from Linux. Required compiler std libraries are also part of the Qt library.
 ;WINEPATH=Z:\home\${USER}\lib\qt\win-x86_64\${RUN_QT_VER}\mingw_64\bin;lib
 ; Overrides QT_VER_DIR since Wine does not pass any 'QT_' prefixed variables.
 RUN_QT_VER_DIR=/home/${USER}/lib/qt/win-x86_64/${RUN_QT_VER}
-
-; Environment added before running the 'gnu' compiler in the Docker container.
-[env.gnu.docker@]
-__inherit__=qt-ver
-SF_EXEC_DIR_SUFFIX=-gnu
-# Normally the RUN_PATH is dealing with this but when compiled differently it must be set.
-;LD_LIBRARY_PATH=/home/${USER}/lib/qt/lnx-x86_64/${RUN_QT_VER}/gcc_64/lib
 
 """.replace('\r', '')
 
@@ -446,15 +449,16 @@ def create_config_parser(ini_path: str, cfg: configparser.ConfigParser = None) -
 
 # Show the Python used.
 logger.info(f"# Python {sys.version} on {sys.platform}.")
-# The directory of the current file.
-RUN_DIR = os.path.dirname(os.path.abspath(__file__))
+# The run directory using on Linux of the current file/symlink location and on Windows the current working directory.
+# It is impossible on Windows to detect the location of an executed symlink when executed without the 'python' executable.
+RUN_DIR = os.getcwd() if sys.platform == "win32" else os.path.dirname(os.path.abspath(__file__))
 # Environment variables from this process.
 PARENT_ENV = os.environ.copy()
 # Linux has a current working directory environment variable and Windows does not.
 if 'PWD' not in PARENT_ENV:
 	PARENT_ENV['PWD'] = os.getcwd()
 # List of optional environment variable names when missing no exception is raised.
-ENV_OPTIONAL = ["SF_BIN_DIR_SUFFIX", "WINEPATH", "LD_LIBRARY_PATH"]
+ENV_OPTIONAL = ["SF_BIN_DIR_SUFFIX", "WINEPATH", "LD_LIBRARY_PATH", "SF_EXEC_DIR_SUFFIX"]
 # List of ignored environment variables set when a CI pipeline is active.
 ENV_IGNORED = ["SF_EXEC_DIR_SUFFIX"] if PARENT_ENV.get("CI") else []
 # In Linux and Docker it could be the TEMP environment variable is not set.
@@ -482,7 +486,8 @@ QT_VER = "6.10.1"
 CMAKE_LIB_SUBDIR = ["cmake", "lib"]
 
 
-def get_github_release(owner: str, repo: str, assets_wildcard: Optional[str] = None, release_tag: Optional[str] = None) -> Optional[Dict[str, any]]:
+def get_github_release(owner: str, repo: str, assets_wildcard: Optional[str] = None, release_tag: Optional[str] = None
+) -> Optional[Dict[str, any]]:
 	"""
 	Fetch GitHub release information and assets.
 	:param owner: Repository owner
@@ -529,7 +534,7 @@ def get_github_release(owner: str, repo: str, assets_wildcard: Optional[str] = N
 		return None
 
 
-def extract_by_url(url: str, dest_dir: str, new_dir_name: Optional[str] = None, digest:Optional[str] = None) -> bool:
+def extract_by_url(url: str, dest_dir: str, new_dir_name: Optional[str] = None, digest: Optional[str] = None) -> bool:
 	"""
 	Extracts the url of a given compressed file to the given destination directory.
 	After extraction the directory is renamed to new_dir_name.
@@ -550,7 +555,7 @@ def extract_by_url(url: str, dest_dir: str, new_dir_name: Optional[str] = None, 
 		# Download to the temporary file.
 		sha256_hash = hashlib.sha256() if digest else None
 		with tempfile.NamedTemporaryFile(delete=False, suffix=f"_{filename}") as tmp_file:
-			for chunk in resp.iter_content(chunk_size=1024*4):
+			for chunk in resp.iter_content(chunk_size=1024 * 4):
 				tmp_file.write(chunk)
 				if sha256_hash:
 					sha256_hash.update(chunk)
@@ -616,6 +621,7 @@ def extract_by_url(url: str, dest_dir: str, new_dir_name: Optional[str] = None, 
 		logger.error(f"Error extracting {url}: {e}")
 		return False
 
+
 def get_config_section(section: str, fail: bool = True) -> Dict[str, str]:
 	"""
 	Gets a configuration section as Dict of key-value pairs.
@@ -665,6 +671,37 @@ def get_merged_config_section(section: str, fail: bool = True) -> Dict[str, str]
 			if key not in merged_data:
 				merged_data[key] = value
 	return merged_data
+
+
+def remove_files_from_tree(dir_name: Path, wild_cards: list[str]) -> None:
+	"""
+	Removes any of the matching files listed in the pattern.
+	:param dir_name: Directory to search in recursively.
+	:param wild_cards: Wild card file patterns to look for.
+	"""
+	if not os.path.isdir(dir_name):
+		logger.warning(f": Directory '{dir_name}' does not exist or is not a directory.")
+		return
+	# Single timestamp for all.
+	timestamp = time.strftime("%Y%m%dT%H%M%S", time.localtime())
+	# Walk the tree.
+	for root, dirs, files in os.walk(dir_name):
+		for filename in files:
+			for pattern in wild_cards:
+				if fnmatch.fnmatch(filename, pattern):
+					file_path = os.path.join(root, filename)
+					try:
+						new_file_path = f"{file_path}-{timestamp}"
+						# Use a shorted path name for logging when in the run/project directory.
+						disp_name = new_file_path if RUN_DIR != new_file_path[:len(RUN_DIR)] else new_file_path[len(RUN_DIR) + 1:]
+						if not DEBUG_FLAG:
+							logger.info(f"~ Renaming file to: {disp_name}")
+							os.rename(file_path, new_file_path)
+						else:
+							logger.info(f"~ Skipped renaming file to: {disp_name}")
+					except OSError as ex:
+						logger.warning(f": Failed to rename file '{file_path}': {ex}")
+					break
 
 
 def remove_tree(dir_name: Path) -> None:
@@ -1008,15 +1045,16 @@ def get_compiler_type(preset_name: str, preset_type: PresetTypes = PresetTypes.C
 	"""
 	if (cpn := get_configure_preset_name(preset_type, preset_name)) is not None:
 		if (pn := get_preset_by_name(PresetTypes.CONFIGURE, cpn)) is not None:
+			# Use the 'vendor' from the preset configuration first.
 			compiler_type = pn.get("vendor", {}).get("compiler", None)
-			# Try the cache variable.
+			# Try the cache variable when not found.
 			if compiler_type is not None:
 				logger.debug(f"# Compiler type from field 'vendor/compiler': {compiler_type}")
 			else:
 				compiler_type = pn.get("cacheVariables", {}).get("SF_COMPILER", {}).get("value", None)
 				if compiler_type is not None:
 					logger.debug(f"# Compiler type from field 'cacheVariables/SF_COMPILER': {compiler_type}")
-			# Modify the environment.
+			# Return the type.
 			return compiler_type
 	else:
 		logger.warning(f"! No {PresetTypes.CONFIGURE.value} preset found for '{preset_type.value}/{preset_name}'!")
@@ -1038,6 +1076,7 @@ def set_environment_by_preset(preset_name: str, preset_type: PresetTypes = Prese
 		return True
 	return False
 
+
 def expand_macros(preset: dict, value: Any, is_path: bool = False, context: Dict[str, str] = None) -> Any:
 	"""
 	Recursively expands macros, substituting environment variables in strings from CMakePresets.json.
@@ -1051,13 +1090,6 @@ def expand_macros(preset: dict, value: Any, is_path: bool = False, context: Dict
 	if not isinstance(value, str):
 		return value
 	preset_name = preset.get("name", "unknown")
-	value = value.replace("${presetName}", preset_name)
-	value = value.replace("${sourceDir}", RUN_DIR)
-	value = value.replace("${sourceParentDir}", os.path.dirname(RUN_DIR))
-	value = value.replace("${fileDir}", RUN_DIR)
-	value = value.replace("${pathListSep}", os.pathsep)
-	value = value.replace("${hostSystemName}", "Windows" if sys.platform == 'win32' else "Linux")
-	value = value.replace("${dollar}", "$")
 
 	def env_replacer(match):
 		"""Callback function for regular expression substitution."""
@@ -1071,10 +1103,19 @@ def expand_macros(preset: dict, value: Any, is_path: bool = False, context: Dict
 		value = re.sub(pat, env_replacer, value)
 	if is_path and sys.platform == 'win32':
 		value = value.replace('/', os.sep)
+	# Expand CMakePreset macros at the end.
+	value = value.replace("${presetName}", preset_name)
+	value = value.replace("${sourceDir}", RUN_DIR)
+	value = value.replace("${sourceParentDir}", os.path.dirname(RUN_DIR))
+	value = value.replace("${fileDir}", RUN_DIR)
+	value = value.replace("${pathListSep}", os.pathsep)
+	value = value.replace("${hostSystemName}", "Windows" if sys.platform == 'win32' else "Linux")
+	value = value.replace("${dollar}", "$")
 	return value
 
 
-def run_command(cmd_list: List[str], input_data: bytes = None, shell: bool = False, capture_output: bool = False, check: bool = True,
+def run_command(cmd_list: List[str], input_data: bytes = None, shell: bool = False, capture_output: bool = False,
+	check: bool = True,
 	cwd: str = None, dbg_mode: DebugMode = DebugMode.REPORT
 ) -> subprocess.CompletedProcess | None:
 	"""
@@ -1094,7 +1135,8 @@ def run_command(cmd_list: List[str], input_data: bytes = None, shell: bool = Fal
 		logger.info(f"~ Executing from({cwd}): {cmd_str}")
 	# Raises a 'CalledProcessError' exception on error.
 	try:
-		return subprocess.run(cmd_list, shell=shell, cwd=cwd, check=check, env=RUN_ENV, capture_output=capture_output, input=input_data)
+		return subprocess.run(cmd_list, shell=shell, cwd=cwd, check=check, env=RUN_ENV, capture_output=capture_output,
+			input=input_data)
 	except Exception as ex:
 		ex.add_note(f"Subprocess: {' '.join(cmd_list)}")
 		raise ex
@@ -1113,22 +1155,23 @@ def get_merged_presets() -> dict:
 	# Make 'merged' reference the attribute.
 	merged = get_merged_presets.merged_data
 
-	def deep_merge(source, destination):
+	def deep_merge(_source, _destination):
 		"""
 		Recursively merges the contents of the source dictionary into the destination dictionary.
 		If a key exists in both dictionaries and its value is also a dictionary, this function
 		will recursively merge those nested dictionaries. For non-dictionary values, the value
 		from the source dictionary will overwrite or add to the destination.
 		"""
-		for key, value in source.items():
-			if isinstance(value, dict) and key in destination and isinstance(destination[key], dict):
+		# Make a deep copy since at some point '_source' get corrupted somehow.
+		for _key, _value in copy.deepcopy(_source).items():
+			if isinstance(_value, dict) and _key in _destination and isinstance(_destination[_key], dict):
 				# Recursively merge nested dictionaries.
-				deep_merge(value, destination[key])
+				deep_merge(_value, _destination[_key])
 			else:
 				# Overwrite or add the value.
-				if key not in destination:
-					destination[key] = value
-		return destination
+				if _key not in _destination:
+					_destination[_key] = copy.deepcopy(_value)
+		return _destination
 
 	base_path = os.path.join(RUN_DIR, "CMakePresets.json")
 	user_path = os.path.join(RUN_DIR, "CMakeUserPresets.json")
@@ -1160,18 +1203,29 @@ def get_merged_presets() -> dict:
 			merged.setdefault("vendor", {}).update(data["vendor"])
 	# Merge all in inherited presets.
 	for field in preset_type_fields:
-		# Assemble a dictionary of presets by name first.
-		presets: dict[str, dict] = {}
+		# Assemble a dictionary of presets by name in tuple containing a hash for a sanity check.
+		presets: dict[str, tuple[str, dict]] = {}
 		for preset in merged[field]:
-			presets.setdefault(preset['name'], preset)
+			presets.setdefault(preset['name'], (hashlib.md5(f"{preset}".encode()).hexdigest(), preset))
 		# Merge inherited presets.
 		for preset in merged[field]:
 			inherits = preset.get("inherits", None)
 			if inherits:
 				cur_preset_name = preset['name']
+				cur_index = list(presets).index(cur_preset_name)
 				# Iterate through the inherited presets and merge them in.
 				for preset_name in inherits:
-					deep_merge(presets[preset_name], preset)
+					# Can only merge a preset when defined earlier.
+					if cur_index > list(presets).index(preset_name):
+						deep_merge(presets[preset_name][1], preset)
+						# Update the current hash only.
+						presets[cur_preset_name] = (hashlib.md5(f"{presets[cur_preset_name][1]}".encode()).hexdigest(), presets[cur_preset_name][1])
+						# Sanity check which changed after the deep-merge.
+						for key in list(presets):
+							if presets[key][0] != hashlib.md5(f"{presets[key][1]}".encode()).hexdigest():
+								logger.debug(f"! Preset '{key}' has changed due to merge of '{preset_name}' into '{cur_preset_name}'!")
+					else:
+						raise RuntimeError(f"Preset '{cur_preset_name}' inherits from '{preset_name}' before it was defined!")
 				# Sanity check after merge.
 				if cur_preset_name != preset['name']:
 					logger.debug(f"! Failed to merge properly.")
@@ -1322,8 +1376,7 @@ def get_preset_by_name(preset_type: PresetTypes, preset_name: str) -> dict | Non
 	:param preset_name:  Name of the preset defined in CMakePresets.json or CMakeUserPresets.json.
 	:return: The preset dictionary or None when not found.
 	"""
-	data = get_merged_presets()
-	for p in data.get(f"{preset_type.value}Presets", []):
+	for p in get_merged_presets().get(f"{preset_type.value}Presets", []):
 		if p.get("name") == preset_name:
 			return p
 	return None
@@ -1481,7 +1534,9 @@ class SubCommandNative(SubCommand):
 		parser.add_argument("-c", "--clean", action="store_true",
 			help="Remove the built artifacts first (cmake option '--clean-first').")
 		parser.add_argument("-f", "--fresh", action="store_true",
-			help="Configure a fresh build tree (cmake option --fresh).")
+			help="Additional flag for adding (cmake option --fresh).")
+		parser.add_argument("-F", "--fresh-all", action="store_true",
+			help="Clears the build tree of all 'CMakeCache.txt' files.")
 		parser.add_argument("-C", "--wipe", action="store_true", help="Wipe build directory contents.")
 		parser.add_argument("-l", "--list-only", action="store_true", help="Lists tests only.")
 		parser.add_argument("-m", "--make", action="store_true", help="Create build directory/makefiles only.")
@@ -1518,6 +1573,10 @@ class SubCommandNative(SubCommand):
       {self.script} -t gnu-debug -r '^t_my-test'
     Workflow (Make/Build/Test/Pack) a preset:
       {self.script} --workflow gnu-debug
+    When configuring fails due to 'CMakeCache.txt' issues:
+      {self.script} -fm gnu-debug  (Applies only to the  main project)
+      {self.script} -Fm gnu-debug  (Applies to all projects and modules)
+      {self.script} -Cm gnu-debug  (Nuclear option, wipes the build directory clean.))
 """
 		return parser
 
@@ -1582,6 +1641,9 @@ class SubCommandNative(SubCommand):
 				logger.info(f"# Binary Directory: {bin_dir}")
 			# Get the full path to the binary directory if not already absolute.
 			bin_dir = os.path.abspath(bin_dir)
+			# Check if the build directory needs to have cleaned all 'CMakeLists.txt' files recursively.
+			if args.fresh_all:
+				remove_files_from_tree(Path(bin_dir), ["CMakeCache.txt"])
 			# When build only, do not configure.
 			if not args.build_only:
 				# Check if the directory should be wiped.
@@ -1805,7 +1867,8 @@ This ignores the options: --qt-ver, --platform'
 		logger.info(f"# Docker image used: {img_name}")
 		# Prepare standard Docker options for running the container.
 		docker_opts = ["--platform", f"linux/{args.platform}", "--rm", "--tty", "--interactive", "--device", "/dev/fuse",
-			"--cap-add", "SYS_ADMIN", "--security-opt", "apparmor:unconfined", "--hostname", platform.node(), "--user", "0:0",
+			"--cap-add", "SYS_ADMIN", "--cap-add", "SYS_PTRACE", "--security-opt", "apparmor:unconfined",
+			"--hostname", platform.node(), "--user", "0:0",
 			"--env", f"LOCAL_USER={os.getuid()}:{os.getgid()}", "--network", "host"]
 		# Handle X11 Display forwarding if available on the host.
 		# noinspection SpellCheckingInspection
@@ -1908,7 +1971,7 @@ class SubCommandInstall(SubCommand):
 	def create_parser(self, subparsers: argparse._SubParsersAction) -> argparse.ArgumentParser:
 		self.parser = subparsers.add_parser(self.command, aliases=self.aliases, add_help=False,
 			formatter_class=argparse.RawTextHelpFormatter,
-			help="Install required build tools or a quick start template project.")
+			help="Install required build tools or a quick start boilerplate project.")
 		return self.parser
 
 	def options(self, parser: argparse.ArgumentParser):
@@ -1950,6 +2013,8 @@ Choices are depended on the host platform:
   Windows: 
     win - Windows WinGet packages for build tools except a compiler(s).
 """)
+		parser.add_argument("-e", "--env-file", type=str, metavar="<preset>",
+			help="Create an environment file for the toolchain configured by the given configure preset.")
 
 	def handle(self, args: argparse.Namespace, args_left: List[str], args_right: List[str] | None) -> int:
 		"""
@@ -1965,10 +2030,114 @@ Choices are depended on the host platform:
 		if args.project:
 			if not self.create_project():
 				return 1
+		if args.env_file:
+			if not self.create_env_file(args.env_file):
+				return 1
 		if args.toolchain:
 			if not self.install_toolchain(args.toolchain):
 				return 1
 		return 0
+
+	# noinspection PyMethodMayBeStatic
+	def create_env_file(self, preset_name: str) -> bool:
+		"""Creates an environment file for the toolchain of the given 'configure' preset."""
+		# Get the compiler type and the preset itself.
+		toolchain = get_compiler_type(preset_name)
+		preset = get_preset_by_name(PresetTypes.CONFIGURE, preset_name)
+		if toolchain is None or preset is None:
+			logger.error(f"! Could not determine toolchain or find preset '{preset_name}'.")
+			return False
+
+		# Get the section name for the toolchain.
+		parts = ["env", toolchain]
+		if is_wine():
+			parts += ["wine"]
+		if is_docker():
+			parts += ["docker"]
+		section = '.'.join(parts) + '@'
+
+		# Assemble the filename based on the toolchain and environment.
+		ext = ".bat" if sys.platform == "win32" or is_wine() else ".sh"
+		env_filename = f".tc-env.{'.'.join(parts[1:])}{ext}"
+		env_file = os.path.join(RUN_DIR, env_filename)
+
+		# Check if the section exists.
+		if not CONFIG.has_section(section):
+			logger.error(f"! No environment configuration section [{section}] found in the ini-file.")
+			return False
+		# Call set_environment to populate RUN_ENV with expanded macros.
+		set_environment(toolchain)
+
+		# Collect the variables that are defined in the section or its ancestors.
+		# We want to exclude variables that are just inherited from the process environment and NOT modified.
+		def get_config_inheritance(_section: str) -> List[str]:
+			"""
+			Gets the configuration inheritance for the given section.
+			:param _section:
+			:return:
+			"""
+			inherit_key = "__inherit__"
+			visited = []
+			queue = [_section]
+			while queue:
+				sec = queue.pop(0)
+				if sec in visited:
+					continue
+				visited.append(sec)
+				secs = [p.strip() for p in CONFIG.get(sec, inherit_key, fallback="").split(",") if p.strip()]
+				secs.reverse()
+				queue += secs
+			return visited
+
+		config_vars = set()
+		for cur_section in get_config_inheritance(section):
+			if CONFIG.has_section(cur_section):
+				for key in CONFIG[cur_section]:
+					if key not in ["__inherit__"]:
+						# configparser keys are case-insensitive and converted to lowercase.
+						# We need to find the actual key name if possible, or just use it.
+						# But RUN_ENV has the correct case.
+						config_vars.add(key.upper())
+
+		# Add environment variables from the preset itself.
+		preset_env = preset.get("environment", {})
+		for key, value in preset_env.items():
+			expanded_value = expand_macros(preset, value, context=preset_env)
+			# Only update RUN_ENV if it's not already set by the toolchain section (which takes precedence for tools).
+			# Actually, we want both, but if they overlap, which one should win?
+			# Usually, presets might override some things. Let's update RUN_ENV with preset variables.
+			RUN_ENV[key] = expanded_value
+			config_vars.add(key.upper())
+
+		export_vars = ["SF_EXEC_DIR_SUFFIX", "LD_LIBRARY_PATH", "WINEPATH", "MSVC_ROOT"]
+		lines = []
+		if sys.platform == "win32" or is_wine():
+			lines.append("@echo off")
+			for key in sorted(config_vars):
+				if key in RUN_ENV and key in export_vars:
+					val = RUN_ENV[key]
+					lines.append(f"set {key}={val}")
+					# Special handling for LD_LIBRARY_PATH to prefix the PATH.
+					if key == "LD_LIBRARY_PATH":
+						lines.append(f"set PATH=%LD_LIBRARY_PATH%;%PATH%")
+		else:
+			lines.append("#!/usr/bin/env bash")
+			for key in sorted(config_vars):
+				if key in RUN_ENV and key in export_vars:
+					val = RUN_ENV[key]
+					lines.append(f"export {key}=\"{val}\"")
+					# Special handling for LD_LIBRARY_PATH to prefix the PATH.
+					if key == "LD_LIBRARY_PATH":
+						lines.append(f"# set PATH=%LD_LIBRARY_PATH%;%PATH%")
+
+		try:
+			with open(env_file, "w") as f:
+				f.write("\n".join(lines) + "\n")
+			logger.info(f"# Environment file for preset '{preset_name}' with toolchain '{toolchain}': {env_file}")
+			return True
+		except OSError as e:
+			logger.error(f"! Failed to create environment file '{env_file}': {e}")
+			return False
 
 	@staticmethod
 	def install_toolchain(toolchain: str) -> bool:
@@ -2045,7 +2214,7 @@ Choices are depended on the host platform:
 
 			case "doxygen":
 				logger.info("# Installing Doxygen latest released version.")
-				doxygen_dir = os.path.join(install_dir,  "doxygen")
+				doxygen_dir = os.path.join(install_dir, "doxygen")
 				if os.path.exists(doxygen_dir):
 					logger.warning(f": Doxygen directory already exists: {doxygen_dir}")
 					return False
@@ -2094,14 +2263,16 @@ Choices are depended on the host platform:
 		# Check if the repository was installed 'cmake/lib' submodule.
 		if not os.path.isdir(dir_cmake_lib):
 			# Suggest installing the cmake project template.
-			if ask_selection(options={True: "Yes", False: "No"}, title="CMakeLists.txt not found!",
-				caption=f"Clone project helper in '{'/'.join(CMAKE_LIB_SUBDIR)}'?"):
+			if ask_selection(options={True: "Yes", False: "No"}, title="Project Helper Repository",
+				caption=f"Add submodule project helper in '{'/'.join(CMAKE_LIB_SUBDIR)}'?"):
 				clone_options = {
 					"main@https://github.com/Scanframe/sf-cmake.git": "GitHub Scanframe 'sf-cmake.git'",
-					"main@https://git.scanframe.com/library/cmake-lib.git": "Scanframe GitLab 'cmake-lib.git'"
+					"main@https://git.scanframe.com/library/cmake-lib.git": "GitLab Scanframe 'cmake-lib.git'",
 				}
 				# Only add these options when '__DEV' is set.
 				if RUN_ENV.get("__DEV"):
+					clone_options[
+						"dev-hotfix@https://git.scanframe.com/library/cmake-lib.git"] = "GitLab Scanframe 'cmake-lib.git' (hotfix)"
 					clone_options["zipfile@https://www.scanframe.com/export/cmake-lib.zip"] = "Zipped (dev only)"
 				if selected := ask_selection(
 					options=clone_options,
@@ -2109,7 +2280,12 @@ Choices are depended on the host platform:
 					branch, repo = selected.split("@")
 					if repo:
 						if repo[-4:] == ".git":
-							cmd = ["git", "clone", "--branch", branch, "--", repo, '/'.join(CMAKE_LIB_SUBDIR)]
+							if ask_selection(options={True: "Git Submodule", False: "Standalone Repository"},
+								title="Helper Repository Type",
+								caption="Add repository as?"):
+								cmd = ["git", "submodule", "add", "--branch", branch, "--", repo, '/'.join(CMAKE_LIB_SUBDIR)]
+							else:
+								cmd = ["git", "clone", "--branch", branch, "--", repo, '/'.join(CMAKE_LIB_SUBDIR)]
 							# cmd = ["git", "submodule", "add", "--branch", "main", "--", repo, '/'.join(CMAKE_LIB_SUBDIR)]
 							if run_command(cmd, dbg_mode=DebugMode.REPORT_ONLY).returncode != 0:
 								logger.error(f"! Failed to add submodule in '{'/'.join(CMAKE_LIB_SUBDIR)}'!")
@@ -2231,9 +2407,12 @@ Choices are depended on the host platform:
 				#
 				logger.info(f"# Installing docker target.")
 				# Get distribution information
-				distro = run_command(["lsb_release", "-is"], capture_output=True, dbg_mode=DebugMode.SILENT).stdout.decode("utf-8").strip().lower()
-				codename = run_command(["lsb_release", "-cs"], capture_output=True, dbg_mode=DebugMode.SILENT).stdout.decode("utf-8").strip()
-				arch = run_command(["dpkg", "--print-architecture"], capture_output=True, dbg_mode=DebugMode.SILENT).stdout.decode("utf-8").strip()
+				distro = run_command(["lsb_release", "-is"], capture_output=True, dbg_mode=DebugMode.SILENT).stdout.decode(
+					"utf-8").strip().lower()
+				codename = run_command(["lsb_release", "-cs"], capture_output=True, dbg_mode=DebugMode.SILENT).stdout.decode(
+					"utf-8").strip()
+				arch = run_command(["dpkg", "--print-architecture"], capture_output=True,
+					dbg_mode=DebugMode.SILENT).stdout.decode("utf-8").strip()
 				# Download GPG key
 				gpg_url = f"https://download.docker.com/linux/{distro}/gpg"
 				gpg_result = run_command(["wget", "-qO-", gpg_url], capture_output=True, dbg_mode=DebugMode.SILENT)
@@ -2309,7 +2488,8 @@ Signed-By:
 				run_command(["sudo", "apt-get", "--yes", "install"] + main_pkgs, dbg_mode=DebugMode.REPORT_ONLY)
 
 			elif target == "linux/qemu":
-				run_command(["sudo", "apt-get", "install", "-y", "qemu-user-static", "binfmt-support", "qemu-user-binfmt"], dbg_mode=DebugMode.REPORT_ONLY)
+				run_command(["sudo", "apt-get", "install", "-y", "qemu-user-static", "binfmt-support", "qemu-user-binfmt"],
+					dbg_mode=DebugMode.REPORT_ONLY)
 
 			elif target == "linux/win":
 				run_command(["sudo", "apt-get", "install", "-y", "mingw-w64"], dbg_mode=DebugMode.REPORT_ONLY)
@@ -2352,7 +2532,7 @@ Signed-By:
 					"CMake C++ build tool": "Kitware.CMake",
 					"Ninja build system": "Ninja-build.Ninja",
 					"Nullsoft Install System": "NSIS.NSIS",
-					"Oracle JRE": "Oracle.JavaRuntimeEnvironment",
+					"Termurin JRE": "EclipseAdoptium.Temurin.21.JRE",
 					"LLVM Clang-Format": "LLVM.ClangFormat",
 					"Doxygen": "DimitriVanHeesch.Doxygen",
 					# TODO: Sadly, the WinGet package is missing some MinGW DLL's. The official installer does not.
@@ -2481,7 +2661,8 @@ Examples:
 			return run_command(args_right, cwd=bin_dir, dbg_mode=DebugMode.REPORT_ONLY).returncode
 		else:
 			# Holds the cmake script and raise an exception on failure.
-			cmake_script = get_config_section("config", fail=True).get("cmake-run-file", os.path.join(*(CMAKE_LIB_SUBDIR + ["run-executable.cmake"])))
+			cmake_script = get_config_section("config", fail=True).get("cmake-run-file",
+				os.path.join(*(CMAKE_LIB_SUBDIR + ["run-executable.cmake"])))
 			# Check if the required cmake script is present and if not, bailout.
 			if not os.path.exists(cmake_script):
 				logger.info(f": Sub command 'run' disabled due to missing '{cmake_script}' file.")
