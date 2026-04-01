@@ -56,6 +56,7 @@ setup(
             "onnx>=1,<2",
             "pysilero-vad>=2.1,<3",
             "cython>=3,<4",
+            "scikit-build>=0.19,<1",
             "librosa<1",
         ],
         "dev": [
