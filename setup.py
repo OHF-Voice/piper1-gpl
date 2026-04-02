@@ -44,6 +44,7 @@ setup(
     python_requires=">=3.9",
     install_requires=[
         "onnxruntime>=1,<2",
+        "pathvalidate>=3,<4",
     ],
     extras_require={
         "train": [
@@ -52,7 +53,6 @@ setup(
             "tensorboard>=2,<3",
             "tensorboardX>=2,<3",
             "jsonargparse[signatures]>=4.27.7",
-            "pathvalidate>=3,<4",
             "onnx>=1,<2",
             "pysilero-vad>=2.1,<3",
             "cython>=3,<4",
