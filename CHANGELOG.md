@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.2
+
+- Fix `pathvalidate` dependency
+
 ## 1.4.1
 
 - Add missing wheels
