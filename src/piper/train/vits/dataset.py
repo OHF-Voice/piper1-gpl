@@ -310,7 +310,7 @@ class VitsDataModule(L.LightningDataModule):
                         phoneme_ids = list(
                             itertools.chain(
                                 *(
-                                    phonemes_to_ids(sentence_phonemes)
+                                    phonemes_to_ids(sentence_phonemes, id_map=self.piper_config.phoneme_id_map)
                                     for sentence_phonemes in phonemes
                                 )
                             )
