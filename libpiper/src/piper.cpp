@@ -1,9 +1,19 @@
+#define BUILDING_LIBPIPER
 #include "piper.h"
 #include "piper_impl.hpp"
 
 #include <array>
 #include <fstream>
 #include <limits>
+
+#if defined(WIN32)
+#define WIN32_LEAN_AND_MEAN
+#if !defined(NOMINMAX)
+#define NOMINMAX
+#endif
+#include <windows.h> // for MultiByteToWideChar below
+#define LIBESPEAK_NG_EXPORT // espeak is exported from piper dll
+#endif
 
 #include <espeak-ng/speak_lib.h>
 
@@ -12,6 +22,9 @@ using json = nlohmann::json;
 struct piper_synthesizer *piper_create(const char *model_path,
                                        const char *config_path,
                                        const char *espeak_data_path) {
+    // onnx
+    static Ort::Env ort_env{ ORT_LOGGING_LEVEL_WARNING, "piper" };
+
     if (!model_path) {
         return nullptr;
     }
@@ -96,8 +109,16 @@ struct piper_synthesizer *piper_create(const char *model_path,
     synth->session_options.DisableMemPattern();
     synth->session_options.DisableProfiling();
 
+    #if !defined (WIN32) // ort on WIN32 uses wchar_t
+    auto model_path_ort = model_path;
+    #else
+    auto sz = ::MultiByteToWideChar(CP_ACP, 0, model_path, -1, 0,0);
+    std::vector<wchar_t> model_path_wc(sz+1);
+    ::MultiByteToWideChar(CP_ACP, 0, model_path, -1, &model_path_wc[0], sz);
+    auto model_path_ort = &model_path_wc[0];
+    #endif
     synth->session = std::make_unique<Ort::Session>(
-        Ort::Session(ort_env, model_path, synth->session_options));
+        Ort::Session(ort_env, model_path_ort, synth->session_options));
 
     return synth;
 }
