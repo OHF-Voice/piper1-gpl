@@ -13,11 +13,25 @@ from pathlib import Path
 from typing import Optional, Union
 from urllib.request import urlopen
 
-from g2pw import G2PWConverter
 from unicode_rbnf import RbnfEngine
 
 from .const import BOS, EOS, PAD
 from .phoneme_ids import DEFAULT_PHONEME_ID_MAP
+
+_HAS_G2PW = False
+_HAS_PYPINYIN = False
+
+try:
+    from g2pw import G2PWConverter
+    _HAS_G2PW = True
+except ImportError:
+    pass
+
+try:
+    import pypinyin
+    _HAS_PYPINYIN = True
+except ImportError:
+    pass
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -201,18 +215,26 @@ PERCENT_PATTERN = re.compile(
 
 
 class ChinesePhonemizer:
-    """Phonemize Chinese text using g2pW."""
+    """Phonemize Chinese text using g2pW or pypinyin as fallback."""
 
     def __init__(self, model_dir: Union[str, Path]) -> None:
         """Initialize phonemizer."""
-
-        # Ensure model is downloaded
-        download_model(model_dir)
-
-        self.g2p = G2PWConverter(
-            model_dir=str(model_dir), style="pinyin", enable_non_tradional_chinese=True
-        )
         self.number_engine = RbnfEngine.for_language("zh")
+
+        if _HAS_G2PW:
+            # Ensure model is downloaded
+            download_model(model_dir)
+            self.g2p = G2PWConverter(
+                model_dir=str(model_dir), style="pinyin", enable_non_tradional_chinese=True
+            )
+            _LOGGER.info("Using g2pW for Chinese phonemization")
+        elif _HAS_PYPINYIN:
+            _LOGGER.warning("Using pypinyin for Chinese phonemization (g2pW unavailable)")
+        else:
+            raise RuntimeError(
+                "Chinese phonemization requires g2pw or pypinyin. "
+                "Install pypinyin: pip install pypinyin"
+            )
 
     def phonemize(self, text: str) -> list[list[str]]:
         """Turn text into phonemes per sentence."""
@@ -224,33 +246,73 @@ class ChinesePhonemizer:
 
         for sentence in stream_to_sentences([text]):
             sentence = self._numbers_to_words(sentence)
-            sylls = self.g2p(sentence)[0]
-            sentence_phonemes = []
-            for syl, syl_char in zip(sylls, sentence):
-                if syl is None:
-                    # Punctuation
-                    if syl_char in PHONEME_TO_ID:
-                        sentence_phonemes.append(syl_char)
-
-                    continue
-
-                syl = _normalize_g2pw_syllable(syl)
-                ini_p, fin_p, tone = _split_initial_final_tone(syl)
-                if not fin_p:
-                    # Not a normal pinyin syllable
-                    sentence_phonemes.append(syl)
-                    continue
-
-                if not ini_p:
-                    ini_p = "Ø"
-
-                for sym in (ini_p, fin_p, tone):
-                    assert sym, sym
-                    sentence_phonemes.append(sym)
-
+            if _HAS_G2PW:
+                sentence_phonemes = self._phonemize_g2pw(sentence)
+            else:
+                sentence_phonemes = self._phonemize_pypinyin(sentence)
             all_phonemes.append(sentence_phonemes)
 
         return all_phonemes
+
+    def _phonemize_g2pw(self, sentence: str) -> list[str]:
+        """Phonemize using g2pW."""
+        sylls = self.g2p(sentence)[0]
+        sentence_phonemes = []
+        for syl, syl_char in zip(sylls, sentence):
+            if syl is None:
+                # Punctuation
+                if syl_char in PHONEME_TO_ID:
+                    sentence_phonemes.append(syl_char)
+                continue
+
+            syl = _normalize_g2pw_syllable(syl)
+            ini_p, fin_p, tone = _split_initial_final_tone(syl)
+            if not fin_p:
+                sentence_phonemes.append(syl)
+                continue
+
+            if not ini_p:
+                ini_p = "Ø"
+
+            for sym in (ini_p, fin_p, tone):
+                assert sym, sym
+                sentence_phonemes.append(sym)
+
+        return sentence_phonemes
+
+    def _phonemize_pypinyin(self, sentence: str) -> list[str]:
+        """Phonemize using pypinyin."""
+        import pypinyin
+        sentence_phonemes = []
+        pinyin_list = pypinyin.pinyin(sentence, style=pypinyin.Style.TONE3)
+
+        char_idx = 0
+        for item in pinyin_list:
+            py = item[0]
+            while char_idx < len(sentence):
+                char = sentence[char_idx]
+                char_idx += 1
+                if char == ' ':
+                    if char in PHONEME_TO_ID:
+                        sentence_phonemes.append(char)
+                    continue
+                break
+
+            if py in PHONEME_TO_ID:
+                sentence_phonemes.append(py)
+                continue
+
+            py = py.replace('ü', 'v').replace('u:', 'v')
+            ini_p, fin_p, tone = _split_initial_final_tone(py)
+            if not fin_p:
+                continue
+            if not ini_p:
+                ini_p = "Ø"
+            for sym in (ini_p, fin_p, tone):
+                if sym:
+                    sentence_phonemes.append(sym)
+
+        return sentence_phonemes
 
     def _numbers_to_words(self, text: str) -> str:
         # TODO: dates/times/ordinals
