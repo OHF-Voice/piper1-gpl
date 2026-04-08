@@ -72,6 +72,7 @@ class VitsModel(L.LightningModule):
         c_kl: float = 1.0,
         grad_clip: Optional[float] = None,
         vocoder_warmstart_ckpt: Optional[str] = None,
+        warmstart_pretrained: bool = False,
         # unused
         dataset: object = None,
         **kwargs,
@@ -116,6 +117,7 @@ class VitsModel(L.LightningModule):
         # Used to partially load the state dict from a checkpoint.
         # Only the text/phoneme agnostic portions are loaded.
         self._vocoder_warmstart_ckpt = vocoder_warmstart_ckpt
+        self._warmstart_pretrained = warmstart_pretrained
 
         # Set up models
         self.model_g = SynthesizerTrn(
@@ -315,7 +317,7 @@ class VitsModel(L.LightningModule):
         ]
 
         return optimizers, schedulers
-
+        
     def _warmstart_vocoder_from_ckpt(self, ckpt_path: str):
         ckpt = torch.load(ckpt_path, map_location=self.device, weights_only=False)
 
@@ -334,19 +336,25 @@ class VitsModel(L.LightningModule):
             if not k.startswith(KEEP_PREFIXES):
                 continue
             if (k in new_sd) and (new_sd[k].shape == v.shape):
-                new_sd[k] = v
-                copied += 1
+                    new_sd[k] = v
+                    copied += 1
 
-        self.load_state_dict(new_sd, strict=False)
         _LOGGER.info(f"[warmstart] Copied {copied} vocoder parameters from {ckpt_path}")
-
+        return new_sd
+        
     def on_fit_start(self):
         # Called once at the start of fit()
         if self._vocoder_warmstart_ckpt is None:
             return
-
-        # Make sure we’re on the correct device
-        self._warmstart_vocoder_from_ckpt(self._vocoder_warmstart_ckpt)
-
+            
+        ckpt = torch.load(self._vocoder_warmstart_ckpt, map_location=self.device, weights_only=False)
+        if self._warmstart_pretrained:
+            new_sd = ckpt["state_dict"]
+            _LOGGER.info(f"Loaded pretrained weights from {self._vocoder_warmstart_ckpt}")
+        else:
+            # Make sure we’re on the correct device
+            new_sd = self._warmstart_vocoder_from_ckpt(self._vocoder_warmstart_ckpt)
+            
+        self.load_state_dict(new_sd, strict=False)
         # Avoid re-running if Trainer restarts
         self._vocoder_warmstart_ckpt = None
