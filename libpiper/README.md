@@ -6,6 +6,16 @@ See `piper.h` for details.
 
 ## Building
 
+### Windows
+
+``` sh
+cmake -Bbuild -DCMAKE_INSTALL_PREFIX=$PWD/install -G "Visual Studio 17 2022" -A x64
+cmake --build build --config Release
+cmake --install build --config Release
+```
+
+### Linux/macOS
+
 ``` sh
 cmake -Bbuild -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$PWD/install
 cmake --build build
