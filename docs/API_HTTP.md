@@ -36,9 +36,26 @@ The JSON data fields area:
 * `length_scale` (optional) - speaking speed; defaults to 1
 * `noise_scale` (optional) - speaking variability
 * `noise_w_scale` (optional) - phoneme width variability
+* `realtime` (optional) - stream with a provisional WAV header and zero‑padding for low‑latency playback
 
 Get the available voices with:
 
 ``` sh
 curl localhost:5000/voices
 ```
+
+## Streaming input
+
+The `POST /stream` endpoint accepts newline-delimited text as the
+request body and streams audio back as sentences are synthesized:
+
+``` sh
+echo -e "Hello world.\nThis is a test." \
+  | curl -X POST -H 'Content-Type: text/plain' \
+      --data-binary @- -o out.wav localhost:5000/stream
+```
+
+The server reads text lines from the request body, buffers until a
+sentence boundary is detected, and immediately synthesizes and streams
+the resulting audio.  This allows feeding text from an LLM or other
+incremental source without waiting for the full text to be available.
