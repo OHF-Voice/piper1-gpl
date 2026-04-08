@@ -20,3 +20,12 @@ src/piper/train/vits/monotonic_align/core.c
 *.so
 
 lightning_logs/
+
+# Application location
+/bin
+
+lib/
+download/
+cmake-build/
+
+/CMakeUserPresets.json

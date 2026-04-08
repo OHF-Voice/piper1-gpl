@@ -1,5 +1,15 @@
 # Builds libpiper
 cmake_minimum_required(VERSION 3.26)
+
+message(STATUS "SF_COMPILER: ${SF_COMPILER}")
+message(STATUS "SF_EXEC_DIR_SUFFIX: $ENV{SF_EXEC_DIR_SUFFIX}")
+message(STATUS "SF_EXECUTABLE_DIR: $ENV{SF_EXECUTABLE_DIR}")
+message(STATUS "SF_LIBRARY_DIR: $ENV{SF_LIBRARY_DIR}")
+message(STATUS "CMAKE_BINARY_DIR: ${CMAKE_BINARY_DIR}")
+message(STATUS "CMAKE_RUNTIME_OUTPUT_DIRECTORY: ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
+message(STATUS "CMAKE_LIBRARY_OUTPUT_DIRECTORY: ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}")
+
+
 project(piper LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -11,7 +21,9 @@ include(ExternalProject)
 set(ESPEAKNG_BUILD_DIR ${CMAKE_BINARY_DIR}/espeak_ng)
 set(ESPEAKNG_INSTALL_DIR ${CMAKE_BINARY_DIR}/espeak_ng-install)
 
-if(WIN32)
+if (NOT TARGET espeak_ng_external)
+
+if(WIN32 AND MSVC)
     # Special handling for Windows
     set(ESPEAKNG_STATIC_LIB ${ESPEAKNG_INSTALL_DIR}/lib/espeak-ng.lib)
     set(UCD_STATIC_LIB ${ESPEAKNG_BUILD_DIR}/src/espeak_ng_external-build/src/ucd-tools/ucd.lib)
@@ -24,7 +36,10 @@ ExternalProject_Add(espeak_ng_external
     GIT_REPOSITORY https://github.com/espeak-ng/espeak-ng.git
     GIT_TAG 212928b394a96e8fd2096616bfd54e17845c48f6  # 2025-Mar-22
     PREFIX ${ESPEAKNG_BUILD_DIR}
+    GIT_SHALLOW TRUE
     CMAKE_ARGS
+        # Forward the current toolchain file.
+        -DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE}
         -DCMAKE_INSTALL_PREFIX=${ESPEAKNG_INSTALL_DIR}
         -DBUILD_SHARED_LIBS:BOOL=OFF
         -DCMAKE_POSITION_INDEPENDENT_CODE:BOOL=ON
@@ -44,6 +59,8 @@ ExternalProject_Add(espeak_ng_external
         ${UCD_STATIC_LIB}
     UPDATE_DISCONNECTED TRUE
 )
+
+endif ()
 
 include_directories(
     ${ESPEAKNG_INSTALL_DIR}/include
@@ -102,30 +119,79 @@ if(NOT DEFINED ONNXRUNTIME_DIR)
         if(NOT EXISTS "download/${ONNXRUNTIME_FILENAME}")
             # Download onnxruntime release
             message("Downloading ${ONNXRUNTIME_URL}")
-            file(DOWNLOAD "${ONNXRUNTIME_URL}" "download/${ONNXRUNTIME_FILENAME}")
+            file(DOWNLOAD "${ONNXRUNTIME_URL}" "download/${ONNXRUNTIME_FILENAME}" STATUS _status SHOW_PROGRESS)
+            # First entry in list is the exit code.
+            list(GET _status 0 _exitcode)
+            # Bailout on failure and delete the file.
+            if (NOT _exitcode EQUAL 0)
+                # Remove the empty file first when created.
+                if(EXISTS "download/${ONNXRUNTIME_FILENAME}")
+                    execute_process(COMMAND ${CMAKE_COMMAND} -E rm "download/${ONNXRUNTIME_FILENAME}")
+                endif ()
+                message(FATAL_ERROR "Download status: ${_status}")
+            endif ()
         endif()
 
         # Extract .zip or .tgz to a directory like lib/onnxruntime-linux-x64-1.22.0/
         file(ARCHIVE_EXTRACT INPUT "download/${ONNXRUNTIME_FILENAME}" DESTINATION "${CMAKE_CURRENT_LIST_DIR}/lib")
     endif()
+    # Get the dynamic library files.
+    file(GLOB _DynLibFiles "${ONNXRUNTIME_DIR}/lib/*.so*" "${ONNXRUNTIME_DIR}/lib/*.dll")
+    # Check if the global library output directory has been set.
+    if (DEFINED CMAKE_LIBRARY_OUTPUT_DIRECTORY)
+        # Copy the files to the output directory.
+        message(STATUS "Copying onnxruntime dynlibs to: ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}")
+        file(COPY ${_DynLibFiles} DESTINATION "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}")
+    else ()
+        # When not able to copy files, set a cache entry.
+        message(STATUS "Writing onnxruntime cache entry 'ONNXRUNTIME_DYNLIB_FILES' with dynlibs.")
+       set(ONNXRUNTIME_DYNLIB_FILES "${_DynLibFiles}" CACHE INTERNAL "Location of the onnxruntime dynamic-library files.")
+    endif ()
 endif()
 
 # ---- libpiper ---
 
-add_library(piper SHARED
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/piper.cpp
-)
+add_library(piper SHARED ${CMAKE_CURRENT_SOURCE_DIR}/src/piper.cpp)
+add_library(piper::shared ALIAS piper)
 
 add_dependencies(piper espeak_ng_external)
-target_include_directories(piper PUBLIC
+target_include_directories(piper
+  PRIVATE
     ${ESPEAKNG_INSTALL_DIR}/include
     ${ONNXRUNTIME_DIR}/include
+  PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
-target_link_directories(piper PUBLIC
+target_link_directories(piper
+  PUBLIC
     ${ONNXRUNTIME_DIR}/lib
 )
 target_link_libraries(piper
+  PRIVATE
+    ${ESPEAKNG_STATIC_LIB}
+    ${UCD_STATIC_LIB}
+    onnxruntime
+)
+
+# ---- libpiper static ---
+
+add_library(piper-static STATIC ${CMAKE_CURRENT_SOURCE_DIR}/src/piper.cpp)
+add_library(piper::static ALIAS piper-static)
+
+add_dependencies(piper-static espeak_ng_external)
+target_include_directories(piper-static
+  PRIVATE
+    ${ESPEAKNG_INSTALL_DIR}/include
+    ${ONNXRUNTIME_DIR}/include
+  PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+target_link_directories(piper-static
+  PUBLIC
+    ${ONNXRUNTIME_DIR}/lib
+)
+target_link_libraries(piper-static
+  PRIVATE
     ${ESPEAKNG_STATIC_LIB}
     ${UCD_STATIC_LIB}
     onnxruntime
@@ -157,3 +223,7 @@ install(
     DIRECTORY ${ESPEAKNG_DATA_SRC}
     DESTINATION ${CMAKE_INSTALL_PREFIX}
 )
+
+if (BUILD_APPS)
+    add_subdirectory(app/cli)
+endif ()

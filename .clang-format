@@ -1,0 +1,51 @@
+---
+# Generated from piper.cpp and piper.h
+Language: Cpp
+BasedOnStyle: Google
+
+# Basic Indentation
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+ContinuationIndentWidth: 4
+
+# Braces (Attached as seen in piper.cpp)
+BreakBeforeBraces: Attach
+AllowShortBlocksOnASingleLine: Never
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+
+# Pointer Alignment (Right aligned as per 'piper_synthesizer *synth')
+PointerAlignment: Right
+DerivePointerAlignment: false
+
+# Spacing
+SpaceAfterCStyleCast: false
+SpaceBeforeParens: ControlStatements
+SpaceInEmptyParentheses: false
+SpacesInAngles: false
+SpacesInContainerLiterals: true
+SpacesInCStyleCastParentheses: false
+SpacesInParentheses: false
+SpacesInSquareBrackets: false
+
+# Layout
+ColumnLimit: 80
+BinPackArguments: false
+BinPackParameters: false
+
+# Include Management
+SortIncludes: true
+IncludeBlocks: Regroup
+IncludeCategories:
+  - Regex:           '^<.*\.h>'
+    Priority:        1
+  - Regex:           '^<.*'
+    Priority:        2
+  - Regex:           '.*'
+    Priority:        3
+
+# Ensure access modifiers in structs don't over-indent
+AccessModifierOffset: -4
+...
