@@ -366,6 +366,11 @@ add_library(piper SHARED
 )
 enable_clang_tidy(piper)
 
+set_target_properties(piper PROPERTIES
+    VERSION 0.0.1
+    SOVERSION 0
+)
+
 # espeak-ng
 if(NOT USE_SYSTEM_ESPEAKNG)
     add_dependencies(piper espeak_ng_external)
