@@ -10,43 +10,52 @@ if(MSVC)
     add_compile_options(/utf-8)
 endif()
 
-include(ExternalProject)
+option(USE_SYSTEM_ESPEAKNG "Use system-installed espeak-ng instead of building from source" OFF)
+option(USE_SYSTEM_ONNXRUNTIME "Use system-installed onnxruntime instead of downloading pre-built binaries" OFF)
 
-# Install location for espeak-ng
-set(ESPEAKNG_BUILD_DIR ${CMAKE_BINARY_DIR}/espeak_ng)
-set(ESPEAKNG_INSTALL_DIR ${CMAKE_BINARY_DIR}/espeak_ng-install)
-
-# ucd-tools is built (not installed) by espeak-ng, so we reference its static
-# library directly from the build tree. Multi-config generators (e.g. Visual
-# Studio) place the output in a per-config subdirectory whose name is only
-# known at build time, so resolve it with a $<CONFIG> generator expression.
-# Single-config generators (Unix Makefiles, Ninja) write directly into the
-# build directory with no subdirectory.
+# Multi-config generators (e.g. Visual Studio) place built libraries in a
+# per-config subdirectory whose name is only known at build time, so resolve
+# it with a $<CONFIG> generator expression. Single-config generators (Unix
+# Makefiles, Ninja) write directly into the build directory.
 get_property(IS_MULTI_CONFIG GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
-if(IS_MULTI_CONFIG)
-    set(UCD_CONFIG_SUBDIR "$<CONFIG>/")
-else()
-    set(UCD_CONFIG_SUBDIR "")
-endif()
 
-set(UCD_TOOLS_DIR ${ESPEAKNG_BUILD_DIR}/src/espeak_ng_external-build/src/ucd-tools)
+if(NOT USE_SYSTEM_ESPEAKNG)
+    include(ExternalProject)
 
-if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
-    # MSVC emits .lib files (espeak-ng is re-exported from piper.dll)
-    set(ESPEAKNG_STATIC_LIB ${ESPEAKNG_INSTALL_DIR}/lib/espeak-ng.lib)
-    set(UCD_STATIC_LIB ${UCD_TOOLS_DIR}/${UCD_CONFIG_SUBDIR}ucd.lib)
-else()
-    set(ESPEAKNG_STATIC_LIB ${ESPEAKNG_INSTALL_DIR}/lib/libespeak-ng.a)
-    set(UCD_STATIC_LIB ${UCD_TOOLS_DIR}/${UCD_CONFIG_SUBDIR}libucd.a)
-endif()
+    # Install location for espeak-ng
+    set(ESPEAKNG_BUILD_DIR ${CMAKE_BINARY_DIR}/espeak_ng)
+    set(ESPEAKNG_INSTALL_DIR ${CMAKE_BINARY_DIR}/espeak_ng-install)
 
-# espeak-ng's compat shims (unistd.h, endian.h, getopt.h) test
-# `#if __has_include_next(...)`, which MSVC 14.52 (Visual Studio 2026) rejects
-# with C7780 because MSVC has no __has_include_next. Backport of espeak-ng
-# 021e465, which defines it as 0 when the compiler lacks it. Drop this once the
-# pinned commit includes that fix.
-set(ESPEAKNG_PATCH_SCRIPT ${CMAKE_CURRENT_BINARY_DIR}/espeak_ng_patch.cmake)
-file(WRITE ${ESPEAKNG_PATCH_SCRIPT} [=[
+    # ucd-tools is built (not installed) by espeak-ng, so we reference its static
+    # library directly from the build tree. Multi-config generators (e.g. Visual
+    # Studio) place the output in a per-config subdirectory whose name is only
+    # known at build time, so resolve it with a $<CONFIG> generator expression.
+    # Single-config generators (Unix Makefiles, Ninja) write directly into the
+    # build directory with no subdirectory.
+    if(IS_MULTI_CONFIG)
+        set(UCD_CONFIG_SUBDIR "$<CONFIG>/")
+    else()
+        set(UCD_CONFIG_SUBDIR "")
+    endif()
+
+    set(UCD_TOOLS_DIR ${ESPEAKNG_BUILD_DIR}/src/espeak_ng_external-build/src/ucd-tools)
+
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+        # MSVC emits .lib files (espeak-ng is re-exported from piper.dll)
+        set(ESPEAKNG_STATIC_LIB ${ESPEAKNG_INSTALL_DIR}/lib/espeak-ng.lib)
+        set(UCD_STATIC_LIB ${UCD_TOOLS_DIR}/${UCD_CONFIG_SUBDIR}ucd.lib)
+    else()
+        set(ESPEAKNG_STATIC_LIB ${ESPEAKNG_INSTALL_DIR}/lib/libespeak-ng.a)
+        set(UCD_STATIC_LIB ${UCD_TOOLS_DIR}/${UCD_CONFIG_SUBDIR}libucd.a)
+    endif()
+
+    # espeak-ng's compat shims (unistd.h, endian.h, getopt.h) test
+    # `#if __has_include_next(...)`, which MSVC 14.52 (Visual Studio 2026) rejects
+    # with C7780 because MSVC has no __has_include_next. Backport of espeak-ng
+    # 021e465, which defines it as 0 when the compiler lacks it. Drop this once the
+    # pinned commit includes that fix.
+    set(ESPEAKNG_PATCH_SCRIPT ${CMAKE_CURRENT_BINARY_DIR}/espeak_ng_patch.cmake)
+    file(WRITE ${ESPEAKNG_PATCH_SCRIPT} [=[
 foreach(header unistd endian getopt)
     set(path "${ESPEAKNG_SOURCE_DIR}/src/include/compat/${header}.h")
     file(READ "${path}" content)
@@ -63,40 +72,44 @@ foreach(header unistd endian getopt)
 endforeach()
 ]=])
 
-ExternalProject_Add(espeak_ng_external
-    GIT_REPOSITORY https://github.com/espeak-ng/espeak-ng.git
-    GIT_TAG 212928b394a96e8fd2096616bfd54e17845c48f6  # 2025-Mar-22
-    PREFIX ${ESPEAKNG_BUILD_DIR}
-    PATCH_COMMAND ${CMAKE_COMMAND} -DESPEAKNG_SOURCE_DIR=<SOURCE_DIR> -P ${ESPEAKNG_PATCH_SCRIPT}
-    CMAKE_ARGS
-        -DCMAKE_INSTALL_PREFIX=${ESPEAKNG_INSTALL_DIR}
-        -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
-        -DBUILD_SHARED_LIBS:BOOL=OFF
-        -DCMAKE_POSITION_INDEPENDENT_CODE:BOOL=ON
-        -DUSE_ASYNC:BOOL=OFF
-        -DUSE_MBROLA:BOOL=OFF
-        -DUSE_LIBSONIC:BOOL=OFF
-        -DUSE_LIBPCAUDIO:BOOL=OFF
-        -DUSE_KLATT:BOOL=OFF
-        -DUSE_SPEECHPLAYER:BOOL=OFF
-        -DEXTRA_cmn:BOOL=ON
-        -DEXTRA_ru:BOOL=ON
-        # N_PATH_HOME sizes espeak-ng's data directory buffer. It defaults to
-        # PATH_MAX on Linux but only 160 bytes elsewhere, and a longer path is
-        # silently truncated and replaced by the build-time PATH_ESPEAK_DATA.
-        #
-        # Need to explicitly add ucd include directory for CI
-        "-DCMAKE_C_FLAGS=-D_FILE_OFFSET_BITS=64 -DN_PATH_HOME=4096 -I${ESPEAKNG_BUILD_DIR}/src/espeak_ng_external/src/ucd-tools/src/include"
-        "-DCMAKE_CXX_FLAGS=-D_FILE_OFFSET_BITS=64 -DN_PATH_HOME=4096 -I${ESPEAKNG_BUILD_DIR}/src/espeak_ng_external/src/ucd-tools/src/include"
-    BUILD_BYPRODUCTS
-        ${ESPEAKNG_STATIC_LIB}
-        ${UCD_STATIC_LIB}
-    UPDATE_DISCONNECTED TRUE
-)
+    ExternalProject_Add(espeak_ng_external
+        GIT_REPOSITORY https://github.com/espeak-ng/espeak-ng.git
+        GIT_TAG 212928b394a96e8fd2096616bfd54e17845c48f6  # 2025-Mar-22
+        PREFIX ${ESPEAKNG_BUILD_DIR}
+        PATCH_COMMAND ${CMAKE_COMMAND} -DESPEAKNG_SOURCE_DIR=<SOURCE_DIR> -P ${ESPEAKNG_PATCH_SCRIPT}
+        CMAKE_ARGS
+            -DCMAKE_INSTALL_PREFIX=${ESPEAKNG_INSTALL_DIR}
+            -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
+            -DBUILD_SHARED_LIBS:BOOL=OFF
+            -DCMAKE_POSITION_INDEPENDENT_CODE:BOOL=ON
+            -DUSE_ASYNC:BOOL=OFF
+            -DUSE_MBROLA:BOOL=OFF
+            -DUSE_LIBSONIC:BOOL=OFF
+            -DUSE_LIBPCAUDIO:BOOL=OFF
+            -DUSE_KLATT:BOOL=OFF
+            -DUSE_SPEECHPLAYER:BOOL=OFF
+            -DEXTRA_cmn:BOOL=ON
+            -DEXTRA_ru:BOOL=ON
+            # N_PATH_HOME sizes espeak-ng's data directory buffer. It defaults to
+            # PATH_MAX on Linux but only 160 bytes elsewhere, and a longer path is
+            # silently truncated and replaced by the build-time PATH_ESPEAK_DATA.
+            #
+            # Need to explicitly add ucd include directory for CI
+            "-DCMAKE_C_FLAGS=-D_FILE_OFFSET_BITS=64 -DN_PATH_HOME=4096 -I${ESPEAKNG_BUILD_DIR}/src/espeak_ng_external/src/ucd-tools/src/include"
+            "-DCMAKE_CXX_FLAGS=-D_FILE_OFFSET_BITS=64 -DN_PATH_HOME=4096 -I${ESPEAKNG_BUILD_DIR}/src/espeak_ng_external/src/ucd-tools/src/include"
+        BUILD_BYPRODUCTS
+            ${ESPEAKNG_STATIC_LIB}
+            ${UCD_STATIC_LIB}
+        UPDATE_DISCONNECTED TRUE
+    )
 
-include_directories(
-    ${ESPEAKNG_INSTALL_DIR}/include
-)
+    include_directories(
+        ${ESPEAKNG_INSTALL_DIR}/include
+    )
+else()
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(ESPEAKNG REQUIRED IMPORTED_TARGET espeak-ng)
+endif()
 
 # ---- open_jtalk (Japanese frontend: text -> full-context labels) ---
 #
@@ -175,170 +188,174 @@ set(OPENJTALK_INCLUDE_DIRS
 
 # ---- onnxruntime ---
 
-find_package(onnxruntime QUIET)
+if(USE_SYSTEM_ONNXRUNTIME)
+    find_package(onnxruntime REQUIRED CONFIG)
+else()
+    find_package(onnxruntime QUIET)
 
-# Download url to path unless it is already there. Fails on an HTTP error
-# instead of saving the error page, and checks sha256 (when not empty) for a
-# fresh download and for one left from an earlier configure.
-function(piper_download url path sha256)
-    if(EXISTS "${path}")
-        if(NOT sha256)
-            return()
-        endif()
-
-        file(SHA256 "${path}" existing_sha256)
-        string(TOLOWER "${sha256}" expected_sha256)
-        if(existing_sha256 STREQUAL expected_sha256)
-            return()
-        endif()
-
-        message(STATUS "${path} does not match its SHA256; downloading it again")
-        file(REMOVE "${path}")
-    endif()
-
-    set(hash_args "")
-    if(sha256)
-        set(hash_args EXPECTED_HASH "SHA256=${sha256}")
-    endif()
-
-    message(STATUS "Downloading ${url}")
-    file(DOWNLOAD "${url}" "${path}.part" STATUS download_status TLS_VERIFY ON ${hash_args})
-    list(GET download_status 0 download_code)
-    if(NOT download_code EQUAL 0)
-        list(GET download_status 1 download_message)
-        file(REMOVE "${path}.part")
-        message(FATAL_ERROR "Failed to download ${url}: ${download_message}")
-    endif()
-
-    file(RENAME "${path}.part" "${path}")
-endfunction()
-
-# Without a system onnxruntime or -DONNXRUNTIME_DIR, download a prebuilt one
-# into <root>/lib/onnxruntime-<platform>-<version>/, with include/ and lib/
-# laid out like Microsoft's release archives.
-if(NOT TARGET onnxruntime::onnxruntime AND NOT DEFINED ONNXRUNTIME_DIR)
-    if(NOT DEFINED ONNXRUNTIME_VERSION)
-        set(ONNXRUNTIME_VERSION "1.22.0")
-    endif()
-
-    # ONNXRUNTIME_PREFIX names the directory, ONNXRUNTIME_RID is the platform
-    # in the NuGet package
-    if(WIN32)
-        # Windows x86-64
-        set(ONNXRUNTIME_PREFIX "onnxruntime-win-x64-${ONNXRUNTIME_VERSION}")
-        set(ONNXRUNTIME_RID "win-x64")
-        set(ONNXRUNTIME_EXT "zip")
-    elseif (APPLE)
-        if(CMAKE_SYSTEM_PROCESSOR STREQUAL x86_64)
-            # MacOS x86-64
-            set(ONNXRUNTIME_PREFIX "onnxruntime-osx-x86_64-${ONNXRUNTIME_VERSION}")
-            set(ONNXRUNTIME_RID "osx-x64")
-        elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL arm64)
-            # MacOS Apple Silicon
-            set(ONNXRUNTIME_PREFIX "onnxruntime-osx-arm64-${ONNXRUNTIME_VERSION}")
-            set(ONNXRUNTIME_RID "osx-arm64")
-        else()
-            message(FATAL_ERROR "Unsupported architecture for onnxruntime")
-        endif()
-
-        set(ONNXRUNTIME_EXT "tgz")
-    else()
-        if(CMAKE_SYSTEM_PROCESSOR STREQUAL x86_64)
-            # Linux x86-64
-            set(ONNXRUNTIME_PREFIX "onnxruntime-linux-x64-${ONNXRUNTIME_VERSION}")
-            set(ONNXRUNTIME_RID "linux-x64")
-        elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL aarch64)
-            # Linux ARM 64-bit
-            set(ONNXRUNTIME_PREFIX "onnxruntime-linux-aarch64-${ONNXRUNTIME_VERSION}")
-            set(ONNXRUNTIME_RID "linux-arm64")
-        elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL armv7l)
-            # Linux ARM 32-bit: not in the NuGet package
-            set(ONNXRUNTIME_PREFIX "onnxruntime-linux-arm32-${ONNXRUNTIME_VERSION}")
-            if(NOT DEFINED ONNXRUNTIME_URL)
-                set(ONNXRUNTIME_URL "https://github.com/synesthesiam/prebuilt-apps/releases/download/v1.0/onnxruntime-linux-arm32-${ONNXRUNTIME_VERSION}.tgz")
+    # Download url to path unless it is already there. Fails on an HTTP error
+    # instead of saving the error page, and checks sha256 (when not empty) for a
+    # fresh download and for one left from an earlier configure.
+    function(piper_download url path sha256)
+        if(EXISTS "${path}")
+            if(NOT sha256)
+                return()
             endif()
-        else()
-            message(FATAL_ERROR "Unsupported architecture for onnxruntime")
-        endif()
 
-        set(ONNXRUNTIME_EXT "tgz")
-    endif()
-
-    if(NOT DEFINED ONNXRUNTIME_SHA256)
-        if(NOT DEFINED ONNXRUNTIME_URL AND ONNXRUNTIME_VERSION STREQUAL "1.22.0")
-            # Microsoft.ML.OnnxRuntime.1.22.0.nupkg, which matches the SHA512 in
-            # the nuget.org catalog. Set ONNXRUNTIME_SHA256 for another version.
-            set(ONNXRUNTIME_SHA256 "d571e63a2329baacb713f441e65ad75284de354db6e1ac435fe4bebbb417986a")
-        else()
-            set(ONNXRUNTIME_SHA256 "")
-        endif()
-    endif()
-
-    set(ONNXRUNTIME_DIR "${CMAKE_CURRENT_LIST_DIR}/lib/${ONNXRUNTIME_PREFIX}")
-    set(ONNXRUNTIME_DOWNLOAD_DIR "${CMAKE_CURRENT_LIST_DIR}/download")
-
-    if(NOT EXISTS "${ONNXRUNTIME_DIR}")
-        if(DEFINED ONNXRUNTIME_URL)
-            # A .zip or .tgz laid out like Microsoft's release archives, which
-            # extracts to a directory like lib/onnxruntime-linux-x64-1.22.0/
-            set(ONNXRUNTIME_FILENAME "${ONNXRUNTIME_PREFIX}.${ONNXRUNTIME_EXT}")
-            piper_download("${ONNXRUNTIME_URL}" "${ONNXRUNTIME_DOWNLOAD_DIR}/${ONNXRUNTIME_FILENAME}" "${ONNXRUNTIME_SHA256}")
-            file(ARCHIVE_EXTRACT INPUT "${ONNXRUNTIME_DOWNLOAD_DIR}/${ONNXRUNTIME_FILENAME}" DESTINATION "${CMAKE_CURRENT_LIST_DIR}/lib")
-        else()
-            # Microsoft's NuGet package: one archive for every platform, with
-            # the headers in build/native/include and the libraries in
-            # runtimes/<rid>/native
-            set(ONNXRUNTIME_FILENAME "microsoft.ml.onnxruntime.${ONNXRUNTIME_VERSION}.nupkg")
-            set(ONNXRUNTIME_NUGET_URL "https://api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntime/${ONNXRUNTIME_VERSION}/${ONNXRUNTIME_FILENAME}")
-            if(NOT ONNXRUNTIME_SHA256)
-                message(WARNING "No SHA256 for onnxruntime ${ONNXRUNTIME_VERSION}; set ONNXRUNTIME_SHA256 to verify the download")
+            file(SHA256 "${path}" existing_sha256)
+            string(TOLOWER "${sha256}" expected_sha256)
+            if(existing_sha256 STREQUAL expected_sha256)
+                return()
             endif()
-            piper_download("${ONNXRUNTIME_NUGET_URL}" "${ONNXRUNTIME_DOWNLOAD_DIR}/${ONNXRUNTIME_FILENAME}" "${ONNXRUNTIME_SHA256}")
 
-            set(nuget_dir "${ONNXRUNTIME_DOWNLOAD_DIR}/nuget-${ONNXRUNTIME_VERSION}")
-            set(native_dir "${nuget_dir}/runtimes/${ONNXRUNTIME_RID}/native")
-            set(staging_dir "${ONNXRUNTIME_DIR}.part")
-            file(REMOVE_RECURSE "${nuget_dir}" "${staging_dir}")
-            file(ARCHIVE_EXTRACT INPUT "${ONNXRUNTIME_DOWNLOAD_DIR}/${ONNXRUNTIME_FILENAME}" DESTINATION "${nuget_dir}"
-                PATTERNS "build/native/include/*" "runtimes/${ONNXRUNTIME_RID}/native/*" "LICENSE" "ThirdPartyNotices.txt")
+            message(STATUS "${path} does not match its SHA256; downloading it again")
+            file(REMOVE "${path}")
+        endif()
 
-            file(MAKE_DIRECTORY "${staging_dir}/lib")
-            file(COPY "${nuget_dir}/build/native/include/" DESTINATION "${staging_dir}/include")
-            file(COPY "${nuget_dir}/LICENSE" "${nuget_dir}/ThirdPartyNotices.txt" DESTINATION "${staging_dir}")
+        set(hash_args "")
+        if(sha256)
+            set(hash_args EXPECTED_HASH "SHA256=${sha256}")
+        endif()
 
-            # Give the library the file names of the release archives, which
-            # its embedded name (install name or soname) refers to
-            if(WIN32)
-                file(COPY "${native_dir}/" DESTINATION "${staging_dir}/lib")
-            elseif(APPLE)
-                # Install name: @rpath/libonnxruntime.<version>.dylib
-                file(COPY_FILE "${native_dir}/libonnxruntime.dylib" "${staging_dir}/lib/libonnxruntime.${ONNXRUNTIME_VERSION}.dylib")
-                file(CREATE_LINK "libonnxruntime.${ONNXRUNTIME_VERSION}.dylib" "${staging_dir}/lib/libonnxruntime.dylib" SYMBOLIC)
+        message(STATUS "Downloading ${url}")
+        file(DOWNLOAD "${url}" "${path}.part" STATUS download_status TLS_VERIFY ON ${hash_args})
+        list(GET download_status 0 download_code)
+        if(NOT download_code EQUAL 0)
+            list(GET download_status 1 download_message)
+            file(REMOVE "${path}.part")
+            message(FATAL_ERROR "Failed to download ${url}: ${download_message}")
+        endif()
+
+        file(RENAME "${path}.part" "${path}")
+    endfunction()
+
+    # Without a system onnxruntime or -DONNXRUNTIME_DIR, download a prebuilt one
+    # into <root>/lib/onnxruntime-<platform>-<version>/, with include/ and lib/
+    # laid out like Microsoft's release archives.
+    if(NOT TARGET onnxruntime::onnxruntime AND NOT DEFINED ONNXRUNTIME_DIR)
+        if(NOT DEFINED ONNXRUNTIME_VERSION)
+            set(ONNXRUNTIME_VERSION "1.22.0")
+        endif()
+
+        # ONNXRUNTIME_PREFIX names the directory, ONNXRUNTIME_RID is the platform
+        # in the NuGet package
+        if(WIN32)
+            # Windows x86-64
+            set(ONNXRUNTIME_PREFIX "onnxruntime-win-x64-${ONNXRUNTIME_VERSION}")
+            set(ONNXRUNTIME_RID "win-x64")
+            set(ONNXRUNTIME_EXT "zip")
+        elseif (APPLE)
+            if(CMAKE_SYSTEM_PROCESSOR STREQUAL x86_64)
+                # MacOS x86-64
+                set(ONNXRUNTIME_PREFIX "onnxruntime-osx-x86_64-${ONNXRUNTIME_VERSION}")
+                set(ONNXRUNTIME_RID "osx-x64")
+            elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL arm64)
+                # MacOS Apple Silicon
+                set(ONNXRUNTIME_PREFIX "onnxruntime-osx-arm64-${ONNXRUNTIME_VERSION}")
+                set(ONNXRUNTIME_RID "osx-arm64")
             else()
-                # Soname: libonnxruntime.so.<major>
-                string(REGEX MATCH "^[0-9]+" onnxruntime_major "${ONNXRUNTIME_VERSION}")
-                file(COPY_FILE "${native_dir}/libonnxruntime.so" "${staging_dir}/lib/libonnxruntime.so.${ONNXRUNTIME_VERSION}")
-                file(CREATE_LINK "libonnxruntime.so.${ONNXRUNTIME_VERSION}" "${staging_dir}/lib/libonnxruntime.so.${onnxruntime_major}" SYMBOLIC)
-                file(CREATE_LINK "libonnxruntime.so.${onnxruntime_major}" "${staging_dir}/lib/libonnxruntime.so" SYMBOLIC)
-                file(COPY "${native_dir}/libonnxruntime_providers_shared.so" DESTINATION "${staging_dir}/lib")
+                message(FATAL_ERROR "Unsupported architecture for onnxruntime")
             endif()
 
-            file(RENAME "${staging_dir}" "${ONNXRUNTIME_DIR}")
-            file(REMOVE_RECURSE "${nuget_dir}")
+            set(ONNXRUNTIME_EXT "tgz")
+        else()
+            if(CMAKE_SYSTEM_PROCESSOR STREQUAL x86_64)
+                # Linux x86-64
+                set(ONNXRUNTIME_PREFIX "onnxruntime-linux-x64-${ONNXRUNTIME_VERSION}")
+                set(ONNXRUNTIME_RID "linux-x64")
+            elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL aarch64)
+                # Linux ARM 64-bit
+                set(ONNXRUNTIME_PREFIX "onnxruntime-linux-aarch64-${ONNXRUNTIME_VERSION}")
+                set(ONNXRUNTIME_RID "linux-arm64")
+            elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL armv7l)
+                # Linux ARM 32-bit: not in the NuGet package
+                set(ONNXRUNTIME_PREFIX "onnxruntime-linux-arm32-${ONNXRUNTIME_VERSION}")
+                if(NOT DEFINED ONNXRUNTIME_URL)
+                    set(ONNXRUNTIME_URL "https://github.com/synesthesiam/prebuilt-apps/releases/download/v1.0/onnxruntime-linux-arm32-${ONNXRUNTIME_VERSION}.tgz")
+                endif()
+            else()
+                message(FATAL_ERROR "Unsupported architecture for onnxruntime")
+            endif()
+
+            set(ONNXRUNTIME_EXT "tgz")
         endif()
+
+        if(NOT DEFINED ONNXRUNTIME_SHA256)
+            if(NOT DEFINED ONNXRUNTIME_URL AND ONNXRUNTIME_VERSION STREQUAL "1.22.0")
+                # Microsoft.ML.OnnxRuntime.1.22.0.nupkg, which matches the SHA512 in
+                # the nuget.org catalog. Set ONNXRUNTIME_SHA256 for another version.
+                set(ONNXRUNTIME_SHA256 "d571e63a2329baacb713f441e65ad75284de354db6e1ac435fe4bebbb417986a")
+            else()
+                set(ONNXRUNTIME_SHA256 "")
+            endif()
+        endif()
+
+        set(ONNXRUNTIME_DIR "${CMAKE_CURRENT_LIST_DIR}/lib/${ONNXRUNTIME_PREFIX}")
+        set(ONNXRUNTIME_DOWNLOAD_DIR "${CMAKE_CURRENT_LIST_DIR}/download")
+
+        if(NOT EXISTS "${ONNXRUNTIME_DIR}")
+            if(DEFINED ONNXRUNTIME_URL)
+                # A .zip or .tgz laid out like Microsoft's release archives, which
+                # extracts to a directory like lib/onnxruntime-linux-x64-1.22.0/
+                set(ONNXRUNTIME_FILENAME "${ONNXRUNTIME_PREFIX}.${ONNXRUNTIME_EXT}")
+                piper_download("${ONNXRUNTIME_URL}" "${ONNXRUNTIME_DOWNLOAD_DIR}/${ONNXRUNTIME_FILENAME}" "${ONNXRUNTIME_SHA256}")
+                file(ARCHIVE_EXTRACT INPUT "${ONNXRUNTIME_DOWNLOAD_DIR}/${ONNXRUNTIME_FILENAME}" DESTINATION "${CMAKE_CURRENT_LIST_DIR}/lib")
+            else()
+                # Microsoft's NuGet package: one archive for every platform, with
+                # the headers in build/native/include and the libraries in
+                # runtimes/<rid>/native
+                set(ONNXRUNTIME_FILENAME "microsoft.ml.onnxruntime.${ONNXRUNTIME_VERSION}.nupkg")
+                set(ONNXRUNTIME_NUGET_URL "https://api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntime/${ONNXRUNTIME_VERSION}/${ONNXRUNTIME_FILENAME}")
+                if(NOT ONNXRUNTIME_SHA256)
+                    message(WARNING "No SHA256 for onnxruntime ${ONNXRUNTIME_VERSION}; set ONNXRUNTIME_SHA256 to verify the download")
+                endif()
+                piper_download("${ONNXRUNTIME_NUGET_URL}" "${ONNXRUNTIME_DOWNLOAD_DIR}/${ONNXRUNTIME_FILENAME}" "${ONNXRUNTIME_SHA256}")
+
+                set(nuget_dir "${ONNXRUNTIME_DOWNLOAD_DIR}/nuget-${ONNXRUNTIME_VERSION}")
+                set(native_dir "${nuget_dir}/runtimes/${ONNXRUNTIME_RID}/native")
+                set(staging_dir "${ONNXRUNTIME_DIR}.part")
+                file(REMOVE_RECURSE "${nuget_dir}" "${staging_dir}")
+                file(ARCHIVE_EXTRACT INPUT "${ONNXRUNTIME_DOWNLOAD_DIR}/${ONNXRUNTIME_FILENAME}" DESTINATION "${nuget_dir}"
+                    PATTERNS "build/native/include/*" "runtimes/${ONNXRUNTIME_RID}/native/*" "LICENSE" "ThirdPartyNotices.txt")
+
+                file(MAKE_DIRECTORY "${staging_dir}/lib")
+                file(COPY "${nuget_dir}/build/native/include/" DESTINATION "${staging_dir}/include")
+                file(COPY "${nuget_dir}/LICENSE" "${nuget_dir}/ThirdPartyNotices.txt" DESTINATION "${staging_dir}")
+
+                # Give the library the file names of the release archives, which
+                # its embedded name (install name or soname) refers to
+                if(WIN32)
+                    file(COPY "${native_dir}/" DESTINATION "${staging_dir}/lib")
+                elseif(APPLE)
+                    # Install name: @rpath/libonnxruntime.<version>.dylib
+                    file(COPY_FILE "${native_dir}/libonnxruntime.dylib" "${staging_dir}/lib/libonnxruntime.${ONNXRUNTIME_VERSION}.dylib")
+                    file(CREATE_LINK "libonnxruntime.${ONNXRUNTIME_VERSION}.dylib" "${staging_dir}/lib/libonnxruntime.dylib" SYMBOLIC)
+                else()
+                    # Soname: libonnxruntime.so.<major>
+                    string(REGEX MATCH "^[0-9]+" onnxruntime_major "${ONNXRUNTIME_VERSION}")
+                    file(COPY_FILE "${native_dir}/libonnxruntime.so" "${staging_dir}/lib/libonnxruntime.so.${ONNXRUNTIME_VERSION}")
+                    file(CREATE_LINK "libonnxruntime.so.${ONNXRUNTIME_VERSION}" "${staging_dir}/lib/libonnxruntime.so.${onnxruntime_major}" SYMBOLIC)
+                    file(CREATE_LINK "libonnxruntime.so.${onnxruntime_major}" "${staging_dir}/lib/libonnxruntime.so" SYMBOLIC)
+                    file(COPY "${native_dir}/libonnxruntime_providers_shared.so" DESTINATION "${staging_dir}/lib")
+                endif()
+
+                file(RENAME "${staging_dir}" "${ONNXRUNTIME_DIR}")
+                file(REMOVE_RECURSE "${nuget_dir}")
+            endif()
+        endif()
+    endif()
+
+    if(DEFINED ONNXRUNTIME_DIR)
+        find_library(ONNXRUNTIME_LIB NAMES onnxruntime PATHS ${ONNXRUNTIME_DIR}/lib REQUIRED)
+        add_library(onnxruntime::onnxruntime UNKNOWN IMPORTED)
+        set_target_properties(onnxruntime::onnxruntime PROPERTIES
+            IMPORTED_LOCATION ${ONNXRUNTIME_LIB}
+            INTERFACE_INCLUDE_DIRECTORIES ${ONNXRUNTIME_DIR}/include
+        )
     endif()
 endif()
 
-if(DEFINED ONNXRUNTIME_DIR)
-    find_library(ONNXRUNTIME_LIB NAMES onnxruntime PATHS ${ONNXRUNTIME_DIR}/lib REQUIRED)
-    add_library(onnxruntime::onnxruntime UNKNOWN IMPORTED)
-    set_target_properties(onnxruntime::onnxruntime PROPERTIES
-        IMPORTED_LOCATION ${ONNXRUNTIME_LIB}
-        INTERFACE_INCLUDE_DIRECTORIES ${ONNXRUNTIME_DIR}/include
-    )
-endif()
-
-# ---- linting ----
+# ---- linting ---
 include(ClangTidy.cmake)
 # ---- libpiper ---
 
@@ -349,17 +366,39 @@ add_library(piper SHARED
 )
 enable_clang_tidy(piper)
 
-add_dependencies(piper espeak_ng_external openjtalk_external)
+# espeak-ng
+if(NOT USE_SYSTEM_ESPEAKNG)
+    add_dependencies(piper espeak_ng_external)
+    target_include_directories(piper PUBLIC
+        ${ESPEAKNG_INSTALL_DIR}/include
+    )
+    target_link_libraries(piper
+        ${ESPEAKNG_STATIC_LIB}
+        ${UCD_STATIC_LIB}
+    )
+else()
+    target_link_libraries(piper
+        PkgConfig::ESPEAKNG
+    )
+endif()
+
+# open_jtalk
+add_dependencies(piper openjtalk_external)
 target_include_directories(piper PUBLIC
-    ${ESPEAKNG_INSTALL_DIR}/include
     ${OPENJTALK_INCLUDE_DIRS}
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 target_link_libraries(piper
-    ${ESPEAKNG_STATIC_LIB}
-    ${UCD_STATIC_LIB}
     ${OPENJTALK_STATIC_LIB}
+)
+
+# onnxruntime
+target_link_libraries(piper
     onnxruntime::onnxruntime
+)
+
+# piper's own public headers
+target_include_directories(piper PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
 # ---- piper exe ---
@@ -427,20 +466,22 @@ if(DEFINED ONNXRUNTIME_DIR)
     endif()
 endif()
 
-# Copy espeak-ng-data
-set(ESPEAKNG_DATA_SRC ${CMAKE_BINARY_DIR}/espeak_ng-install/share/espeak-ng-data)
+# Copy espeak-ng-data (skipped when using system espeak-ng)
+if(NOT USE_SYSTEM_ESPEAKNG)
+    set(ESPEAKNG_DATA_SRC ${CMAKE_BINARY_DIR}/espeak_ng-install/share/espeak-ng-data)
 
-install(
-    DIRECTORY ${ESPEAKNG_DATA_SRC}
-    DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}
-)
-
-if(WIN32)
-    # The CLI looks next to its executable; retain the shared API data above.
     install(
         DIRECTORY ${ESPEAKNG_DATA_SRC}
-        DESTINATION ${CMAKE_INSTALL_BINDIR}
+        DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}
     )
+
+    if(WIN32)
+        # The CLI looks next to its executable; retain the shared API data above.
+        install(
+            DIRECTORY ${ESPEAKNG_DATA_SRC}
+            DESTINATION ${CMAKE_INSTALL_BINDIR}
+        )
+    endif()
 endif()
 
 # ----------------
