@@ -6,7 +6,20 @@ from pathlib import Path
 from typing import Union
 
 _DIR = Path(__file__).parent
-ESPEAK_DATA_DIR = _DIR / "espeak-ng-data"
+
+
+def _find_espeak_data() -> Path:
+    bundled = _DIR / "espeak-ng-data"
+    if bundled.is_dir():
+        return bundled
+    # Fall back to system install (e.g. /usr/share/espeak-ng-data-1.52.0)
+    candidates = sorted(Path("/usr/share").glob("espeak-ng-data*"))
+    if candidates:
+        return candidates[-1]  # take the highest version
+    return bundled  # let espeak_Initialize fail with a clear error
+
+
+ESPEAK_DATA_DIR = _find_espeak_data()
 
 
 class EspeakPhonemizer:
