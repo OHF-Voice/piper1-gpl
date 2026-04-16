@@ -436,7 +436,7 @@ if(WIN32)
     )
 else()
     install(TARGETS piper
-        DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     )
 endif()
 
