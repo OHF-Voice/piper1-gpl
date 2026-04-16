@@ -4,42 +4,45 @@
 cmake_minimum_required(VERSION 3.26)
 project(piper LANGUAGES C CXX)
 
-include(ExternalProject)
+option(USE_SYSTEM_ESPEAKNG "Use system-installed espeak-ng instead of building from source" OFF)
 
 # scikit-build-core will forward Python_* variables
 find_package(Python COMPONENTS Development.Module Development.SABIModule REQUIRED)
 
-# Install location for espeak-ng
-set(ESPEAKNG_BUILD_DIR ${CMAKE_BINARY_DIR}/espeak_ng)
-set(ESPEAKNG_INSTALL_DIR ${CMAKE_BINARY_DIR}/espeak_ng-install)
+if(NOT USE_SYSTEM_ESPEAKNG)
+    include(ExternalProject)
 
-# ucd-tools is built, not installed. Multi-config generators place its static
-# library in a configuration subdirectory; single-config generators do not.
-get_property(IS_MULTI_CONFIG GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
-if(IS_MULTI_CONFIG)
-    set(UCD_CONFIG_SUBDIR "$<CONFIG>/")
-else()
-    set(UCD_CONFIG_SUBDIR "")
-endif()
+    # Install location for espeak-ng
+    set(ESPEAKNG_BUILD_DIR ${CMAKE_BINARY_DIR}/espeak_ng)
+    set(ESPEAKNG_INSTALL_DIR ${CMAKE_BINARY_DIR}/espeak_ng-install)
 
-set(UCD_TOOLS_DIR ${ESPEAKNG_BUILD_DIR}/src/espeak_ng_external-build/src/ucd-tools)
+    # ucd-tools is built, not installed. Multi-config generators place its static
+    # library in a configuration subdirectory; single-config generators do not.
+    get_property(IS_MULTI_CONFIG GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
+    if(IS_MULTI_CONFIG)
+        set(UCD_CONFIG_SUBDIR "$<CONFIG>/")
+    else()
+        set(UCD_CONFIG_SUBDIR "")
+    endif()
 
-if(WIN32)
-    # Special handling for Windows
-    set(ESPEAKNG_STATIC_LIB ${ESPEAKNG_INSTALL_DIR}/lib/espeak-ng.lib)
-    set(UCD_STATIC_LIB ${UCD_TOOLS_DIR}/${UCD_CONFIG_SUBDIR}ucd.lib)
-else()
-    set(ESPEAKNG_STATIC_LIB ${ESPEAKNG_INSTALL_DIR}/lib/libespeak-ng.a)
-    set(UCD_STATIC_LIB ${UCD_TOOLS_DIR}/${UCD_CONFIG_SUBDIR}libucd.a)
-endif()
+    set(UCD_TOOLS_DIR ${ESPEAKNG_BUILD_DIR}/src/espeak_ng_external-build/src/ucd-tools)
 
-# espeak-ng's compat shims (unistd.h, endian.h, getopt.h) test
-# `#if __has_include_next(...)`, which MSVC 14.52 (Visual Studio 2026) rejects
-# with C7780 because MSVC has no __has_include_next. Backport of espeak-ng
-# 021e465, which defines it as 0 when the compiler lacks it. Drop this once the
-# pinned commit includes that fix.
-set(ESPEAKNG_PATCH_SCRIPT ${CMAKE_CURRENT_BINARY_DIR}/espeak_ng_patch.cmake)
-file(WRITE ${ESPEAKNG_PATCH_SCRIPT} [=[
+    if(WIN32)
+        # Special handling for Windows
+        set(ESPEAKNG_STATIC_LIB ${ESPEAKNG_INSTALL_DIR}/lib/espeak-ng.lib)
+        set(UCD_STATIC_LIB ${UCD_TOOLS_DIR}/${UCD_CONFIG_SUBDIR}ucd.lib)
+    else()
+        set(ESPEAKNG_STATIC_LIB ${ESPEAKNG_INSTALL_DIR}/lib/libespeak-ng.a)
+        set(UCD_STATIC_LIB ${UCD_TOOLS_DIR}/${UCD_CONFIG_SUBDIR}libucd.a)
+    endif()
+
+    # espeak-ng's compat shims (unistd.h, endian.h, getopt.h) test
+    # `#if __has_include_next(...)`, which MSVC 14.52 (Visual Studio 2026) rejects
+    # with C7780 because MSVC has no __has_include_next. Backport of espeak-ng
+    # 021e465, which defines it as 0 when the compiler lacks it. Drop this once the
+    # pinned commit includes that fix.
+    set(ESPEAKNG_PATCH_SCRIPT ${CMAKE_CURRENT_BINARY_DIR}/espeak_ng_patch.cmake)
+    file(WRITE ${ESPEAKNG_PATCH_SCRIPT} [=[
 foreach(header unistd endian getopt)
     set(path "${ESPEAKNG_SOURCE_DIR}/src/include/compat/${header}.h")
     file(READ "${path}" content)
@@ -56,54 +59,64 @@ foreach(header unistd endian getopt)
 endforeach()
 ]=])
 
-ExternalProject_Add(espeak_ng_external
-    GIT_REPOSITORY https://github.com/espeak-ng/espeak-ng.git
-    GIT_TAG 724808c5a83f9ef95fdd0db886ba7ba537ff224a  # 2026-Apr-06
-    PREFIX ${ESPEAKNG_BUILD_DIR}
-    PATCH_COMMAND ${CMAKE_COMMAND} -DESPEAKNG_SOURCE_DIR=<SOURCE_DIR> -P ${ESPEAKNG_PATCH_SCRIPT}
-    CMAKE_ARGS
-        -DCMAKE_INSTALL_PREFIX=${ESPEAKNG_INSTALL_DIR}
-        -DBUILD_SHARED_LIBS:BOOL=OFF
-        -DCMAKE_POSITION_INDEPENDENT_CODE:BOOL=ON
-        -DUSE_ASYNC:BOOL=OFF
-        -DUSE_MBROLA:BOOL=OFF
-        -DUSE_LIBSONIC:BOOL=OFF
-        -DUSE_LIBPCAUDIO:BOOL=OFF
-        -DUSE_KLATT:BOOL=OFF
-        -DUSE_SPEECHPLAYER:BOOL=OFF
-        -DEXTRA_cmn:BOOL=ON
-        -DEXTRA_ru:BOOL=ON
-        # N_PATH_HOME sizes espeak-ng's data directory buffer. It defaults to
-        # PATH_MAX on Linux but only 160 bytes elsewhere, and a longer path is
-        # silently truncated and replaced by the build-time PATH_ESPEAK_DATA.
-        #
-        # Need to explicitly add ucd include directory for CI
-        "-DCMAKE_C_FLAGS=-D_FILE_OFFSET_BITS=64 -DN_PATH_HOME=4096 -I${ESPEAKNG_BUILD_DIR}/src/espeak_ng_external/src/ucd-tools/src/include"
-        "-DCMAKE_CXX_FLAGS=-D_FILE_OFFSET_BITS=64 -DN_PATH_HOME=4096 -I${ESPEAKNG_BUILD_DIR}/src/espeak_ng_external/src/ucd-tools/src/include"
-    BUILD_BYPRODUCTS
-        ${ESPEAKNG_STATIC_LIB}
-        ${UCD_STATIC_LIB}
-    UPDATE_DISCONNECTED TRUE
-)
+    ExternalProject_Add(espeak_ng_external
+        GIT_REPOSITORY https://github.com/espeak-ng/espeak-ng.git
+        GIT_TAG 724808c5a83f9ef95fdd0db886ba7ba537ff224a  # 2026-Apr-06
+        PREFIX ${ESPEAKNG_BUILD_DIR}
+        PATCH_COMMAND ${CMAKE_COMMAND} -DESPEAKNG_SOURCE_DIR=<SOURCE_DIR> -P ${ESPEAKNG_PATCH_SCRIPT}
+        CMAKE_ARGS
+            -DCMAKE_INSTALL_PREFIX=${ESPEAKNG_INSTALL_DIR}
+            -DBUILD_SHARED_LIBS:BOOL=OFF
+            -DCMAKE_POSITION_INDEPENDENT_CODE:BOOL=ON
+            -DUSE_ASYNC:BOOL=OFF
+            -DUSE_MBROLA:BOOL=OFF
+            -DUSE_LIBSONIC:BOOL=OFF
+            -DUSE_LIBPCAUDIO:BOOL=OFF
+            -DUSE_KLATT:BOOL=OFF
+            -DUSE_SPEECHPLAYER:BOOL=OFF
+            -DEXTRA_cmn:BOOL=ON
+            -DEXTRA_ru:BOOL=ON
+            # N_PATH_HOME sizes espeak-ng's data directory buffer. It defaults to
+            # PATH_MAX on Linux but only 160 bytes elsewhere, and a longer path is
+            # silently truncated and replaced by the build-time PATH_ESPEAK_DATA.
+            #
+            # Need to explicitly add ucd include directory for CI
+            "-DCMAKE_C_FLAGS=-D_FILE_OFFSET_BITS=64 -DN_PATH_HOME=4096 -I${ESPEAKNG_BUILD_DIR}/src/espeak_ng_external/src/ucd-tools/src/include"
+            "-DCMAKE_CXX_FLAGS=-D_FILE_OFFSET_BITS=64 -DN_PATH_HOME=4096 -I${ESPEAKNG_BUILD_DIR}/src/espeak_ng_external/src/ucd-tools/src/include"
+        BUILD_BYPRODUCTS
+            ${ESPEAKNG_STATIC_LIB}
+            ${UCD_STATIC_LIB}
+        UPDATE_DISCONNECTED TRUE
+    )
 
-include_directories(
-    ${ESPEAKNG_INSTALL_DIR}/include
-)
-
+    include_directories(
+        ${ESPEAKNG_INSTALL_DIR}/include
+    )
+else()
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(ESPEAKNG REQUIRED IMPORTED_TARGET espeak-ng)
+endif()
 # espeak bridge
 add_library(espeakbridge MODULE
     src/piper/espeakbridge.c
 )
 
-add_dependencies(espeakbridge espeak_ng_external)
-target_link_libraries(espeakbridge
-    ${ESPEAKNG_STATIC_LIB}
-    ${UCD_STATIC_LIB}
-    Python::SABIModule
-)
-target_include_directories(espeakbridge PRIVATE
-    ${ESPEAKNG_INSTALL_DIR}/include
-)
+if(NOT USE_SYSTEM_ESPEAKNG)
+    add_dependencies(espeakbridge espeak_ng_external)
+    target_link_libraries(espeakbridge
+        ${ESPEAKNG_STATIC_LIB}
+        ${UCD_STATIC_LIB}
+        Python::SABIModule
+    )
+    target_include_directories(espeakbridge PRIVATE
+        ${ESPEAKNG_INSTALL_DIR}/include
+    )
+else()
+    target_link_libraries(espeakbridge
+        PkgConfig::ESPEAKNG
+        Python::SABIModule
+    )
+endif()
 
 if(WIN32)
     # Fix dll thunk issue (__imp_SYMBOL not found)
@@ -125,12 +138,14 @@ install(TARGETS espeakbridge
     RUNTIME DESTINATION .
 )
 
-# Copy espeak-ng-data
-set(DATA_SRC ${CMAKE_BINARY_DIR}/espeak_ng-install/share/espeak-ng-data)
-set(DATA_DST ${CMAKE_CURRENT_SOURCE_DIR}/src/piper/espeak-ng-data)
+# Copy espeak-ng-data (skipped when using system espeak-ng)
+if(NOT USE_SYSTEM_ESPEAKNG)
+    set(DATA_SRC ${CMAKE_BINARY_DIR}/espeak_ng-install/share/espeak-ng-data)
+    set(DATA_DST ${CMAKE_CURRENT_SOURCE_DIR}/src/piper/espeak-ng-data)
 
-add_custom_target(copy_espeak_ng_data ALL
-    COMMAND ${CMAKE_COMMAND} -E copy_directory ${DATA_SRC} ${DATA_DST}
-    DEPENDS espeak_ng_external
-    COMMENT "Copying espeak-ng-data after espeak-ng external project builds"
-)
+    add_custom_target(copy_espeak_ng_data ALL
+        COMMAND ${CMAKE_COMMAND} -E copy_directory ${DATA_SRC} ${DATA_DST}
+        DEPENDS espeak_ng_external
+        COMMENT "Copying espeak-ng-data after espeak-ng external project builds"
+    )
+endif()
