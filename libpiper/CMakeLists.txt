@@ -172,7 +172,7 @@ target_include_directories(piper PUBLIC
 include(GNUInstallDirs)
 
 install(TARGETS piper
-    DESTINATION ${CMAKE_INSTALL_PREFIX}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
 )
 
 install(
