@@ -42,3 +42,30 @@ Get the available voices with:
 ``` sh
 curl localhost:5000/voices
 ```
+
+## WSGI support
+
+The HTTP API can also be run from a standard
+[WSGI server](https://flask.palletsprojects.com/en/stable/deploying/#self-hosted-options).
+
+Following are the example steps with [Gunicorn](https://gunicorn.org/).
+
+Install dependencies:
+
+```shell
+python3 -m pip install piper-tts[http] gunicorn
+```
+
+Download some voice:
+
+```shell
+python3 -m piper.download_voices en_US-lessac-medium
+```
+
+Run server:
+
+```shell
+PIPER_MODEL=en_US-lessac-medium gunicorn 'piper.http_server:create_app_from_env()'
+```
+
+See the output of `python3 -m piper.http_server --help` for documentation on environment variables.
