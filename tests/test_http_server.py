@@ -113,6 +113,7 @@ full_env = {
     "PIPER_CUDA": "True",
     "PIPER_SENTENCE_SILENCE": "0.42",
     "PIPER_DATA_DIR": "some/dir:other/dir",
+    "PIPER_CWD_DATA_DIR": "False",
     "PIPER_DOWNLOAD_DIR": "download/dir",
     "PIPER_DEBUG": "True",
 }
@@ -130,14 +131,17 @@ full_app_args = AppArgs(
 )
 required_args = ["model"]
 optional_args = list(full_app_args.__dict__.keys() - required_args)
-minimum_env = {name: full_env[name] for name in map(to_env_var, required_args)}
+minimum_env = (
+    {name: full_env[name] for name in map(to_env_var, required_args)}
+    | {"PIPER_CWD_DATA_DIR": "False"}
+)
 minimum_args_params = (
     {name: full_app_args.__dict__[name] for name in required_args}
     | {name: None for name in optional_args}
     | {
         "cuda": False,
         "sentence_silence": 0.0,
-        "data_dir": [str(Path.cwd())],
+        "data_dir": [],
         "debug": False,
     }
 )

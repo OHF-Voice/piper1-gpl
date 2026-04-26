@@ -57,8 +57,14 @@ def main() -> None:
         "--data-dir",
         "--data_dir",
         action="append",
-        default=[str(Path.cwd())],
-        help="Data directory to check for downloaded models (default: current directory)",
+        default=[],
+        help="Data directory to check for downloaded models (default: current directory, see option `--[no-]cwd-data-dir`)",
+    )
+    parser.add_argument(
+        "--cwd-data-dir",
+        default=True,
+        action=argparse.BooleanOptionalAction,
+        help="Use the current working directory as first data directory. See `--data-dir`.",
     )
     parser.add_argument(
         "--download-dir",
@@ -71,10 +77,14 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    special_args = ["host", "port", "cwd_data_dir", "data_dir"]
     app_args_params = {
-        k: v for k, v in args.__dict__.items() if k != "host" and k != "port"
+        k: v for k, v in args.__dict__.items() if k not in special_args
     }
-    app = create_app(AppArgs(**app_args_params))
+    app = create_app(AppArgs(
+        **app_args_params,
+        data_dir=([str(Path.cwd())] if args.cwd_data_dir else []) + args.data_dir
+    ))
     app.run(host=args.host, port=args.port)
 
 
@@ -313,10 +323,11 @@ def create_app(args: AppArgs) -> Flask:
 
 T = TypeVar("T")
 U = TypeVar("U")
+V = TypeVar("V")
 
 
-def map_if_not_none(mapper: Callable[[T], U], value: Optional[T]) -> Optional[U]:
-    return None if value is None else mapper(value)
+def map_if_not_none(mapper: Callable[[T], U], value: Optional[T], default: V = None) -> U | V:
+    return default if value is None else mapper(value)
 
 
 def require(value: Optional[T]) -> T:
@@ -326,9 +337,14 @@ def require(value: Optional[T]) -> T:
         return value
 
 
+def parse_bool(value: str) -> bool:
+    return value.lower() in ["true", "1", "t", "yes", "on"]
+
+
 def create_app_args_from_env(
     get_env: Callable[[str], Optional[str]] = getenv,
 ) -> AppArgs:
+    cwd_data_dir = map_if_not_none(parse_bool, get_env("PIPER_CWD_DATA_DIR"), default=True)
     return AppArgs(
         model=require(get_env("PIPER_MODEL")),
         speaker=map_if_not_none(int, get_env("PIPER_SPEAKER")),
@@ -338,8 +354,9 @@ def create_app_args_from_env(
         cuda=(get_env("PIPER_CUDA") == "True"),
         sentence_silence=map_if_not_none(float, get_env("PIPER_SENTENCE_SILENCE"))
         or 0.0,
-        data_dir=[d for d in (get_env("PIPER_DATA_DIR") or "").split(":") if d]
-        or [str(Path.cwd())],
+        data_dir=
+            ([str(Path.cwd())] if cwd_data_dir else []) +
+            [d for d in (get_env("PIPER_DATA_DIR") or "").split(":") if d],
         download_dir=get_env("PIPER_DOWNLOAD_DIR"),
         debug=(get_env("PIPER_DEBUG") == "True"),
     )
