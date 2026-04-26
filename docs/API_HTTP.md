@@ -45,7 +45,7 @@ curl localhost:5000/voices
 
 ## WSGI support
 
-For a more production-ready setup, the HTTP API can also be run from a
+The HTTP API can also be run from a standard
 [WSGI server](https://flask.palletsprojects.com/en/stable/deploying/#self-hosted-options).
 
 Following are the example steps with [Gunicorn](https://gunicorn.org/).
@@ -68,16 +68,4 @@ Run server:
 PIPER_MODEL=en_US-lessac-medium gunicorn 'piper.http_server:create_app_from_env()'
 ```
 
-The environment variables are similar
-to the command line arguments of the stand-alone server:
-
-| Variable | Type | Required | Meaning | Default |
-|---|---|---|---|---|
-| `PIPER_MODEL` | Path | Yes | Path to Onnx model file | |
-| `PIPER_SPEAKER` | Integer | No | Id of speaker | 0 |
-| `PIPER_LENGTH_SCALE`, `PIPER_NOISE_SCALE` , `PIPER_NOISE_W_SCALE` | Floating-point number | No | Defaults for request parameters, see above. | See `src/piper/config.py`. |
-| `PIPER_SENTENCE_SILENCE` | Floating-point number | No | Seconds of silence after each sentence | 0 |
-| `PIPER_DATA_DIR` | List of paths joined by colon `:` | No | Data directories to check for downloaded models | Current directory |
-| `PIPER_DOWNLOAD_DIR` | Path | No | Path to the download directory | First data directory |
-| `PIPER_CUDA` | `True` or `False` | No | Use GPU | `False` |
-| `PIPER_DEBUG` | `True` or `False` | No | Print debug messages to console | `False` |
+See the output of `python3 -m piper.http_server --help` for documentation on environment variables.

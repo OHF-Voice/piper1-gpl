@@ -8,7 +8,7 @@ import wave
 from dataclasses import dataclass
 from os import getenv
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, TypeVar
+from typing import Any, Callable, Dict, List, Optional
 from urllib.request import urlopen
 
 from flask import Flask, request
@@ -18,10 +18,11 @@ from .download_voices import VOICES_JSON, download_voice
 
 _LOGGER = logging.getLogger()
 
+GetEnvType=Callable[[str], Optional[str]]
 
-def main() -> None:
-    """Run HTTP server."""
-    parser = argparse.ArgumentParser()
+
+def create_argument_parser(get_env: GetEnvType = getenv) -> argparse.ArgumentParser:
+    parser = create_environment_fallback_argument_parser(env_prefix="PIPER_", get_env=get_env)
     parser.add_argument("--host", default="0.0.0.0", help="HTTP server host")
     parser.add_argument("--port", type=int, default=5000, help="HTTP server port")
     #
@@ -58,13 +59,23 @@ def main() -> None:
         "--data_dir",
         action="append",
         default=[],
-        help="Data directory to check for downloaded models (default: current directory, see option `--[no-]cwd-data-dir`)",
+        help=(
+            "Data directory to check for downloaded models "
+            "(default: current directory, see option `--[no-]cwd-data-dir`). "
+            "Environment variable syntax: "
+            "One or more paths joined by `:`."
+        ),
     )
     parser.add_argument(
         "--cwd-data-dir",
         default=True,
         action=argparse.BooleanOptionalAction,
-        help="Use the current working directory as first data directory. See `--data-dir`.",
+        help=(
+            "Use the current working directory as first data directory. "
+            "See `--data-dir`. "
+            "Environment variable syntax: "
+            "Only `True` (case-insensitive) is allowed."
+        )
     )
     parser.add_argument(
         "--download-dir",
@@ -75,17 +86,114 @@ def main() -> None:
     parser.add_argument(
         "--debug", action="store_true", help="Print DEBUG messages to console"
     )
-    args = parser.parse_args()
+    return parser
 
-    special_args = ["host", "port", "cwd_data_dir", "data_dir"]
-    app_args_params = {
-        k: v for k, v in args.__dict__.items() if k not in special_args
-    }
-    app = create_app(AppArgs(
-        **app_args_params,
-        data_dir=([str(Path.cwd())] if args.cwd_data_dir else []) + args.data_dir
-    ))
+
+def main() -> None:
+    """Run HTTP server."""
+
+    parser = create_argument_parser()
+    args = parser.parse_args()
+    app_args = _argparse_namespace_to_app_args(args)
+    app = create_app(app_args)
     app.run(host=args.host, port=args.port)
+
+
+@dataclass
+class _EnvVarInfo:
+    option_string: str
+    action: argparse.Action
+
+
+_supported_explicit_action_types: List[int | str | None] = [None, 1, argparse.OPTIONAL, argparse.ZERO_OR_MORE, argparse.ONE_OR_MORE]
+
+
+# `dest` of `argparse` `Action`s that should be split to a list.
+_list_var_names = ["data_dir"]
+
+
+def parse_true_bool(value: str) -> bool:
+    if value.lower() == "true":
+        return True
+    else:
+        raise ValueError(
+            "Unsupported string value for flag. "
+            "Only `True` (case-insensitive) is allowed."
+        )
+
+
+def create_environment_fallback_argument_parser(*args: Any, env_prefix: str = "", get_env: GetEnvType = getenv, formatter_class: type[argparse.HelpFormatter] | None = None, **kwargs: Any):
+    def option_string_to_env_var_name(option_string: str) -> str:
+        return env_prefix + option_string.lstrip("-").replace("-", "_").upper()
+
+    def get_env_var_names(action: argparse.Action) -> List[tuple[str, str]]:
+        return list({
+            option_string_to_env_var_name(option_string): option_string
+            for option_string in action.option_strings
+            if option_string.startswith("--")
+        }.items())
+
+    # `ArgumentParser` needs to be initialized with the formatter class.
+    # The class definition needs to reference the `env_prefix`.
+    # Here this is achieved indirectly via closures.
+    class EnvironmentFallbackHelpFormatter(argparse.ArgumentDefaultsHelpFormatter):
+        def _get_help_string(self, action: argparse.Action) -> str | None:
+            help = super()._get_help_string(action)
+            if action.dest != 'help':
+                env_var_names = get_env_var_names(action)
+                if env_var_names:
+                    info = f"[Environment variable{
+                        "s" if len(env_var_names) > 1 else ""
+                    }: {", ".join([name for name, _ in env_var_names])}]"
+                    return info if help is None else f"{help} {info}"
+            return help
+
+    resolved_formatter_class = formatter_class or EnvironmentFallbackHelpFormatter
+
+    class EnvironmentFallbackArgumentParser(argparse.ArgumentParser):
+        def __init__(self):
+            super().__init__(*args, formatter_class=resolved_formatter_class, **kwargs)
+
+        # This method gets called by several other methods of the base class.
+        def _parse_known_args(self, arg_strings: List[str], *args: Any, **kwargs: Any) -> tuple[argparse.Namespace, list[str]]:
+            return super()._parse_known_args(self._get_env_args() + arg_strings, *args, **kwargs)
+
+        def _get_env_args(self) -> List[str]:
+            """Create CLI arguments for set environment variables."""
+
+            # Create env var names from double-dash option strings.
+            env_var_names: Dict[str, _EnvVarInfo] = {}
+            for action in self._actions:
+                for env_var_name, option_string in get_env_var_names(action):
+                    env_var_names.setdefault(env_var_name, _EnvVarInfo(option_string, action))
+
+            result: List[str] = []
+            for (env_var_name, env_var_info) in env_var_names.items():
+                try:
+                    env_var_value=get_env(env_var_name)
+                    if env_var_value is None:
+                        continue
+                    action = env_var_info.action
+                    nargs = action.nargs
+                    # If CLI arg supports a single value...
+                    if nargs in _supported_explicit_action_types:
+                        if action.dest in _list_var_names:
+                            for part in env_var_value.split(":"):
+                                result.append(f"{env_var_info.option_string}={part}")
+                        else:
+                            result.append(f"{env_var_info.option_string}={env_var_value}")
+                    # If CLI arg is a flag without value...
+                    elif nargs == 0:
+                        if parse_true_bool(env_var_value):
+                            result.append(f"{env_var_info.option_string}")
+                    # If it's unclear what to do...
+                    else:
+                        raise ValueError("Unsupported argparse option type - not sure what to do.")
+                except Exception as cause:
+                    raise Exception(f"Error processing env var {env_var_name}.") from cause
+            return result
+
+    return EnvironmentFallbackArgumentParser()
 
 
 @dataclass
@@ -100,6 +208,17 @@ class AppArgs:
     data_dir: list[str]
     download_dir: Optional[str]
     debug: bool
+
+
+def _argparse_namespace_to_app_args(args: argparse.Namespace) -> AppArgs:
+    special_args = ["host", "port", "cwd_data_dir", "data_dir"]
+    app_args_params = {
+        k: v for k, v in args.__dict__.items() if k not in special_args
+    }
+    return AppArgs(
+        **app_args_params,
+        data_dir=([str(Path.cwd())] if args.cwd_data_dir else []) + args.data_dir
+    )
 
 
 def create_app(args: AppArgs) -> Flask:
@@ -321,45 +440,11 @@ def create_app(args: AppArgs) -> Flask:
     return app
 
 
-T = TypeVar("T")
-U = TypeVar("U")
-V = TypeVar("V")
-
-
-def map_if_not_none(mapper: Callable[[T], U], value: Optional[T], default: V = None) -> U | V:
-    return default if value is None else mapper(value)
-
-
-def require(value: Optional[T]) -> T:
-    if value is None:
-        raise ValueError("Must be set.")
-    else:
-        return value
-
-
-def parse_bool(value: str) -> bool:
-    return value.lower() in ["true", "1", "t", "yes", "on"]
-
-
-def create_app_args_from_env(
-    get_env: Callable[[str], Optional[str]] = getenv,
-) -> AppArgs:
-    cwd_data_dir = map_if_not_none(parse_bool, get_env("PIPER_CWD_DATA_DIR"), default=True)
-    return AppArgs(
-        model=require(get_env("PIPER_MODEL")),
-        speaker=map_if_not_none(int, get_env("PIPER_SPEAKER")),
-        length_scale=map_if_not_none(float, get_env("PIPER_LENGTH_SCALE")),
-        noise_scale=map_if_not_none(float, get_env("PIPER_NOISE_SCALE")),
-        noise_w_scale=map_if_not_none(float, get_env("PIPER_NOISE_W_SCALE")),
-        cuda=(get_env("PIPER_CUDA") == "True"),
-        sentence_silence=map_if_not_none(float, get_env("PIPER_SENTENCE_SILENCE"))
-        or 0.0,
-        data_dir=
-            ([str(Path.cwd())] if cwd_data_dir else []) +
-            [d for d in (get_env("PIPER_DATA_DIR") or "").split(":") if d],
-        download_dir=get_env("PIPER_DOWNLOAD_DIR"),
-        debug=(get_env("PIPER_DEBUG") == "True"),
-    )
+def create_app_args_from_env(get_env: GetEnvType = getenv) -> AppArgs:
+    argument_parser = create_argument_parser(get_env=get_env)
+    # Load arguments exclusively from environment variables.
+    args, _ = argument_parser.parse_known_args([])
+    return _argparse_namespace_to_app_args(args)
 
 
 def create_app_from_env() -> Flask:

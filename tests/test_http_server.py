@@ -113,7 +113,7 @@ full_env = {
     "PIPER_CUDA": "True",
     "PIPER_SENTENCE_SILENCE": "0.42",
     "PIPER_DATA_DIR": "some/dir:other/dir",
-    "PIPER_CWD_DATA_DIR": "False",
+    "PIPER_NO_CWD_DATA_DIR": "true",
     "PIPER_DOWNLOAD_DIR": "download/dir",
     "PIPER_DEBUG": "True",
 }
@@ -133,7 +133,7 @@ required_args = ["model"]
 optional_args = list(full_app_args.__dict__.keys() - required_args)
 minimum_env = (
     {name: full_env[name] for name in map(to_env_var, required_args)}
-    | {"PIPER_CWD_DATA_DIR": "False"}
+    | {"PIPER_NO_CWD_DATA_DIR": "true"}
 )
 minimum_args_params = (
     {name: full_app_args.__dict__[name] for name in required_args}
@@ -174,7 +174,7 @@ def test_create_app_args_from_env_fails_for_missing_arg(missing_arg: str):
     env = minimum_env | {
         to_env_var(missing_arg): None,
     }
-    with pytest.raises(ValueError):
+    with pytest.raises(SystemExit):
         create_app_args_from_env(get_env=env.get)
 
 
@@ -199,5 +199,5 @@ def test_create_app_args_from_env_fails_for_each_broken_arg(
     env = full_env | {
         broken_name: broken_value,
     }
-    with pytest.raises(ValueError):
+    with pytest.raises(SystemExit):
         create_app_args_from_env(get_env=env.get)
