@@ -137,15 +137,29 @@ if(NOT DEFINED ONNXRUNTIME_DIR)
     endif()
     # Get the dynamic library files.
     file(GLOB _DynLibFiles "${ONNXRUNTIME_DIR}/lib/*.so*" "${ONNXRUNTIME_DIR}/lib/*.dll")
-    # Check if the global library output directory has been set.
-    if (DEFINED CMAKE_LIBRARY_OUTPUT_DIRECTORY)
-        # Copy the files to the output directory.
-        message(STATUS "Copying onnxruntime dynlibs to: ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}")
-        file(COPY ${_DynLibFiles} DESTINATION "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}")
+    # Dynamic libraries are required to be in the executable directory for a Windows application.
+    if (WIN32)
+        # Check if the global library output directory has been set.
+        if (DEFINED CMAKE_RUNTIME_OUTPUT_DIRECTORY)
+            # Copy the files to the output directory.
+            message(STATUS "Copying onnxruntime dynlibs to: ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
+            file(COPY ${_DynLibFiles} DESTINATION "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
+        else ()
+            # When not able to copy files, set a cache entry.
+            message(STATUS "Writing onnxruntime cache entry 'ONNXRUNTIME_DYNLIB_FILES' with dynlibs.")
+           set(ONNXRUNTIME_DYNLIB_FILES "${_DynLibFiles}" CACHE INTERNAL "Location of the onnxruntime dynamic-library files.")
+        endif ()
     else ()
-        # When not able to copy files, set a cache entry.
-        message(STATUS "Writing onnxruntime cache entry 'ONNXRUNTIME_DYNLIB_FILES' with dynlibs.")
-       set(ONNXRUNTIME_DYNLIB_FILES "${_DynLibFiles}" CACHE INTERNAL "Location of the onnxruntime dynamic-library files.")
+        # Check if the global library output directory has been set.
+        if (DEFINED CMAKE_LIBRARY_OUTPUT_DIRECTORY)
+            # Copy the files to the output directory.
+            message(STATUS "Copying onnxruntime dynlibs to: ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}")
+            file(COPY ${_DynLibFiles} DESTINATION "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}")
+        else ()
+            # When not able to copy files, set a cache entry.
+            message(STATUS "Writing onnxruntime cache entry 'ONNXRUNTIME_DYNLIB_FILES' with dynlibs.")
+           set(ONNXRUNTIME_DYNLIB_FILES "${_DynLibFiles}" CACHE INTERNAL "Location of the onnxruntime dynamic-library files.")
+        endif ()
     endif ()
 endif()
 
