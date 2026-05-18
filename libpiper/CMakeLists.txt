@@ -147,6 +147,16 @@ target_link_libraries(piper
     onnxruntime
 )
 
+# ---- piper exe ---
+
+add_executable(piper_exe src/main.cpp
+                         src/wavfile.cpp
+                         include/wavfile.hpp
+              )
+target_link_libraries(piper_exe
+                      piper
+)
+
 # ---- install ---
 
 include(GNUInstallDirs)
