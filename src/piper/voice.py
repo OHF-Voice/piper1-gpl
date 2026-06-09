@@ -262,7 +262,9 @@ class PiperVoice:
                     _ESPEAK_PHONEMIZER = EspeakPhonemizer(self.espeak_data_dir)
 
                 text_part_phonemes = _ESPEAK_PHONEMIZER.phonemize(
-                    self.config.espeak_voice, text_part
+                    self.config.espeak_voice,
+                    text_part,
+                    merge_vowels=self.config.merge_vowels,
                 )
 
                 if prev_raw_phonemes and text_part_phonemes:

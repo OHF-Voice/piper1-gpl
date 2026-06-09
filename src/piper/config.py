@@ -51,6 +51,9 @@ class PiperConfig:
 
     hop_length: int = DEFAULT_HOP_LENGTH
 
+    merge_vowels: bool = False
+    """Merge vowel clusters (espeak only)"""
+
     @staticmethod
     def from_dict(config: dict[str, Any]) -> "PiperConfig":
         """Load configuration from a dictionary."""

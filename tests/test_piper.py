@@ -467,3 +467,78 @@ def _make_ceil_model(path: Path) -> None:
     model.ir_version = 8
     onnx.checker.check_model(model)
     onnx.save(model, str(path))
+
+
+def test_phonemize_with_vowel_clusters() -> None:
+    """Test phonemizing with vowel clusters."""
+    voice = PiperVoice.load(_TEST_VOICE)
+    voice.config.merge_vowels = True
+
+    phonemes = voice.phonemize("my cow toy day no")
+    assert phonemes == [
+        [
+            "m",
+            "aɪ",
+            " ",
+            "k",
+            "ˈ",
+            "aʊ",
+            " ",
+            "t",
+            "ˈ",
+            "ɔɪ",
+            " ",
+            "d",
+            "ˈ",
+            "eɪ",
+            " ",
+            "n",
+            "ˈ",
+            "oʊ",
+        ],
+    ]
+
+    phoneme_ids = [voice.phonemes_to_ids(ps) for ps in phonemes]
+    assert phoneme_ids == [
+        [
+            1,
+            0,
+            25,
+            0,
+            161,
+            0,
+            3,
+            0,
+            23,
+            0,
+            120,
+            0,
+            162,
+            0,
+            3,
+            0,
+            32,
+            0,
+            120,
+            0,
+            163,
+            0,
+            3,
+            0,
+            17,
+            0,
+            120,
+            0,
+            164,
+            0,
+            3,
+            0,
+            26,
+            0,
+            120,
+            0,
+            165,
+            0,
+            2,
+        ]
+    ]

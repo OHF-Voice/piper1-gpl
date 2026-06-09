@@ -3,10 +3,22 @@
 import re
 import unicodedata
 from pathlib import Path
-from typing import Union
+from typing import Dict, List, Optional, Tuple, Union
 
 _DIR = Path(__file__).parent
 ESPEAK_DATA_DIR = _DIR / "espeak-ng-data"
+
+from collections.abc import Sequence
+
+VOWEL_CLUSTERS: Dict[str, Dict[Tuple[str, ...], str]] = {
+    "en-us": {
+        ("a", "ɪ"): "aɪ",
+        ("a", "ʊ"): "aʊ",
+        ("ɔ", "ɪ"): "ɔɪ",
+        ("e", "ɪ"): "eɪ",
+        ("o", "ʊ"): "oʊ",
+    },
+}
 
 
 class EspeakPhonemizer:
@@ -18,7 +30,9 @@ class EspeakPhonemizer:
 
         espeakbridge.initialize(str(espeak_data_dir))
 
-    def phonemize(self, voice: str, text: str) -> list[list[str]]:
+    def phonemize(
+        self, voice: str, text: str, merge_vowels: bool = False
+    ) -> list[list[str]]:
         """Text to phonemes grouped by sentence."""
         from . import espeakbridge  # avoid circular import
 
@@ -26,6 +40,10 @@ class EspeakPhonemizer:
 
         all_phonemes: list[list[str]] = []
         sentence_phonemes: list[str] = []
+
+        vowel_clusters: Optional[Dict[Tuple[str, ...], str]] = None
+        if merge_vowels:
+            vowel_clusters = VOWEL_CLUSTERS.get(voice)
 
         clause_phonemes = espeakbridge.get_phonemes(text)
         for phonemes_str, terminator_str, end_of_sentence in clause_phonemes:
@@ -44,6 +62,11 @@ class EspeakPhonemizer:
             sentence_phonemes.extend(list(unicodedata.normalize("NFD", phonemes_str)))
 
             if end_of_sentence:
+                if vowel_clusters:
+                    sentence_phonemes = _merge_known_vowel_clusters(
+                        sentence_phonemes, vowel_clusters
+                    )
+
                 all_phonemes.append(sentence_phonemes)
                 sentence_phonemes = []
 
@@ -51,3 +74,30 @@ class EspeakPhonemizer:
             all_phonemes.append(sentence_phonemes)
 
         return all_phonemes
+
+
+def _merge_known_vowel_clusters(
+    phones: Sequence[str], clusters: Dict[Tuple[str, ...], str]
+) -> List[str]:
+    """Merge adjacent recognized vowel clusters."""
+    max_len = max(len(k) for k in clusters)
+    out: list[str] = []
+    i = 0
+
+    while i < len(phones):
+        match: Tuple[str, ...] | None = None
+
+        for n in range(min(max_len, len(phones) - i), 1, -1):
+            candidate = tuple(phones[i : i + n])
+            if candidate in clusters:
+                match = candidate
+                break
+
+        if match is not None:
+            out.append(clusters[match])
+            i += len(match)
+        else:
+            out.append(phones[i])
+            i += 1
+
+    return out
