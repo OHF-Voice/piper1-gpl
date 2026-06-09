@@ -33,7 +33,7 @@ HTTP_DATA_FILES = [
 
 setup(
     name="piper-tts",
-    version="1.4.2",
+    version="1.5.0",
     description="Fast and local neural text-to-speech engine",
     url="http://github.com/OHF-voice/piper1-gpl",
     license="GPL-3.0-or-later",

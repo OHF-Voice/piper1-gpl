@@ -170,7 +170,7 @@ DEFAULT_PHONEME_ID_MAP: dict[str, list[int]] = {
     "̊": [158],
     "ɝ": [159],
     "ʷ": [160],
-    # dipthongs
+    # diphthongs
     "aɪ": [161],
     "aʊ": [162],
     "ɔɪ": [163],

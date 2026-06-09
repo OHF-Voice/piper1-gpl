@@ -10,7 +10,7 @@ def test_phonemize() -> None:
 
 
 def test_merge_vowels() -> None:
-    """Test merging vowel clusters (dipthongs)."""
+    """Test merging vowel clusters (diphthongs)."""
     phonemizer = EspeakPhonemizer()
 
     # my
