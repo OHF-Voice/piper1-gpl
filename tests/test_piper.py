@@ -1,9 +1,14 @@
 """Tests for Piper."""
 
 import io
+import shutil
 import wave
 from pathlib import Path
 from unittest.mock import patch
+
+import onnx
+import pytest
+from onnx import TensorProto, helper
 
 from piper import PiperVoice
 from piper.const import BOS, EOS
@@ -12,6 +17,7 @@ from piper.phonemize_espeak import EspeakPhonemizer
 _DIR = Path(__file__).parent
 _TESTS_DIR = _DIR
 _TEST_VOICE = _TESTS_DIR / "test_voice.onnx"
+_TEST_CONFIG = _TESTS_DIR / "test_voice.onnx.json"
 
 
 def test_load_voice() -> None:
@@ -377,3 +383,87 @@ def test_synthesize_alignment() -> None:
 
             assert actual_alignment.num_samples == expected_samples
             assert actual_alignment.phoneme_ids == expected_ids
+
+
+def test_add_alignment_output_autodetect() -> None:
+    """Test autodetecting and marking the Ceil tensor as an output."""
+    from piper.patch_voice_with_alignment import add_alignment_output
+
+    model = onnx.parser.parse_model(
+        """
+        <ir_version: 8, opset_import: ["": 15]>
+        agraph (float[N] input) => (float[N] output) {
+            w_ceil = Ceil(input)
+            output = Identity(w_ceil)
+        }
+        """
+    )
+    assert [o.name for o in model.graph.output] == ["output"]
+
+    tensor_name = add_alignment_output(model)
+    assert tensor_name == "w_ceil"
+    assert [o.name for o in model.graph.output] == ["output", "w_ceil"]
+
+
+def test_add_alignment_output_errors() -> None:
+    """Test errors when no Ceil tensor exists or it is already an output."""
+    from piper.patch_voice_with_alignment import add_alignment_output
+
+    # No Ceil node
+    no_ceil = onnx.parser.parse_model(
+        """
+        <ir_version: 8, opset_import: ["": 15]>
+        agraph (float[N] input) => (float[N] output) {
+            output = Identity(input)
+        }
+        """
+    )
+    with pytest.raises(ValueError):
+        add_alignment_output(no_ceil)
+
+    # Tensor already marked as an output
+    with pytest.raises(ValueError):
+        add_alignment_output(no_ceil, tensor_name="output")
+
+
+def test_load_include_alignments_in_memory(tmp_path: Path) -> None:
+    """Test patching an unpatched model in memory at load time."""
+    model_path = tmp_path / "ceil_voice.onnx"
+    _make_ceil_model(model_path)
+    shutil.copy(_TEST_CONFIG, f"{model_path}.json")
+
+    # Without alignments: single (unpatched) output
+    voice = PiperVoice.load(model_path)
+    assert [o.name for o in voice.session.get_outputs()] == ["output"]
+
+    # With alignments: Ceil tensor is exposed as an extra output
+    voice = PiperVoice.load(model_path, include_alignments=True)
+    assert [o.name for o in voice.session.get_outputs()] == ["output", "w_ceil"]
+
+    # The on-disk model is left unpatched
+    on_disk = onnx.load(str(model_path))
+    assert [o.name for o in on_disk.graph.output] == ["output"]
+
+
+def test_load_include_alignments_no_ceil() -> None:
+    """Test that loading falls back gracefully when there is no Ceil tensor."""
+    # The test voice has no Ceil tensor, so alignments cannot be added.
+    voice = PiperVoice.load(_TEST_VOICE, include_alignments=True)
+    assert [o.name for o in voice.session.get_outputs()] == ["output"]
+
+
+# -----------------------------------------------------------------------------
+
+
+def _make_ceil_model(path: Path) -> None:
+    """Write a minimal ONNX model with a Ceil node (unpatched, single output)."""
+
+    inp = helper.make_tensor_value_info("input", TensorProto.FLOAT, [None])
+    out = helper.make_tensor_value_info("output", TensorProto.FLOAT, [None])
+    ceil_node = helper.make_node("Ceil", ["input"], ["w_ceil"])
+    identity_node = helper.make_node("Identity", ["w_ceil"], ["output"])
+    graph = helper.make_graph([ceil_node, identity_node], "ceil_graph", [inp], [out])
+    model = helper.make_model(graph, opset_imports=[helper.make_opsetid("", 15)])
+    model.ir_version = 8
+    onnx.checker.check_model(model)
+    onnx.save(model, str(path))
