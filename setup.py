@@ -68,6 +68,7 @@ setup(
             "scikit-build<1",
             "cmake>=3.18,<4",
             "ninja>=1,<2",
+            "onnx>=1,<2",  # for alignments
         ],
         "http": [
             "flask>=3,<4",

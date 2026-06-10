@@ -126,6 +126,7 @@ class PiperVoice:
         use_cuda: bool = False,
         espeak_data_dir: Union[str, Path] = ESPEAK_DATA_DIR,
         download_dir: Optional[Union[str, Path]] = None,
+        include_alignments: bool = False,
     ) -> "PiperVoice":
         """
         Load an ONNX model and config.
@@ -135,6 +136,9 @@ class PiperVoice:
         :param use_cuda: True if CUDA (GPU) should be used instead of CPU.
         :param espeak_data_dir: Path to espeak-ng data dir (defaults to internal data).
         :param download_dir: Path to download resources (defaults to current directory).
+        :param include_alignments: If True, patch the model in memory (requires the
+            onnx package) so phoneme/audio alignments are available even if the model
+            file has not been patched with piper.patch_voice_with_alignment.
         :return: Voice object.
         """
         if config_path is None:
@@ -159,10 +163,35 @@ class PiperVoice:
         if download_dir is None:
             download_dir = Path.cwd()
 
+        # By default, load the model directly from its path. To expose alignments
+        # without writing a patched model to disk, load and patch the model in
+        # memory and hand the serialized bytes to onnxruntime.
+        model_or_path: Union[str, bytes] = str(model_path)
+        if include_alignments:
+            try:
+                import onnx
+
+                from .patch_voice_with_alignment import add_alignment_output
+
+                model = onnx.load(str(model_path))
+                tensor_name = add_alignment_output(model)
+                model_or_path = model.SerializeToString()
+                _LOGGER.debug(
+                    "Patched model in memory for alignments (tensor=%s)", tensor_name
+                )
+            except ImportError:
+                _LOGGER.warning(
+                    "The onnx package is required for include_alignments. "
+                    "Install it with: pip install piper-tts[alignment]"
+                )
+            except ValueError as error:
+                # Tensor not found or model already patched: use it as-is.
+                _LOGGER.debug("Not patching model for alignments: %s", error)
+
         return PiperVoice(
             config=PiperConfig.from_dict(config_dict),
             session=onnxruntime.InferenceSession(
-                str(model_path),
+                model_or_path,
                 sess_options=onnxruntime.SessionOptions(),
                 providers=providers,
             ),

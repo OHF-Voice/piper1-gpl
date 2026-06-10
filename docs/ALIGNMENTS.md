@@ -13,6 +13,16 @@ python3 -m piper.patch_voice_with_alignment /path/to/model.onnx
 
 This requires the `onnx` Python package to be installed (not to be confused with `onnxruntime`). After patching, the `onnx` package is no longer required. Patched ONNX models should still work fine with existing Piper installations.
 
+### Patching at Load Time
+
+Alternatively, you can patch a voice in memory when loading it, without writing a modified model to disk:
+
+``` python
+voice = PiperVoice.load("/path/to/model.onnx", include_alignments=True)
+```
+
+This also requires the `onnx` package (install with `pip install piper-tts[alignment]`), but it leaves the original `.onnx` file untouched. If the model is already patched, or the `onnx` package is unavailable, the voice loads normally and alignments are simply unavailable.
+
 ## Python API
 
 The `AudioChunk` class has been extended with several new fields:
