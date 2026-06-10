@@ -72,7 +72,7 @@ class VitsDataModule(L.LightningDataModule):
         phoneme_type: Optional[str] = None,
         dataset_type: Union[str, DatasetType] = DatasetType.TEXT.value,
         phonemes_path: Optional[Union[str, Path]] = None,
-        vowel_clusters: Optional[List[List[str]]] = None,
+        vowel_clusters: Optional[str] = None,
     ) -> None:
         super().__init__()
 
@@ -131,8 +131,11 @@ class VitsDataModule(L.LightningDataModule):
         if phonemes_path is not None:
             self.phonemes_path = Path(phonemes_path)
 
-        # diphthongs
-        self.vowel_clusters = vowel_clusters
+        # (diphthongs)
+        # Expecting [["<vowel>", "<vowel>"], ...]
+        self.vowel_clusters: Optional[List[List[str]]] = None
+        if vowel_clusters:
+            self.vowel_clusters = json.loads(vowel_clusters)
 
     def prepare_data(self):
         self.cache_dir.mkdir(parents=True, exist_ok=True)
