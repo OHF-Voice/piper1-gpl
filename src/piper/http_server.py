@@ -4,12 +4,13 @@ import argparse
 import io
 import json
 import logging
+import time
 import wave
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from urllib.request import urlopen
 
-from flask import Flask, request
+from flask import Flask, render_template, request
 
 from . import PiperVoice, SynthesisConfig
 from .download_voices import VOICES_JSON, download_voice
@@ -97,11 +98,53 @@ def main() -> None:
     default_model_id = model_path.name.rstrip(".onnx")
 
     # Load voice
-    default_voice = PiperVoice.load(model_path, use_cuda=args.cuda)
+    default_voice = PiperVoice.load(
+        model_path, use_cuda=args.cuda, include_alignments=True
+    )
     loaded_voices: Dict[str, PiperVoice] = {default_model_id: default_voice}
 
-    # Create web server
-    app = Flask(__name__)
+    # Create web server.
+    # Images live in the "img" directory and are served under "/img".
+    app = Flask(__name__, static_folder="img", static_url_path="/img")
+
+    # Info about the most recently synthesized utterance (for the web page).
+    last_synthesis: Dict[str, Any] = {}
+
+    @app.route("/", methods=["GET"])
+    def app_index() -> str:
+        """Web page for testing a voice in the browser."""
+        return render_template("index.html")
+
+    @app.route("/info", methods=["GET"])
+    def app_info() -> Dict[str, Any]:
+        """Info about the current voice and most recently synthesized utterance.
+
+        Outputs a JSON object with the format:
+        {
+          "voice": {
+            "name": "<voice name>",
+            "language": "<espeak voice/alphabet>",
+            "num_speakers": <number of speakers>
+          },
+          "last": {                            (null until something is synthesized)
+            "text": "<synthesized text>",
+            "synthesize_seconds": <wall-clock synthesis time>,
+            "phonemes": ["<phoneme>", ...],
+            "alignments": [
+              { "phoneme": "<phoneme>", "seconds": <duration> },
+              ...
+            ]
+          }
+        }
+        """
+        return {
+            "voice": {
+                "name": default_model_id,
+                "language": default_voice.config.espeak_voice,
+                "num_speakers": default_voice.config.num_speakers,
+            },
+            "last": last_synthesis or None,
+        }
 
     @app.route("/voices", methods=["GET"])
     def app_voices() -> Dict[str, Any]:
@@ -170,7 +213,7 @@ def main() -> None:
 
         return model_id
 
-    @app.route("/", methods=["POST"])
+    @app.route("/synthesize", methods=["POST"])
     def app_synthesize() -> bytes:
         """Synthesize audio from text.
 
@@ -259,11 +302,16 @@ def main() -> None:
         )
 
         _LOGGER.debug("Synthesizing text: '%s' with config=%s", text, syn_config)
+        phonemes: List[str] = []
+        alignments: List[Dict[str, Any]] = []
+        start_time = time.monotonic()
         with io.BytesIO() as wav_io:
             wav_file: wave.Wave_write = wave.open(wav_io, "wb")
             with wav_file:
                 wav_params_set = False
-                for i, audio_chunk in enumerate(voice.synthesize(text, syn_config)):
+                for i, audio_chunk in enumerate(
+                    voice.synthesize(text, syn_config, include_alignments=True)
+                ):
                     if not wav_params_set:
                         wav_file.setframerate(audio_chunk.sample_rate)
                         wav_file.setsampwidth(audio_chunk.sample_width)
@@ -280,6 +328,26 @@ def main() -> None:
                         )
 
                     wav_file.writeframes(audio_chunk.audio_int16_bytes)
+
+                    # Collect phonemes/alignments for the web page
+                    phonemes.extend(audio_chunk.phonemes)
+                    for alignment in audio_chunk.phoneme_alignments or []:
+                        alignments.append(
+                            {
+                                "phoneme": alignment.phoneme,
+                                "seconds": alignment.num_samples
+                                / audio_chunk.sample_rate,
+                            }
+                        )
+
+            synthesize_seconds = time.monotonic() - start_time
+            last_synthesis.clear()
+            last_synthesis.update(
+                text=text,
+                synthesize_seconds=synthesize_seconds,
+                phonemes=phonemes,
+                alignments=alignments,
+            )
 
             return wav_io.getvalue()
 

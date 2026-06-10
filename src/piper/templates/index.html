@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Piper Web Server</title>
+    <style type="text/css">
+      body {
+          margin: auto;
+          max-width: 90%;
+      }
+
+      #textInput {
+          width: 100%;
+      }
+
+      #logo {
+          margin-left: -30px;
+          height: 6em;
+      }
+
+      #sponsored {
+          position: absolute;
+          right: 75px;
+          top: 20px;
+      }
+
+      #buttonSpeak {
+          font-size: 1.25em;
+          padding: 5px 8px 5px 8px;
+      }
+
+      #divSpeak {
+          margin-top: 10px;
+      }
+
+      #divSpeak > audio {
+          vertical-align: bottom;
+          margin-left: 10px;
+      }
+
+      section {
+          margin-top: 1.5em;
+      }
+
+      table {
+          border-collapse: collapse;
+      }
+
+      th, td {
+          border: 1px solid #ccc;
+          padding: 2px 10px;
+          text-align: left;
+      }
+
+      #phonemes {
+          font-size: 1.25em;
+      }
+
+      .muted {
+          color: #888;
+      }
+
+      /* Phoneme alignment timeline */
+      #timeline {
+          display: flex;
+          width: 100%;
+          height: 4em;
+          border: 1px solid #ccc;
+          border-radius: 4px;
+          overflow: hidden;
+          font-family: monospace;
+          user-select: none;
+      }
+
+      .segment {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          min-width: 1px;
+          box-sizing: border-box;
+          border-right: 1px solid #fff;
+          background-color: #d7e3fc;
+          cursor: pointer;
+          overflow: hidden;
+          white-space: nowrap;
+          font-size: 1.1em;
+          transition: background-color 0.05s linear;
+      }
+
+      .segment:last-child {
+          border-right: none;
+      }
+
+      .segment:hover {
+          background-color: #b8ccf7;
+      }
+
+      /* Currently-playing phoneme */
+      .segment.active {
+          background-color: #ffb703;
+      }
+
+      /* Special tokens: BOS (^), EOS ($), PAD (_), word break ( ) */
+      .segment.special {
+          background-color: #eee;
+          color: #999;
+      }
+
+      .segment.special.active {
+          background-color: #ffd166;
+      }
+
+      #timelineScale {
+          display: flex;
+          justify-content: space-between;
+          font-size: 0.8em;
+          color: #888;
+          margin-top: 2px;
+      }
+
+      #frog {
+          display: block;
+          width: 260px;
+          max-width: 100%;
+          height: auto;
+      }
+    </style>
+</head>
+<body>
+    <a href="https://github.com/rhasspy/piper" title="Piper TTS">
+      <img id="logo" src="{{ url_for('static', filename='logo.png') }}" alt="Piper logo">
+    </a>
+    <a href="https://www.openhomefoundation.org/" title="A library from the Open Home Foundation">
+      <img id="sponsored" src="{{ url_for('static', filename='ohf-library.png') }}" alt="A library from the Open Home Foundation">
+    </a>
+
+    <br />
+
+    <textarea id="textInput" rows=5 placeholder="Enter text to speak..."></textarea>
+
+    <div id="divSpeak">
+      <button id="buttonSpeak">Speak</button>
+      <audio id="audioTTS" controls></audio>
+    </div>
+
+    <section id="sectionFrog" style="display: none;">
+      <svg id="frog" viewBox="0 0 220 210" xmlns="http://www.w3.org/2000/svg">
+        <!-- Head -->
+        <ellipse cx="110" cy="125" rx="92" ry="72" fill="#7cb342" stroke="#4e8a37" stroke-width="3"/>
+        <!-- Belly highlight -->
+        <ellipse cx="110" cy="145" rx="70" ry="46" fill="#9ccc65"/>
+        <!-- Eye bulges -->
+        <circle cx="65" cy="42" r="30" fill="#7cb342" stroke="#4e8a37" stroke-width="3"/>
+        <circle cx="155" cy="42" r="30" fill="#7cb342" stroke="#4e8a37" stroke-width="3"/>
+        <!-- Eyeballs -->
+        <circle cx="65" cy="40" r="17" fill="#ffffff"/>
+        <circle cx="155" cy="40" r="17" fill="#ffffff"/>
+        <circle cx="69" cy="42" r="8" fill="#222222"/>
+        <circle cx="151" cy="42" r="8" fill="#222222"/>
+        <!-- Nostrils -->
+        <ellipse cx="99" cy="103" rx="3.5" ry="2.5" fill="#3e6b29"/>
+        <ellipse cx="121" cy="103" rx="3.5" ry="2.5" fill="#3e6b29"/>
+        <!-- Mouth (only this group changes) -->
+        <g id="mouthGroup">
+          <ellipse id="mouthOpening" cx="110" cy="150" rx="0" ry="0" fill="#7a1f2b"/>
+          <ellipse id="tongue" cx="110" cy="150" rx="0" ry="0" fill="#e26a6a" style="display: none;"/>
+          <rect id="teeth" x="0" y="0" width="0" height="0" rx="1.5" fill="#ffffff" style="display: none;"/>
+          <path id="lipLine" d="M40 150 Q110 164 180 150" fill="none" stroke="#3e6b29" stroke-width="4" stroke-linecap="round"/>
+        </g>
+      </svg>
+    </section>
+
+    <section id="sectionLast">
+      <p id="lastEmpty" class="muted">Nothing synthesized yet.</p>
+      <div id="lastInfo" style="display: none;">
+        <p>Synthesized in <strong id="synthTime"></strong> seconds.</p>
+        <div id="alignmentsViz">
+          <p class="muted" style="margin-bottom: 4px;">
+            Click a phoneme to play from there
+          </p>
+          <div id="timeline"></div>
+          <div id="timelineScale">
+            <span>0.000s</span>
+            <span id="timelineTotal"></span>
+          </div>
+        </div>
+        <p id="noAlignments" class="muted" style="display: none;">
+          Alignments are not available for this voice.
+        </p>
+      </div>
+    </section>
+
+
+    <section id="sectionVoice">
+      <h2>Voice</h2>
+      <table>
+        <tr><th>Name</th><td id="voiceName"></td></tr>
+        <tr><th>Language</th><td id="voiceLanguage"></td></tr>
+        <tr><th>Speakers</th><td id="voiceSpeakers"></td></tr>
+      </table>
+    </section>
+
+    <script type="text/javascript">
+      const textInput = document.getElementById("textInput");
+      const buttonSpeak = document.getElementById("buttonSpeak");
+      const audioTTS = document.getElementById("audioTTS");
+      const timeline = document.getElementById("timeline");
+
+      // Segment DOM elements + their [start, end) times, for playback highlighting
+      let segments = [];
+
+      // Human-readable labels for special tokens
+      const SPECIAL_LABELS = { "^": "^", "$": "$", "_": "_", " ": "␣" };
+
+      // --- Talking frog (viseme) mouth shapes ---
+      // The classic Hanna-Barbera / Preston Blair A-H + X mouth set, drawn as an
+      // ellipse "opening" whose size varies, plus optional teeth/tongue.
+      const VISEMES = {
+          X: { rx: 0, ry: 0 },                    // rest / silence (closed)
+          A: { rx: 0, ry: 0 },                    // p b m (lips pressed)
+          B: { rx: 42, ry: 6, teeth: true },      // most consonants, "ee"
+          C: { rx: 40, ry: 17 },                  // "eh", "ae"
+          D: { rx: 44, ry: 31, tongue: true },    // "ah" (wide open)
+          E: { rx: 26, ry: 23 },                  // "oh", "er" (rounded)
+          F: { rx: 14, ry: 14 },                  // "oo", "w" (puckered)
+          G: { rx: 40, ry: 8, teeth: true },      // f v (teeth on lip)
+          H: { rx: 34, ry: 23, tongue: true },    // l (tongue visible)
+      };
+
+      // Map espeak IPA phonemes to a viseme. null = keep the previous shape
+      // (stress/length markers), missing = generic open mouth ("B").
+      const PHONEME_TO_VISEME = {
+          // Vowels. High front vowels (ee/ih) open to "C" rather than the
+          // consonant shape "B" so the mouth visibly moves on every vowel.
+          "i": "C", "ɪ": "C", "y": "C",
+          "e": "C", "ɛ": "C", "æ": "C", "ʌ": "C", "ə": "C", "ɐ": "C",
+          "a": "D", "ɑ": "D", "ɒ": "D",
+          "ɔ": "E", "o": "E", "ɚ": "E", "ɜ": "E", "ɝ": "E", "ɵ": "E",
+          "ʊ": "F", "u": "F", "ʉ": "F",
+          // Approximants / glides
+          "w": "F", "j": "B", "r": "B", "ɹ": "B", "l": "H", "ɫ": "H",
+          // Nasals
+          "m": "A", "n": "B", "ŋ": "B",
+          // Plosives
+          "p": "A", "b": "A", "t": "B", "d": "B", "k": "B", "g": "B", "ɡ": "B", "ʔ": "X",
+          // Fricatives / affricates
+          "f": "G", "v": "G", "θ": "B", "ð": "B", "s": "B", "z": "B",
+          "ʃ": "B", "ʒ": "B", "h": "B", "x": "B", "ʧ": "B", "ʤ": "B",
+          // Stress / length markers: keep the current shape
+          "ˈ": null, "ˌ": null, "ː": null, "ˑ": null,
+          // Silence-ish tokens -> closed
+          " ": "X", "_": "X", "^": "X", "$": "X",
+          ".": "X", ",": "X", "!": "X", "?": "X", ";": "X", ":": "X",
+      };
+
+      let lastViseme = "X";
+
+      // The resting grin line flickers if shown on every brief closed phoneme
+      // (p/b/m, gaps). Only show it once the mouth has stayed closed for a
+      // quiet interval; hide it immediately whenever the mouth opens.
+      const GRIN_DELAY_MS = 350;
+      let grinTimer = null;
+
+      function showGrin(visible) {
+          document.getElementById("lipLine").style.display = visible ? "" : "none";
+      }
+
+      function cancelGrin() {
+          if (grinTimer !== null) {
+              clearTimeout(grinTimer);
+              grinTimer = null;
+          }
+      }
+
+      function scheduleGrin() {
+          cancelGrin();
+          grinTimer = setTimeout(() => {
+              grinTimer = null;
+              showGrin(true);
+          }, GRIN_DELAY_MS);
+      }
+
+      function setMouth(viseme) {
+          const v = VISEMES[viseme] || VISEMES.B;
+          const cx = 110;
+          const cy = 150;
+
+          const opening = document.getElementById("mouthOpening");
+          opening.setAttribute("rx", v.rx);
+          opening.setAttribute("ry", v.ry);
+
+          // The grin line represents the closed mouth. Hide it immediately when
+          // the mouth opens; only restore it after a quiet interval of staying
+          // closed, so brief closed phonemes between sounds don't flicker it.
+          if (v.ry > 0) {
+              cancelGrin();
+              showGrin(false);
+          } else {
+              showGrin(false);
+              scheduleGrin();
+          }
+
+          const teeth = document.getElementById("teeth");
+          if (v.teeth && v.ry > 0) {
+              const tw = v.rx * 1.4;
+              const th = Math.min(6, v.ry);
+              teeth.setAttribute("x", cx - tw / 2);
+              teeth.setAttribute("y", cy - v.ry);
+              teeth.setAttribute("width", tw);
+              teeth.setAttribute("height", th);
+              teeth.style.display = "";
+          } else {
+              teeth.style.display = "none";
+          }
+
+          const tongue = document.getElementById("tongue");
+          if (v.tongue && v.ry > 0) {
+              tongue.setAttribute("cx", cx);
+              tongue.setAttribute("cy", cy + v.ry * 0.45);
+              tongue.setAttribute("rx", v.rx * 0.55);
+              tongue.setAttribute("ry", v.ry * 0.3);
+              tongue.style.display = "";
+          } else {
+              tongue.style.display = "none";
+          }
+
+          lastViseme = viseme;
+      }
+
+      // Closing the mouth is deferred briefly so it holds the current open frame
+      // through short gaps/closures instead of snapping shut between phonemes.
+      // Opening shapes are applied immediately and cancel any pending close.
+      const CLOSE_DELAY_MS = 150;
+      let closeTimer = null;
+
+      function cancelClose() {
+          if (closeTimer !== null) {
+              clearTimeout(closeTimer);
+              closeTimer = null;
+          }
+      }
+
+      function applyViseme(viseme) {
+          const v = VISEMES[viseme] || VISEMES.B;
+          if (v.ry > 0) {
+              // Opening shape: show it right away
+              cancelClose();
+              if (viseme !== lastViseme) {
+                  setMouth(viseme);
+              }
+          } else if (viseme !== lastViseme && closeTimer === null) {
+              // Closing shape: hold the current frame for a moment first
+              closeTimer = setTimeout(() => {
+                  closeTimer = null;
+                  setMouth(viseme);
+              }, CLOSE_DELAY_MS);
+          }
+      }
+
+      function renderTimeline(alignments) {
+          timeline.innerHTML = "";
+          segments = [];
+
+          const total = alignments.reduce((sum, a) => sum + a.seconds, 0);
+          document.getElementById("timelineTotal").textContent =
+              total.toFixed(3) + "s";
+
+          let start = 0;
+          for (const alignment of alignments) {
+              const isSpecial = alignment.phoneme in SPECIAL_LABELS;
+              const segment = document.createElement("div");
+              segment.className = "segment" + (isSpecial ? " special" : "");
+              segment.style.width = total > 0
+                  ? (alignment.seconds / total) * 100 + "%"
+                  : "0";
+              segment.textContent = isSpecial
+                  ? SPECIAL_LABELS[alignment.phoneme]
+                  : alignment.phoneme;
+              segment.title =
+                  alignment.phoneme + " — " + alignment.seconds.toFixed(3) + "s";
+
+              const segStart = start;
+              segment.addEventListener("click", () => {
+                  audioTTS.currentTime = segStart;
+                  audioTTS.play();
+              });
+
+              timeline.appendChild(segment);
+              segments.push({
+                  el: segment,
+                  phoneme: alignment.phoneme,
+                  start: segStart,
+                  end: segStart + alignment.seconds,
+              });
+              start += alignment.seconds;
+          }
+
+          cancelClose();
+          setMouth("X");
+      }
+
+      // Highlight the phoneme that matches the audio's current playback time,
+      // and move the frog's mouth to the matching viseme.
+      function highlightCurrent() {
+          const t = audioTTS.currentTime;
+          let activePhoneme = null;
+          for (const segment of segments) {
+              const active = t >= segment.start && t < segment.end;
+              segment.el.classList.toggle("active", active);
+              if (active) {
+                  activePhoneme = segment.phoneme;
+              }
+          }
+
+          // Resolve the viseme: null mapping keeps the previous shape (stress/
+          // length markers), no active phoneme means rest.
+          let viseme = "X";
+          if (activePhoneme !== null) {
+              const mapped = PHONEME_TO_VISEME[activePhoneme];
+              if (mapped === null) {
+                  viseme = lastViseme;
+              } else if (mapped === undefined) {
+                  viseme = "B";
+              } else {
+                  viseme = mapped;
+              }
+          }
+
+          applyViseme(viseme);
+      }
+
+      // The browser's "timeupdate" event only fires every ~250ms, which is too
+      // coarse for short phonemes (we'd update once every 4-5 of them). Instead,
+      // poll currentTime every animation frame (~60fps) while audio is playing.
+      let rafId = null;
+
+      function trackPlayback() {
+          highlightCurrent();
+          if (!audioTTS.paused && !audioTTS.ended) {
+              rafId = requestAnimationFrame(trackPlayback);
+          } else {
+              rafId = null;
+          }
+      }
+
+      function startTracking() {
+          if (rafId === null) {
+              rafId = requestAnimationFrame(trackPlayback);
+          }
+      }
+
+      audioTTS.addEventListener("play", startTracking);
+      audioTTS.addEventListener("playing", startTracking);
+      // Still update for scrubbing/pausing, when no frame loop is running
+      audioTTS.addEventListener("seeked", highlightCurrent);
+      audioTTS.addEventListener("pause", highlightCurrent);
+      audioTTS.addEventListener("ended", () => {
+          for (const segment of segments) {
+              segment.el.classList.remove("active");
+          }
+          applyViseme("X");
+      });
+
+      async function loadInfo() {
+          const response = await fetch("info");
+          if (!response.ok) {
+              return;
+          }
+
+          const info = await response.json();
+
+          // Voice section
+          document.getElementById("voiceName").textContent = info.voice.name;
+          document.getElementById("voiceLanguage").textContent = info.voice.language;
+          document.getElementById("voiceSpeakers").textContent =
+              info.voice.num_speakers;
+
+          // Last utterance section
+          const last = info.last;
+          const lastEmpty = document.getElementById("lastEmpty");
+          const lastInfo = document.getElementById("lastInfo");
+          if (!last) {
+              lastEmpty.style.display = "";
+              lastInfo.style.display = "none";
+              return;
+          }
+
+          lastEmpty.style.display = "none";
+          lastInfo.style.display = "";
+
+          document.getElementById("synthTime").textContent =
+              last.synthesize_seconds.toFixed(3);
+
+          // Alignments are only available for supported voice models
+          const hasAlignments = last.alignments.length > 0;
+          document.getElementById("alignmentsViz").style.display =
+              hasAlignments ? "" : "none";
+          document.getElementById("noAlignments").style.display =
+              hasAlignments ? "none" : "";
+          document.getElementById("sectionFrog").style.display =
+              hasAlignments ? "" : "none";
+
+          if (hasAlignments) {
+              renderTimeline(last.alignments);
+          }
+      }
+
+      async function speak() {
+          const text = textInput.value.trim();
+          if (!text) {
+              return;
+          }
+
+          buttonSpeak.disabled = true;
+          buttonSpeak.textContent = "Synthesizing...";
+
+          try {
+              const response = await fetch("synthesize", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ text: text }),
+              });
+
+              if (!response.ok) {
+                  throw new Error("Synthesis failed: " + response.status);
+              }
+
+              const blob = await response.blob();
+
+              // Revoke previous object URL to avoid leaking memory
+              if (audioTTS.dataset.objectUrl) {
+                  URL.revokeObjectURL(audioTTS.dataset.objectUrl);
+              }
+
+              const objectUrl = URL.createObjectURL(blob);
+              audioTTS.dataset.objectUrl = objectUrl;
+              audioTTS.src = objectUrl;
+              audioTTS.play();
+
+              // Refresh voice/utterance info
+              await loadInfo();
+          } catch (err) {
+              alert(err);
+          } finally {
+              buttonSpeak.disabled = false;
+              buttonSpeak.textContent = "Speak";
+          }
+      }
+
+      buttonSpeak.addEventListener("click", speak);
+
+      // Populate the voice section on page load
+      loadInfo();
+    </script>
+</body>
+</html>

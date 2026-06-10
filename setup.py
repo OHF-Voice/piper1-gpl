@@ -21,6 +21,15 @@ TASHKEEL_DATA_FILES = [
         "hint_id_map.json",
     )
 ]
+# Web page and images for the HTTP server
+HTTP_DATA_FILES = [
+    f.relative_to(MODULE_DIR)
+    for f in itertools.chain(
+        (MODULE_DIR / "templates").rglob("*"),
+        (MODULE_DIR / "img").rglob("*"),
+    )
+    if f.is_file()
+]
 
 setup(
     name="piper-tts",
@@ -91,7 +100,10 @@ setup(
         "piper": [
             str(p)
             for p in itertools.chain(
-                PIPER_DATA_FILES, ESPEAK_NG_DATA_FILES, TASHKEEL_DATA_FILES
+                PIPER_DATA_FILES,
+                ESPEAK_NG_DATA_FILES,
+                TASHKEEL_DATA_FILES,
+                HTTP_DATA_FILES,
             )
         ],
     },
