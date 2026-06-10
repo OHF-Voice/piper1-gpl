@@ -1,5 +1,7 @@
 from piper.phonemize_espeak import EspeakPhonemizer
 
+from . import EN_US_VOWEL_CLUSTERS
+
 
 def test_phonemize() -> None:
     """Sanity check for phonemizer."""
@@ -9,7 +11,7 @@ def test_phonemize() -> None:
     ]
 
 
-def test_merge_vowels() -> None:
+def test_vowel_clusters() -> None:
     """Test merging vowel clusters (diphthongs)."""
     phonemizer = EspeakPhonemizer()
 
@@ -17,7 +19,7 @@ def test_merge_vowels() -> None:
     assert phonemizer.phonemize("en-us", "my") == [
         ["m", "ˈ", "a", "ɪ"],
     ]
-    assert phonemizer.phonemize("en-us", "my", merge_vowels=True) == [
+    assert phonemizer.phonemize("en-us", "my", vowel_clusters=EN_US_VOWEL_CLUSTERS) == [
         ["m", "ˈ", "aɪ"],
     ]
 
@@ -25,7 +27,9 @@ def test_merge_vowels() -> None:
     assert phonemizer.phonemize("en-us", "cow") == [
         ["k", "ˈ", "a", "ʊ"],
     ]
-    assert phonemizer.phonemize("en-us", "cow", merge_vowels=True) == [
+    assert phonemizer.phonemize(
+        "en-us", "cow", vowel_clusters=EN_US_VOWEL_CLUSTERS
+    ) == [
         ["k", "ˈ", "aʊ"],
     ]
 
@@ -33,7 +37,9 @@ def test_merge_vowels() -> None:
     assert phonemizer.phonemize("en-us", "toy") == [
         ["t", "ˈ", "ɔ", "ɪ"],
     ]
-    assert phonemizer.phonemize("en-us", "toy", merge_vowels=True) == [
+    assert phonemizer.phonemize(
+        "en-us", "toy", vowel_clusters=EN_US_VOWEL_CLUSTERS
+    ) == [
         ["t", "ˈ", "ɔɪ"],
     ]
 
@@ -41,7 +47,9 @@ def test_merge_vowels() -> None:
     assert phonemizer.phonemize("en-us", "day") == [
         ["d", "ˈ", "e", "ɪ"],
     ]
-    assert phonemizer.phonemize("en-us", "day", merge_vowels=True) == [
+    assert phonemizer.phonemize(
+        "en-us", "day", vowel_clusters=EN_US_VOWEL_CLUSTERS
+    ) == [
         ["d", "ˈ", "eɪ"],
     ]
 
@@ -49,6 +57,6 @@ def test_merge_vowels() -> None:
     assert phonemizer.phonemize("en-us", "no") == [
         ["n", "ˈ", "o", "ʊ"],
     ]
-    assert phonemizer.phonemize("en-us", "no", merge_vowels=True) == [
+    assert phonemizer.phonemize("en-us", "no", vowel_clusters=EN_US_VOWEL_CLUSTERS) == [
         ["n", "ˈ", "oʊ"],
     ]

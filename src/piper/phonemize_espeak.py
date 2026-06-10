@@ -3,22 +3,12 @@
 import re
 import unicodedata
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Set, Tuple, Union
 
 _DIR = Path(__file__).parent
 ESPEAK_DATA_DIR = _DIR / "espeak-ng-data"
 
 from collections.abc import Sequence
-
-VOWEL_CLUSTERS: Dict[str, Dict[Tuple[str, ...], str]] = {
-    "en-us": {
-        ("a", "ɪ"): "aɪ",
-        ("a", "ʊ"): "aʊ",
-        ("ɔ", "ɪ"): "ɔɪ",
-        ("e", "ɪ"): "eɪ",
-        ("o", "ʊ"): "oʊ",
-    },
-}
 
 
 class EspeakPhonemizer:
@@ -31,7 +21,10 @@ class EspeakPhonemizer:
         espeakbridge.initialize(str(espeak_data_dir))
 
     def phonemize(
-        self, voice: str, text: str, merge_vowels: bool = False
+        self,
+        voice: str,
+        text: str,
+        vowel_clusters: Optional[Set[Tuple[str, ...]]] = None,
     ) -> list[list[str]]:
         """Text to phonemes grouped by sentence."""
         from . import espeakbridge  # avoid circular import
@@ -40,10 +33,6 @@ class EspeakPhonemizer:
 
         all_phonemes: list[list[str]] = []
         sentence_phonemes: list[str] = []
-
-        vowel_clusters: Optional[Dict[Tuple[str, ...], str]] = None
-        if merge_vowels:
-            vowel_clusters = VOWEL_CLUSTERS.get(voice)
 
         clause_phonemes = espeakbridge.get_phonemes(text)
         for phonemes_str, terminator_str, end_of_sentence in clause_phonemes:
@@ -77,7 +66,7 @@ class EspeakPhonemizer:
 
 
 def _merge_known_vowel_clusters(
-    phones: Sequence[str], clusters: Dict[Tuple[str, ...], str]
+    phones: Sequence[str], clusters: Set[Tuple[str, ...]]
 ) -> List[str]:
     """Merge adjacent recognized vowel clusters."""
     max_len = max(len(k) for k in clusters)
@@ -94,7 +83,7 @@ def _merge_known_vowel_clusters(
                 break
 
         if match is not None:
-            out.append(clusters[match])
+            out.append("".join(match))
             i += len(match)
         else:
             out.append(phones[i])

@@ -72,7 +72,7 @@ class VitsDataModule(L.LightningDataModule):
         phoneme_type: Optional[str] = None,
         dataset_type: Union[str, DatasetType] = DatasetType.TEXT.value,
         phonemes_path: Optional[Union[str, Path]] = None,
-        merge_vowels: bool = False,
+        vowel_clusters: Optional[List[List[str]]] = None,
     ) -> None:
         super().__init__()
 
@@ -131,8 +131,8 @@ class VitsDataModule(L.LightningDataModule):
         if phonemes_path is not None:
             self.phonemes_path = Path(phonemes_path)
 
-        # Merge vowel clusters (diphthongs)
-        self.merge_vowels = merge_vowels
+        # diphthongs
+        self.vowel_clusters = vowel_clusters
 
     def prepare_data(self):
         self.cache_dir.mkdir(parents=True, exist_ok=True)
@@ -170,10 +170,14 @@ class VitsDataModule(L.LightningDataModule):
             phoneme_id_map=phoneme_id_map,
             phoneme_type=self.phoneme_type,
             piper_version="1.5.0",
-            merge_vowels=self.merge_vowels,
+            vowel_clusters=(
+                {tuple(vc) for vc in self.vowel_clusters}
+                if self.vowel_clusters
+                else None
+            ),
         )
 
-        if self.merge_vowels:
+        if self.vowel_clusters:
             _LOGGER.info(
                 "Vowel clusters will be merged. This voice will only work with Piper 1.5 or higher."
             )

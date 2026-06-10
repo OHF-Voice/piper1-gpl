@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Final, Mapping, Optional, Sequence
+from typing import Any, Final, Mapping, Optional, Sequence, Set, Tuple
 
 DEFAULT_NOISE_SCALE: Final = 0.667
 DEFAULT_LENGTH_SCALE: Final = 1.0
@@ -51,13 +51,18 @@ class PiperConfig:
 
     hop_length: int = DEFAULT_HOP_LENGTH
 
-    merge_vowels: bool = False
-    """Merge vowel clusters (espeak only)"""
+    vowel_clusters: Optional[Set[Tuple[str]]] = None
+    """Clusters of vowels to merge into a single 'phoneme'.
+
+    Example: ("a", "ɪ") -> "aɪ"
+    The final cluster phoneme must be present in the id map.
+    """
 
     @staticmethod
     def from_dict(config: dict[str, Any]) -> "PiperConfig":
         """Load configuration from a dictionary."""
         inference = config.get("inference", {})
+        vowel_clusters = config.get("vowel_clusters", {})
 
         return PiperConfig(
             num_symbols=config["num_symbols"],
@@ -75,6 +80,10 @@ class PiperConfig:
             piper_version=config.get("piper_version"),
             #
             hop_length=config.get("hop_length", DEFAULT_HOP_LENGTH),
+            #
+            vowel_clusters=(
+                {tuple(vc) for vc in vowel_clusters} if vowel_clusters else None
+            ),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -101,6 +110,11 @@ class PiperConfig:
 
         if self.piper_version:
             config_dict["piper_version"] = self.piper_version
+
+        if self.vowel_clusters:
+            config_dict["vowel_clusters"] = [
+                list(vc) for vc in sorted(self.vowel_clusters)
+            ]
 
         return config_dict
 

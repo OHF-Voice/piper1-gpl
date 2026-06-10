@@ -14,6 +14,8 @@ from piper import PiperVoice
 from piper.const import BOS, EOS
 from piper.phonemize_espeak import EspeakPhonemizer
 
+from . import EN_US_VOWEL_CLUSTERS
+
 _DIR = Path(__file__).parent
 _TESTS_DIR = _DIR
 _TEST_VOICE = _TESTS_DIR / "test_voice.onnx"
@@ -472,7 +474,7 @@ def _make_ceil_model(path: Path) -> None:
 def test_phonemize_with_vowel_clusters() -> None:
     """Test phonemizing with vowel clusters."""
     voice = PiperVoice.load(_TEST_VOICE)
-    voice.config.merge_vowels = True
+    voice.config.vowel_clusters = EN_US_VOWEL_CLUSTERS
 
     phonemes = voice.phonemize("my cow toy day no")
     assert phonemes == [
