@@ -51,7 +51,7 @@ class PiperConfig:
 
     hop_length: int = DEFAULT_HOP_LENGTH
 
-    vowel_clusters: Optional[Set[Tuple[str]]] = None
+    vowel_clusters: Optional[Set[Tuple[str, ...]]] = None
     """Clusters of vowels to merge into a single 'phoneme'.
 
     Example: ("a", "ɪ") -> "aɪ"

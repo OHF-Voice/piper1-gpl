@@ -544,3 +544,38 @@ def test_phonemize_with_vowel_clusters() -> None:
             2,
         ]
     ]
+
+
+def test_training_phonemize_matches_inference_with_vowel_clusters() -> None:
+    """Training data prep must merge vowel clusters exactly like inference does.
+
+    Guards against the config recording clusters while the training-side
+    phonemizer leaves them unmerged (which would make the trained voice emit
+    diphthong ids it never saw during training).
+    """
+    import json
+
+    from piper.phonemize_espeak import EspeakPhonemizer
+    from piper.train.vits.dataset import VitsDataModule
+
+    data_module = VitsDataModule(
+        csv_path="dataset.csv",
+        cache_dir="cache",
+        espeak_voice="en-us",
+        config_path="config.json",
+        voice_name="test",
+        vowel_clusters=json.dumps([list(vc) for vc in EN_US_VOWEL_CLUSTERS]),
+    )
+
+    # JSON arg is parsed into the same set used at inference time.
+    assert data_module.vowel_clusters == EN_US_VOWEL_CLUSTERS
+
+    text = "my cow toy day no"
+    phonemizer = EspeakPhonemizer()
+    train_phonemes = phonemizer.phonemize(
+        "en-us", text, vowel_clusters=data_module.vowel_clusters
+    )
+    infer_phonemes = phonemizer.phonemize(
+        "en-us", text, vowel_clusters=EN_US_VOWEL_CLUSTERS
+    )
+    assert train_phonemes == infer_phonemes

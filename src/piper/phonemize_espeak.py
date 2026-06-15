@@ -60,6 +60,12 @@ class EspeakPhonemizer:
                 sentence_phonemes = []
 
         if sentence_phonemes:
+            # Text without a final sentence terminator
+            if vowel_clusters:
+                sentence_phonemes = _merge_known_vowel_clusters(
+                    sentence_phonemes, vowel_clusters
+                )
+
             all_phonemes.append(sentence_phonemes)
 
         return all_phonemes

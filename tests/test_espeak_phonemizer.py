@@ -60,3 +60,13 @@ def test_vowel_clusters() -> None:
     assert phonemizer.phonemize("en-us", "no", vowel_clusters=EN_US_VOWEL_CLUSTERS) == [
         ["n", "ˈ", "oʊ"],
     ]
+
+
+def test_vowel_clusters_without_terminator() -> None:
+    """Clusters are merged even when text has no final sentence terminator."""
+    phonemizer = EspeakPhonemizer()
+
+    # "my" with no punctuation still merges the trailing diphthong.
+    assert phonemizer.phonemize("en-us", "my", vowel_clusters=EN_US_VOWEL_CLUSTERS) == [
+        ["m", "ˈ", "aɪ"],
+    ]

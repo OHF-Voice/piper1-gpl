@@ -9,7 +9,7 @@ import unicodedata
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Union
+from typing import Dict, List, Optional, Sequence, Set, Tuple, Union
 
 import librosa
 import lightning as L
@@ -131,11 +131,11 @@ class VitsDataModule(L.LightningDataModule):
         if phonemes_path is not None:
             self.phonemes_path = Path(phonemes_path)
 
-        # (diphthongs)
+        # Vowel clusters to merge into single phonemes (diphthongs).
         # Expecting [["<vowel>", "<vowel>"], ...]
-        self.vowel_clusters: Optional[List[List[str]]] = None
+        self.vowel_clusters: Optional[Set[Tuple[str, ...]]] = None
         if vowel_clusters:
-            self.vowel_clusters = json.loads(vowel_clusters)
+            self.vowel_clusters = {tuple(vc) for vc in json.loads(vowel_clusters)}
 
     def prepare_data(self):
         self.cache_dir.mkdir(parents=True, exist_ok=True)
@@ -173,11 +173,7 @@ class VitsDataModule(L.LightningDataModule):
             phoneme_id_map=phoneme_id_map,
             phoneme_type=self.phoneme_type,
             piper_version="1.5.0",
-            vowel_clusters=(
-                {tuple(vc) for vc in self.vowel_clusters}
-                if self.vowel_clusters
-                else None
-            ),
+            vowel_clusters=self.vowel_clusters,
         )
 
         if self.vowel_clusters:
@@ -243,7 +239,9 @@ class VitsDataModule(L.LightningDataModule):
             phonemizer = EspeakPhonemizer()
 
             def phonemize(text: str) -> list[list[str]]:
-                return phonemizer.phonemize(self.espeak_voice, text)
+                return phonemizer.phonemize(
+                    self.espeak_voice, text, vowel_clusters=self.vowel_clusters
+                )
 
         vad = SileroVoiceActivityDetector()
 
