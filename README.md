@@ -28,6 +28,7 @@ The Open Home Foundation is looking for maintainers for Piper! If you're interes
 
 People/projects using Piper:
 
+* [VoxSherpa TTS](https://github.com/CodeBySonu95/VoxSherpa-TTS) - Offline Android TTS app using Piper via Sherpa-ONNX.
 * [Home Assistant](https://github.com/home-assistant/addons/blob/master/piper/README.md)
 * [NVDA - NonVisual Desktop Access](https://www.nvaccess.org/post/in-process-8th-may-2023/#voices)
 * [Image Captioning for the Visually Impaired and Blind: A Recipe for Low-Resource Languages](https://www.techrxiv.org/articles/preprint/Image_Captioning_for_the_Visually_Impaired_and_Blind_A_Recipe_for_Low-Resource_Languages/22133894)
