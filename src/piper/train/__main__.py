@@ -26,8 +26,17 @@ def main():
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.allow_tf32 = True
     torch.backends.cudnn.deterministic = False
+
+    trainer_defaults = {"max_epochs": -1}
+
+    # VITS has conditional code paths (e.g., SDP, speaker embeddings) that
+    # leave some parameters unused in certain steps. DDP needs to be told
+    # to detect these instead of raising an error.
+    if torch.cuda.device_count() > 1:
+        trainer_defaults["strategy"] = "ddp_find_unused_parameters_true"
+
     _cli = VitsLightningCLI(  # noqa: ignore=F841
-        VitsModel, VitsDataModule, trainer_defaults={"max_epochs": -1}
+        VitsModel, VitsDataModule, trainer_defaults=trainer_defaults
     )
 
 
