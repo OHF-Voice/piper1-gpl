@@ -14,7 +14,10 @@ set(ESPEAKNG_INSTALL_DIR ${CMAKE_BINARY_DIR}/espeak_ng-install)
 if(WIN32)
     # Special handling for Windows
     set(ESPEAKNG_STATIC_LIB ${ESPEAKNG_INSTALL_DIR}/lib/espeak-ng.lib)
-    set(UCD_STATIC_LIB ${ESPEAKNG_BUILD_DIR}/src/espeak_ng_external-build/src/ucd-tools/ucd.lib)
+    # For multi-config generators (Visual Studio), the library is in a config subdirectory
+    # For single-config generators (Ninja, Makefiles), the library is directly in ucd-tools
+    set(UCD_STATIC_LIB_MULTICONFIG ${ESPEAKNG_BUILD_DIR}/src/espeak_ng_external-build/src/ucd-tools/$<CONFIG>/ucd.lib)
+    set(UCD_STATIC_LIB_SINGLECONFIG ${ESPEAKNG_BUILD_DIR}/src/espeak_ng_external-build/src/ucd-tools/ucd.lib)
 else()
     set(ESPEAKNG_STATIC_LIB ${ESPEAKNG_INSTALL_DIR}/lib/libespeak-ng.a)
     set(UCD_STATIC_LIB ${ESPEAKNG_BUILD_DIR}/src/espeak_ng_external-build/src/ucd-tools/libucd.a)
@@ -125,11 +128,28 @@ target_include_directories(piper PUBLIC
 target_link_directories(piper PUBLIC
     ${ONNXRUNTIME_DIR}/lib
 )
-target_link_libraries(piper
-    ${ESPEAKNG_STATIC_LIB}
-    ${UCD_STATIC_LIB}
-    onnxruntime
-)
+
+if(WIN32)
+    # Define LIBESPEAK_NG_EXPORT to avoid __declspec(dllimport) for static linking
+    # The headers check for this macro and use dllexport instead, which works for static linking
+    # Define PIPER_EXPORTS so our public API functions are exported from the DLL
+    target_compile_definitions(piper PRIVATE
+        LIBESPEAK_NG_EXPORT
+        PIPER_EXPORTS
+    )
+    # Try multi-config path first, fall back to single-config
+    target_link_libraries(piper
+        ${ESPEAKNG_STATIC_LIB}
+        $<IF:$<BOOL:${CMAKE_CONFIGURATION_TYPES}>,${UCD_STATIC_LIB_MULTICONFIG},${UCD_STATIC_LIB_SINGLECONFIG}>
+        onnxruntime
+    )
+else()
+    target_link_libraries(piper
+        ${ESPEAKNG_STATIC_LIB}
+        ${UCD_STATIC_LIB}
+        onnxruntime
+    )
+endif()
 
 # ---- install ---
 
