@@ -1,0 +1,45 @@
+---
+name: Build libpiper
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'libpiper/**'
+      - '.github/workflows/build-libpiper.yml'
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        working-directory: libpiper
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$PWD/install"
+
+      - name: Build
+        working-directory: libpiper
+        run: cmake --build build --config Release
+
+      - name: Install
+        working-directory: libpiper
+        run: cmake --install build --config Release
+
+      - name: Upload install artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: libpiper-${{ matrix.os }}
+          path: libpiper/install/
