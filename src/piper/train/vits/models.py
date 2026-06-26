@@ -519,6 +519,97 @@ class MultiPeriodDiscriminator(torch.nn.Module):
         return y_d_rs, y_d_gs, fmap_rs, fmap_gs
 
 
+class DiscriminatorR(torch.nn.Module):
+    """Single-resolution STFT sub-discriminator (operates on magnitude spectra).
+
+    Part of the Multi-Resolution Discriminator (UnivNet/Vocos lineage). It is a
+    training-only module: it shapes the generator's spectral output but is
+    discarded after training, so it adds ZERO inference cost.
+    """
+
+    def __init__(self, resolution, use_spectral_norm: bool = False):
+        super().__init__()
+        self.resolution = resolution  # (n_fft, hop_length, win_length)
+        self.LRELU_SLOPE = 0.1
+        norm_f = weight_norm if not use_spectral_norm else spectral_norm
+        self.convs = nn.ModuleList(
+            [
+                norm_f(Conv2d(1, 32, (3, 9), padding=(1, 4))),
+                norm_f(Conv2d(32, 32, (3, 9), stride=(1, 2), padding=(1, 4))),
+                norm_f(Conv2d(32, 32, (3, 9), stride=(1, 2), padding=(1, 4))),
+                norm_f(Conv2d(32, 32, (3, 9), stride=(1, 2), padding=(1, 4))),
+                norm_f(Conv2d(32, 32, (3, 3), padding=(1, 1))),
+            ]
+        )
+        self.conv_post = norm_f(Conv2d(32, 1, (3, 3), padding=(1, 1)))
+
+    def _spectrogram(self, x):
+        n_fft, hop_length, win_length = self.resolution
+        # stft requires float32 (not bf16/half) -- force it regardless of AMP.
+        x = x.squeeze(1).float()  # [B, T]
+        pad = int((n_fft - hop_length) / 2)
+        x = F.pad(x, (pad, pad), mode="reflect")
+        window = torch.hann_window(win_length, device=x.device)
+        spec = torch.stft(
+            x,
+            n_fft=n_fft,
+            hop_length=hop_length,
+            win_length=win_length,
+            window=window,
+            center=False,
+            return_complex=True,
+        )
+        return torch.abs(spec).unsqueeze(1)  # [B, 1, F, frames]
+
+    def forward(self, x):
+        fmap = []
+        x = self._spectrogram(x)
+        for l in self.convs:
+            x = l(x)
+            x = F.leaky_relu(x, self.LRELU_SLOPE)
+            fmap.append(x)
+        x = self.conv_post(x)
+        fmap.append(x)
+        x = torch.flatten(x, 1, -1)
+        return x, fmap
+
+
+class MultiResolutionDiscriminator(torch.nn.Module):
+    """Multi-Resolution STFT Discriminator (training-only, zero inference cost).
+
+    Complements the MultiPeriodDiscriminator: the period discriminators capture
+    periodic/temporal structure while these capture spectral detail across
+    several STFT resolutions, reducing the metallic/buzzy artifacts VITS can
+    leave behind. Same interface as MultiPeriodDiscriminator so it reuses the
+    existing generator/feature/discriminator loss helpers.
+    """
+
+    def __init__(
+        self,
+        resolutions=((1024, 120, 600), (2048, 240, 1200), (512, 50, 240)),
+        use_spectral_norm: bool = False,
+    ):
+        super().__init__()
+        self.discriminators = nn.ModuleList(
+            [
+                DiscriminatorR(r, use_spectral_norm=use_spectral_norm)
+                for r in resolutions
+            ]
+        )
+
+    def forward(self, y, y_hat):
+        y_d_rs, y_d_gs, fmap_rs, fmap_gs = [], [], [], []
+        for d in self.discriminators:
+            y_d_r, fmap_r = d(y)
+            y_d_g, fmap_g = d(y_hat)
+            y_d_rs.append(y_d_r)
+            y_d_gs.append(y_d_g)
+            fmap_rs.append(fmap_r)
+            fmap_gs.append(fmap_g)
+
+        return y_d_rs, y_d_gs, fmap_rs, fmap_gs
+
+
 class SynthesizerTrn(nn.Module):
     """
     Synthesizer for Training

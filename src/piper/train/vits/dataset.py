@@ -479,35 +479,35 @@ class VitsDataModule(L.LightningDataModule):
             full_dataset, [train_set_size, self.num_test_examples, valid_set_size]
         )
 
-    def train_dataloader(self):
-        return DataLoader(
-            self.train_dataset,
+    def _make_dataloader(
+        self, dataset, shuffle: bool = False, drop_last: bool = False
+    ) -> DataLoader:
+        kwargs = dict(
             collate_fn=UtteranceCollate(
                 is_multispeaker=(self.num_speakers > 1), segment_size=self.segment_size
             ),
             batch_size=self.batch_size,
             num_workers=self.num_workers,
+            shuffle=shuffle,
+            drop_last=drop_last,
+            pin_memory=True,
         )
+        # persistent_workers/prefetch_factor are only valid with workers
+        if self.num_workers > 0:
+            kwargs["persistent_workers"] = True
+            kwargs["prefetch_factor"] = 4
+        return DataLoader(dataset, **kwargs)
+
+    def train_dataloader(self):
+        # shuffle=True: main never shuffles, so batch order is identical every
+        # epoch. drop_last avoids a tiny ragged final batch.
+        return self._make_dataloader(self.train_dataset, shuffle=True, drop_last=True)
 
     def test_dataloader(self):
-        return DataLoader(
-            self.test_dataset,
-            collate_fn=UtteranceCollate(
-                is_multispeaker=(self.num_speakers > 1), segment_size=self.segment_size
-            ),
-            batch_size=self.batch_size,
-            num_workers=self.num_workers,
-        )
+        return self._make_dataloader(self.test_dataset)
 
     def val_dataloader(self):
-        return DataLoader(
-            self.val_dataset,
-            collate_fn=UtteranceCollate(
-                is_multispeaker=(self.num_speakers > 1), segment_size=self.segment_size
-            ),
-            batch_size=self.batch_size,
-            num_workers=self.num_workers,
-        )
+        return self._make_dataloader(self.val_dataset)
 
     def _trim_silence(
         self,
@@ -519,7 +519,6 @@ class VitsDataModule(L.LightningDataModule):
         """Trims silence from original array."""
         vad.reset()
 
-        offset_sec: float = 0.0
         first_chunk: Optional[int] = None
         last_chunk: Optional[int] = None
         first_sample: Optional[int] = None
@@ -542,11 +541,13 @@ class VitsDataModule(L.LightningDataModule):
 
             if is_speech:
                 if first_chunk is None:
-                    # First speech
+                    # First speech chunk
                     first_chunk = chunk_idx
-                else:
-                    # Last speech so far
-                    last_chunk = chunk_idx
+
+                # Last speech chunk so far. Set on every speech chunk so that
+                # utterances with a single speech chunk (e.g. short phrases like
+                # "yes") are still trimmed instead of being skipped entirely.
+                last_chunk = chunk_idx
 
         if (first_chunk is not None) and (last_chunk is not None):
             # Expand with seconds before/after silence
@@ -556,7 +557,7 @@ class VitsDataModule(L.LightningDataModule):
             first_sec = first_chunk * seconds_per_chunk
             first_sec = max(0, first_sec - self.keep_seconds_before_silence)
             first_sample = int(
-                math.floor(num_original_samples * (offset_sec / audio_seconds))
+                math.floor(num_original_samples * (first_sec / audio_seconds))
             )
 
             last_sec = (last_chunk + 1) * seconds_per_chunk
