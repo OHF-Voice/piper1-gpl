@@ -6,7 +6,7 @@
 
 Supported languages:
 
-* العربية, Jordan (Arabic, ar_JO)
+* <span dir="rtl">العربية</span>, Jordan (Arabic, ar_JO)
 * Català, Spain (Catalan, ca_ES)
 * Čeština, Czech Republic (Czech, cs_CZ)
 * Cymraeg, Great Britain (Welsh, cy_GB)
@@ -18,7 +18,7 @@ Supported languages:
 * Español, Argentina (Spanish, es_AR)
 * Español, Spain (Spanish, es_ES)
 * Español, Mexico (Spanish, es_MX)
-* فارسی, Iran (Farsi, fa_IR)
+* <span dir="rtl">فارسی</span>, Iran (Farsi, fa_IR)
 * Suomi, Finland (Finnish, fi_FI)
 * Français, France (French, fr_FR)
 * Magyar, Hungary (Hungarian, hu_HU)
@@ -47,7 +47,7 @@ Supported languages:
 * Kiswahili, Democratic Republic of the Congo (Swahili, sw_CD)
 * తెలుగు, India (Telugu, te_IN)
 * Türkçe, Turkey (Turkish, tr_TR)
-* украї́нська мо́ва, Ukraine (Ukrainian, uk_UA)
+* українська мова, Ukraine (Ukrainian, uk_UA)
 * Tiếng Việt, Vietnam (Vietnamese, vi_VN)
 * 简体中文, China (Chinese, zh_CN)
 
