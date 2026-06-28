@@ -47,7 +47,7 @@ Supported languages:
 * Kiswahili, Democratic Republic of the Congo (Swahili, sw_CD)
 * తెలుగు, India (Telugu, te_IN)
 * Türkçe, Turkey (Turkish, tr_TR)
-* українська мова, Ukraine (Ukrainian, uk_UA)
+* украї́нська мо́ва, Ukraine (Ukrainian, uk_UA)
 * Tiếng Việt, Vietnam (Vietnamese, vi_VN)
 * 简体中文, China (Chinese, zh_CN)
 
