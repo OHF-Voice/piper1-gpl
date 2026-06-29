@@ -320,7 +320,10 @@ class VitsModel(L.LightningModule):
             batch_size=self.batch_size,
         )
         opt_g.zero_grad()
-        self.manual_backward(loss_g, retain_graph=True)
+        # No retain_graph: loss_d is built from an independent discriminator
+        # forward on y_hat.detach(), so freeing the generator graph here is
+        # safe and cuts peak memory (lets larger batches fit on 24 GB).
+        self.manual_backward(loss_g)
         opt_g.step()
 
         self.log("loss_d", loss_d, batch_size=self.batch_size)
