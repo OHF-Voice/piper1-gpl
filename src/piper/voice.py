@@ -98,6 +98,43 @@ class AudioChunk:
         return self.audio_int16_array.tobytes()
 
 
+def _iter_decoded_chunks(
+    dec_session: onnxruntime.InferenceSession,
+    z: np.ndarray,
+    chunk_frames: int,
+    overlap_frames: int,
+) -> Iterable[np.ndarray]:
+    """
+    Run the decoder half over latent chunks, yielding audio as it decodes.
+
+    Each chunk is decoded with overlap_frames of latent context on both
+    sides; the context samples are cropped from the output, so as long as the
+    overlap covers the decoder's receptive field the concatenated audio is
+    exactly the monolithic decode.
+
+    :param dec_session: ONNX session for the <voice>.dec.onnx half.
+    :param z: Masked latent from the encoder half, shape (1, channels, frames).
+    :param chunk_frames: Latent frames per emitted chunk.
+    :param overlap_frames: Latent frames of cropped context on each side.
+    """
+    z_name = dec_session.get_inputs()[0].name
+    num_frames = z.shape[2]
+    hop: Optional[int] = None
+    for start in range(0, num_frames, chunk_frames):
+        end = min(start + chunk_frames, num_frames)
+        ctx_start = max(0, start - overlap_frames)
+        ctx_end = min(num_frames, end + overlap_frames)
+        audio = dec_session.run(
+            ["output"], {z_name: z[:, :, ctx_start:ctx_end]}
+        )[0].reshape(-1)
+        if hop is None:
+            hop = audio.shape[0] // (ctx_end - ctx_start)
+
+        yield audio[
+            (start - ctx_start) * hop: audio.shape[0] - (ctx_end - end) * hop
+        ]
+
+
 @dataclass
 class PiperVoice:
     """A voice for Piper."""
@@ -119,6 +156,10 @@ class PiperVoice:
     tashkeel_diacritizier: Optional[TashkeelDiacritizer] = None
     taskeen_threshold: Optional[float] = 0.8
 
+    # Encoder/decoder halves for synthesize_stream (see piper.split)
+    enc_session: Optional[onnxruntime.InferenceSession] = None
+    dec_session: Optional[onnxruntime.InferenceSession] = None
+
     @staticmethod
     def load(
         model_path: Union[str, Path],
@@ -127,6 +168,7 @@ class PiperVoice:
         espeak_data_dir: Union[str, Path] = ESPEAK_DATA_DIR,
         download_dir: Optional[Union[str, Path]] = None,
         include_alignments: bool = False,
+        streaming: bool = False,
     ) -> "PiperVoice":
         """
         Load an ONNX model and config.
@@ -139,6 +181,9 @@ class PiperVoice:
         :param include_alignments: If True, patch the model in memory (requires the
             onnx package) so phoneme/audio alignments are available even if the model
             file has not been patched with piper.patch_voice_with_alignment.
+        :param streaming: If True, also load the <voice>.enc.onnx/<voice>.dec.onnx
+            halves written by `python3 -m piper.split` so synthesize_stream() can
+            emit audio in decoder chunks.
         :return: Voice object.
         """
         if config_path is None:
@@ -188,6 +233,28 @@ class PiperVoice:
                 # Tensor not found or model already patched: use it as-is.
                 _LOGGER.debug("Not patching model for alignments: %s", error)
 
+        enc_session: Optional[onnxruntime.InferenceSession] = None
+        dec_session: Optional[onnxruntime.InferenceSession] = None
+        if streaming:
+            enc_path = Path(model_path).with_suffix(".enc.onnx")
+            dec_path = Path(model_path).with_suffix(".dec.onnx")
+            if not (enc_path.exists() and dec_path.exists()):
+                raise FileNotFoundError(
+                    f"Streaming needs {enc_path.name} and {dec_path.name}: "
+                    f"run `python3 -m piper.split {model_path}` once"
+                )
+
+            enc_session = onnxruntime.InferenceSession(
+                str(enc_path),
+                sess_options=onnxruntime.SessionOptions(),
+                providers=providers,
+            )
+            dec_session = onnxruntime.InferenceSession(
+                str(dec_path),
+                sess_options=onnxruntime.SessionOptions(),
+                providers=providers,
+            )
+
         return PiperVoice(
             config=PiperConfig.from_dict(config_dict),
             session=onnxruntime.InferenceSession(
@@ -197,6 +264,8 @@ class PiperVoice:
             ),
             espeak_data_dir=Path(espeak_data_dir),
             download_dir=Path(download_dir),
+            enc_session=enc_session,
+            dec_session=dec_session,
         )
 
     def phonemize(self, text: str) -> list[list[str]]:
@@ -440,6 +509,104 @@ class PiperVoice:
                 phoneme_id_samples=phoneme_id_samples,
                 phoneme_alignments=phoneme_alignments,
             )
+
+    def synthesize_stream(
+        self,
+        text: str,
+        syn_config: Optional[SynthesisConfig] = None,
+        chunk_frames: int = 10,
+        overlap_frames: int = 16,
+    ) -> Iterable[AudioChunk]:
+        """
+        Synthesize audio in decoder chunks instead of whole sentences.
+
+        The first chunk is available after the encoder pass plus one small
+        decoder call, so playback can begin while the rest of the sentence is
+        still being synthesized. Requires the voice halves written by
+        `python3 -m piper.split` and loaded with load(..., streaming=True).
+
+        Chunk interiors are exact: the decoder's receptive field is covered
+        by overlap_frames of context on each side, which are cropped from the
+        output (the default of 16 saturates for released Piper voices).
+
+        Audio is NOT peak-normalized (normalization needs the whole
+        sentence); syn_config.volume still applies.
+
+        :param text: Text to synthesize.
+        :param syn_config: Synthesis configuration.
+        :param chunk_frames: Latent frames per emitted chunk
+            (chunk_frames * hop_length samples of audio).
+        :param overlap_frames: Latent frames of context decoded on each side
+            of a chunk and cropped from the output.
+        """
+        if (self.enc_session is None) or (self.dec_session is None):
+            raise RuntimeError(
+                "Streaming synthesis needs PiperVoice.load(..., streaming=True)"
+            )
+
+        if syn_config is None:
+            syn_config = _DEFAULT_SYNTHESIS_CONFIG
+
+        if syn_config.normalize_audio:
+            _LOGGER.debug("Streaming synthesis does not normalize audio")
+
+        speaker_id = syn_config.speaker_id
+        length_scale = syn_config.length_scale
+        noise_scale = syn_config.noise_scale
+        noise_w_scale = syn_config.noise_w_scale
+
+        if length_scale is None:
+            length_scale = self.config.length_scale
+
+        if noise_scale is None:
+            noise_scale = self.config.noise_scale
+
+        if noise_w_scale is None:
+            noise_w_scale = self.config.noise_w_scale
+
+        z_name = self.enc_session.get_outputs()[0].name
+        for phonemes in self.phonemize(text):
+            if not phonemes:
+                continue
+
+            phoneme_ids = self.phonemes_to_ids(phonemes)
+            phoneme_ids_array = np.expand_dims(
+                np.array(phoneme_ids, dtype=np.int64), 0
+            )
+            args = {
+                "input": phoneme_ids_array,
+                "input_lengths": np.array(
+                    [phoneme_ids_array.shape[1]], dtype=np.int64
+                ),
+                "scales": np.array(
+                    [noise_scale, length_scale, noise_w_scale], dtype=np.float32
+                ),
+            }
+
+            if (self.config.num_speakers > 1) and (speaker_id is None):
+                # Default speaker
+                speaker_id = 0
+
+            if (self.config.num_speakers > 1) and (speaker_id is not None):
+                args["sid"] = np.array([speaker_id], dtype=np.int64)
+
+            z = self.enc_session.run([z_name], args)[0]
+            for audio in _iter_decoded_chunks(
+                self.dec_session, z, chunk_frames, overlap_frames
+            ):
+                if syn_config.volume != 1.0:
+                    audio = audio * syn_config.volume
+
+                yield AudioChunk(
+                    sample_rate=self.config.sample_rate,
+                    sample_width=2,
+                    sample_channels=1,
+                    audio_float_array=np.clip(audio, -1.0, 1.0).astype(
+                        np.float32
+                    ),
+                    phonemes=phonemes,
+                    phoneme_ids=phoneme_ids,
+                )
 
     def synthesize_wav(
         self,
