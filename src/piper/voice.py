@@ -103,6 +103,7 @@ def _iter_decoded_chunks(
     z: np.ndarray,
     chunk_frames: int,
     overlap_frames: int,
+    conditioning: Optional[dict] = None,
 ) -> Iterable[np.ndarray]:
     """
     Run the decoder half over latent chunks, yielding audio as it decodes.
@@ -116,6 +117,9 @@ def _iter_decoded_chunks(
     :param z: Masked latent from the encoder half, shape (1, channels, frames).
     :param chunk_frames: Latent frames per emitted chunk.
     :param overlap_frames: Latent frames of cropped context on each side.
+    :param conditioning: Time-independent decoder inputs passed whole to every
+        chunk (a multi-speaker voice conditions its decoder on the speaker
+        embedding).
     """
     z_name = dec_session.get_inputs()[0].name
     num_frames = z.shape[2]
@@ -124,9 +128,10 @@ def _iter_decoded_chunks(
         end = min(start + chunk_frames, num_frames)
         ctx_start = max(0, start - overlap_frames)
         ctx_end = min(num_frames, end + overlap_frames)
-        audio = dec_session.run(
-            ["output"], {z_name: z[:, :, ctx_start:ctx_end]}
-        )[0].reshape(-1)
+        feed = {z_name: z[:, :, ctx_start:ctx_end]}
+        if conditioning:
+            feed.update(conditioning)
+        audio = dec_session.run(["output"], feed)[0].reshape(-1)
         if hop is None:
             hop = audio.shape[0] // (ctx_end - ctx_start)
 
@@ -564,7 +569,8 @@ class PiperVoice:
         if noise_w_scale is None:
             noise_w_scale = self.config.noise_w_scale
 
-        z_name = self.enc_session.get_outputs()[0].name
+        enc_outputs = [o.name for o in self.enc_session.get_outputs()]
+        dec_inputs = [i.name for i in self.dec_session.get_inputs()]
         for phonemes in self.phonemize(text):
             if not phonemes:
                 continue
@@ -590,9 +596,15 @@ class PiperVoice:
             if (self.config.num_speakers > 1) and (speaker_id is not None):
                 args["sid"] = np.array([speaker_id], dtype=np.int64)
 
-            z = self.enc_session.run([z_name], args)[0]
+            # The decoder half's inputs come from the encoder by name: the
+            # latent first (chunked along time), then any conditioning a
+            # multi-speaker decoder wants whole (the speaker embedding).
+            result = self.enc_session.run(enc_outputs, args)
+            by_name = dict(zip(enc_outputs, result))
+            z = by_name[dec_inputs[0]]
+            conditioning = {n: by_name[n] for n in dec_inputs[1:] if n in by_name}
             for audio in _iter_decoded_chunks(
-                self.dec_session, z, chunk_frames, overlap_frames
+                self.dec_session, z, chunk_frames, overlap_frames, conditioning
             ):
                 if syn_config.volume != 1.0:
                     audio = audio * syn_config.volume
