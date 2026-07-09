@@ -367,9 +367,7 @@ class VitsModel(L.LightningModule):
         mos_scores = []
         for utt_idx, test_utt in enumerate(self.trainer.datamodule.test_dataset):
             text = test_utt.phoneme_ids.unsqueeze(0).to(self.device)
-            text_lengths = torch.LongTensor([len(test_utt.phoneme_ids)]).to(
-                self.device
-            )
+            text_lengths = torch.LongTensor([len(test_utt.phoneme_ids)]).to(self.device)
             scales = [0.667, 1.0, 0.8]
             sid = (
                 test_utt.speaker_id.to(self.device)
@@ -381,9 +379,7 @@ class VitsModel(L.LightningModule):
 
             # Score perceptual quality on the raw (un-normalized) audio.
             if mos_enabled:
-                score = self._mos_predictor.score(
-                    test_audio, self.hparams.sample_rate
-                )
+                score = self._mos_predictor.score(test_audio, self.hparams.sample_rate)
                 if score is not None:
                     mos_scores.append(score)
 
@@ -391,8 +387,15 @@ class VitsModel(L.LightningModule):
                 # Requires tensorboard. Scale to make louder in [-1, 1].
                 norm_audio = test_audio * (1.0 / max(0.01, abs(test_audio).max()))
                 tag = test_utt.text or str(utt_idx)
+                # Pass global_step so each validation epoch's clip lands on its
+                # own step. Without it, every epoch's audio is written at step 0,
+                # and TensorBoard's audio dashboard can't scrub across epochs --
+                # it mis-renders the stacked step-0 entries (clips show as 0s).
                 self.logger.experiment.add_audio(
-                    tag, norm_audio, sample_rate=self.hparams.sample_rate
+                    tag,
+                    norm_audio,
+                    sample_rate=self.hparams.sample_rate,
+                    global_step=self.global_step,
                 )
 
         if mos_scores:
