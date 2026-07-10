@@ -239,21 +239,38 @@ class VitsModel(L.LightningModule):
         opt_g, opt_d = self.optimizers()
         loss_g, loss_d = self._compute_loss(batch)
 
+        # Generator step
+        # toggle_optimizer ensures DDP only syncs generator gradients
+        self.toggle_optimizer(opt_g)
         self.log("loss_g", loss_g, batch_size=self.batch_size)
         opt_g.zero_grad()
-        self.manual_backward(loss_g, retain_graph=True)
+        self.manual_backward(loss_g)
         opt_g.step()
+        self.untoggle_optimizer(opt_g)
 
+        # Discriminator step
+        self.toggle_optimizer(opt_d)
         self.log("loss_d", loss_d, batch_size=self.batch_size)
         opt_d.zero_grad()
         self.manual_backward(loss_d)
         opt_d.step()
+        self.untoggle_optimizer(opt_d)
 
     def validation_step(self, batch: Batch, batch_idx: int):
         loss_g, _loss_d = self._compute_loss(batch)
         val_loss = loss_g  # only generator loss matters
         self.log("val_loss", val_loss, batch_size=self.batch_size)
         return val_loss
+
+    def on_train_epoch_end(self) -> None:
+        # With manual optimization, LR schedulers must be stepped manually
+        schedulers = self.lr_schedulers()
+        if schedulers is not None:
+            if isinstance(schedulers, (list, tuple)):
+                for sched in schedulers:
+                    sched.step()
+            else:
+                schedulers.step()
 
     def on_validation_end(self) -> None:
         # Generate audio examples after validation, but not during sanity check
