@@ -1,0 +1,46 @@
+name: C++ Build
+
+on:
+  pull_request:
+    branches: ['main']
+    paths:
+      - 'libpiper/**'
+      - '.github/workflows/libpiper.yml'
+  push:
+    branches: ['main']
+    paths:
+      - 'libpiper/**'
+      - '.github/workflows/libpiper.yml'
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Install dependencies (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake ninja-build pkg-config
+
+    - name: Install dependencies (macOS)
+      if: runner.os == 'macOS'
+      run: |
+        brew install cmake ninja pkg-config
+
+    - name: Install dependencies (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        choco install pkgconfiglite 
+
+    - name: Configure CMake
+      run: cmake -S libpiper -B build
+
+    - name: Build
+      run: cmake --build build --config Release
+
