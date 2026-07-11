@@ -11,13 +11,28 @@ include(ExternalProject)
 set(ESPEAKNG_BUILD_DIR ${CMAKE_BINARY_DIR}/espeak_ng)
 set(ESPEAKNG_INSTALL_DIR ${CMAKE_BINARY_DIR}/espeak_ng-install)
 
+# ucd-tools is built (not installed) by espeak-ng, so we reference its static
+# library directly from the build tree. Multi-config generators (e.g. Visual
+# Studio) place the output in a per-config subdirectory whose name is only
+# known at build time, so resolve it with a $<CONFIG> generator expression.
+# Single-config generators (Unix Makefiles, Ninja) write directly into the
+# build directory with no subdirectory.
+get_property(IS_MULTI_CONFIG GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
+if(IS_MULTI_CONFIG)
+    set(UCD_CONFIG_SUBDIR "$<CONFIG>/")
+else()
+    set(UCD_CONFIG_SUBDIR "")
+endif()
+
+set(UCD_TOOLS_DIR ${ESPEAKNG_BUILD_DIR}/src/espeak_ng_external-build/src/ucd-tools)
+
 if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
-    # Special handling for Windows
+    # MSVC emits .lib files (espeak-ng is re-exported from piper.dll)
     set(ESPEAKNG_STATIC_LIB ${ESPEAKNG_INSTALL_DIR}/lib/espeak-ng.lib)
-    set(UCD_STATIC_LIB ${ESPEAKNG_BUILD_DIR}/src/espeak_ng_external-build/src/ucd-tools/${CMAKE_BUILD_TYPE}/ucd.lib)
+    set(UCD_STATIC_LIB ${UCD_TOOLS_DIR}/${UCD_CONFIG_SUBDIR}ucd.lib)
 else()
     set(ESPEAKNG_STATIC_LIB ${ESPEAKNG_INSTALL_DIR}/lib/libespeak-ng.a)
-    set(UCD_STATIC_LIB ${ESPEAKNG_BUILD_DIR}/src/espeak_ng_external-build/src/ucd-tools/libucd.a)
+    set(UCD_STATIC_LIB ${UCD_TOOLS_DIR}/${UCD_CONFIG_SUBDIR}libucd.a)
 endif()
 
 ExternalProject_Add(espeak_ng_external

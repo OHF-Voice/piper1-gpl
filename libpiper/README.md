@@ -8,15 +8,21 @@ See `piper.h` for details.
 
 ``` sh
 cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$PWD/install
-```
-or use %CD% instead of $PWD when building on Windows in a DOS window:
-```
-cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=%CD%/install
-```
-```
 cmake --build build --config Release
-cmake --install build
+cmake --install build --config Release
 ```
+
+On Windows in a `cmd` shell, use `%CD%` instead of `$PWD`:
+
+``` bat
+cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=%CD%/install
+cmake --build build --config Release
+cmake --install build --config Release
+```
+
+The `--config Release` flag is required for multi-config generators such as
+Visual Studio and is ignored by single-config generators, so it is safe to
+pass on every platform.
 
 This will automatically download/build [espeak-ng][] as well as download shared libraries for the [onnxruntime][].
 
