@@ -15,24 +15,10 @@ FetchContent_MakeAvailable(googletest)
 
 enable_testing()
 
-set(EN_MODEL_DIR "${CMAKE_BINARY_DIR}/en")
-set(MODEL_PATH "${EN_MODEL_DIR}/model.onnx")
-set(MODEL_CONFIG_PATH "${MODEL_PATH}.json")
+include(DownloadModel.cmake)
 
-set(MODEL_BASE_URL "https://huggingface.co/rhasspy/piper-voices/resolve/main")
-set(MODEL_URL "${MODEL_BASE_URL}/en/en_US/lessac/medium/en_US-lessac-medium.onnx")
-set(MODEL_CONFIG_URL "${MODEL_URL}.json")
-
-file(DOWNLOAD
-    ${MODEL_URL}
-    ${MODEL_PATH}
-    SHOW_PROGRESS
-)
-file(DOWNLOAD
-    ${MODEL_CONFIG_URL}
-    ${MODEL_CONFIG_PATH}
-    SHOW_PROGRESS
-)
+download_piper_model(VOICE "en/en_US/lessac/medium/en_US-lessac-medium"
+                     OUTPUT_DIR EN_MODEL_DIR)
 
 add_executable(piper_test
    test_piper.cpp
