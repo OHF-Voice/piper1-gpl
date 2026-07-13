@@ -74,7 +74,7 @@ void parseArgsLogic(int argc, char *argv[], RunConfig &runConfig) {
         runConfig.outputType = OUTPUT_FILE;
         runConfig.outputPath = std::filesystem::path(filePath);
       }
-    } else if (arg == "-d" || arg == "--output_dir" || arg == "output-dir") {
+    } else if (arg == "-d" || arg == "--output_dir" || arg == "--output-dir") {
       ensureArg(argc, argv, i);
       runConfig.outputType = OUTPUT_DIRECTORY;
       runConfig.outputPath = std::filesystem::path(argv[++i]);

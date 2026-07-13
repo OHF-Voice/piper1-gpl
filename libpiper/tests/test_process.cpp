@@ -14,32 +14,19 @@ namespace {
 // RAII class to redirect stdin for tests
 class StdinRedirect {
 public:
-  StdinRedirect(const std::string &input) {
-    // Create a temporary file with the input
-    std::filesystem::path tempPath =
-        std::filesystem::temp_directory_path() / "stdin.txt";
-    std::ofstream tempFile(tempPath);
-    tempFile << input;
-    tempFile.close();
-
-    // Redirect stdin
-    old_stdin = freopen(tempPath.c_str(), "r", stdin);
+  StdinRedirect(const std::string &input) : old_cin(std::cin.rdbuf()) {
+    input_buffer << input;
+    std::cin.rdbuf(input_buffer.rdbuf());
   }
 
   ~StdinRedirect() {
     // Restore stdin and clean up
-    if (old_stdin) {
-      freopen(old_stdin_path, "r", stdin);
-      fclose(old_stdin);
-    }
-    std::filesystem::remove(std::filesystem::temp_directory_path() /
-                            "stdin.txt");
+    std::cin.rdbuf(old_cin);
   }
 
 private:
-  FILE *old_stdin = nullptr;
-  // This is platform-specific, but works for this test case
-  const char *old_stdin_path = "/dev/tty";
+  std::streambuf *old_cin;
+  std::stringstream input_buffer;
 };
 } // namespace
 
@@ -68,7 +55,9 @@ piper_synthesizer *ProcessTest::synth = nullptr;
 TEST_F(ProcessTest, ProcessInputStreamText) {
   piper::RunConfig runConfig;
   runConfig.outputType = piper::OUTPUT_STDOUT;
-  runConfig.speakerId = 0;
+
+  piper_synthesize_options options = piper_default_synthesize_options(synth);
+  options.speaker_id = 0;
 
   StdinRedirect redirect("This is a test.");
 
@@ -76,7 +65,7 @@ TEST_F(ProcessTest, ProcessInputStreamText) {
   std::stringstream cout_buffer;
   std::streambuf *old_cout = std::cout.rdbuf(cout_buffer.rdbuf());
 
-  processInputStream(runConfig, synth, nullptr);
+  processInputStream(runConfig, synth, &options);
 
   std::cout.rdbuf(old_cout); // Restore cout
 
@@ -86,18 +75,51 @@ TEST_F(ProcessTest, ProcessInputStreamText) {
   ASSERT_EQ(audio_data.substr(0, 4), "RIFF");
 }
 
+TEST_F(ProcessTest, ProcessInputStreamFileOutput) {
+  piper::RunConfig runConfig;
+  auto outputPath = std::filesystem::temp_directory_path() / "test.wav";
+  runConfig.outputPath = outputPath;
+  runConfig.outputType = piper::OUTPUT_FILE;
+
+  piper_synthesize_options options = piper_default_synthesize_options(synth);
+  options.speaker_id = 0;
+
+  StdinRedirect redirect("This is a test for file output.");
+
+  // Redirect cout to capture the output path
+  std::stringstream cout_buffer;
+  std::streambuf* old_cout = std::cout.rdbuf(cout_buffer.rdbuf());
+
+  processInputStream(runConfig, synth, &options);
+
+  std::cout.rdbuf(old_cout); // Restore cout
+
+  // Verify the output file was created and has content
+  ASSERT_TRUE(std::filesystem::exists(outputPath));
+  {
+    std::ifstream audio_file(outputPath, std::ios::binary | std::ios::ate);
+    ASSERT_TRUE(audio_file.is_open());
+    std::streamsize size = audio_file.tellg();
+    ASSERT_GT(size, 44); // Should have a 44-byte header plus some audio data
+  }
+  // Clean up the created file
+  std::filesystem::remove(outputPath);
+}
+
 TEST_F(ProcessTest, ProcessInputStreamJson) {
   piper::RunConfig runConfig;
   runConfig.outputType = piper::OUTPUT_STDOUT;
   runConfig.jsonInput = true;
-  runConfig.speakerId = 0;
+
+  piper_synthesize_options options = piper_default_synthesize_options(synth);
+  options.speaker_id = 0;
 
   StdinRedirect redirect("{\"text\": \"This is a JSON test.\"}");
 
   std::stringstream cout_buffer;
   std::streambuf *old_cout = std::cout.rdbuf(cout_buffer.rdbuf());
 
-  processInputStream(runConfig, synth, nullptr);
+  processInputStream(runConfig, synth, &options);
 
   std::cout.rdbuf(old_cout);
 

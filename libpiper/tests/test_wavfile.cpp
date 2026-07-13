@@ -30,10 +30,10 @@ piper_synthesizer *WavFileTest::synth = nullptr;
 
 TEST_F(WavFileTest, TextToWavFile) {
   std::stringstream audio_stream;
-  piper::RunConfig runConfig;
-  runConfig.speakerId = 0;
+  piper_synthesize_options options = piper_default_synthesize_options(synth);
+  options.speaker_id = 0;
 
-  textToWavFile(runConfig, synth, nullptr, "This is a test.", audio_stream);
+  textToWavFile(synth, &options, "This is a test.", audio_stream);
 
   std::string audio_data = audio_stream.str();
   // Should have a 44-byte header plus some audio data

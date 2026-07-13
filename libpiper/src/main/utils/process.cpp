@@ -12,36 +12,15 @@
 using json = nlohmann::json;
 
 void processInputStream(piper::RunConfig &runConfig, piper_synthesizer *piper, piper_synthesize_options *options) {
-    std::unique_ptr<piper_synthesize_options> default_options;
-    if (!options) {
-        default_options = std::make_unique<piper_synthesize_options>(
-            piper_default_synthesize_options(piper));
-        options = default_options.get();
-    }
-
-    // Speaker ID
-    if (runConfig.speakerId) {
-        options->speaker_id = runConfig.speakerId.value();
-    }
-
-    // Scales
-    if (runConfig.noiseScale) {
-        options->noise_scale = runConfig.noiseScale.value();
-    }
-
-    if (runConfig.lengthScale) {
-        options->length_scale = runConfig.lengthScale.value();
-    }
-
-    if (runConfig.noiseW) {
-        options->noise_w_scale = runConfig.noiseW.value();
-    }
-
+    
     std::string line;
     while (getline(std::cin, line)) {
+        if (line.empty()) {
+            continue;
+        }
 
+        piper_synthesize_options local_options = *options;
         auto outputType = runConfig.outputType;
-        auto speakerId = options->speaker_id;
         std::optional<std::filesystem::path> maybeOutputPath = runConfig.outputPath;
 
         if (runConfig.jsonInput) {
@@ -60,7 +39,7 @@ void processInputStream(piper::RunConfig &runConfig, piper_synthesizer *piper, p
 
             if (lineRoot.contains("speaker_id")) {
                 // Override speaker id
-                options->speaker_id =
+                local_options.speaker_id =
                     lineRoot["speaker_id"].get<int>();
             }
         }
@@ -76,10 +55,11 @@ void processInputStream(piper::RunConfig &runConfig, piper_synthesizer *piper, p
             outputName << timestamp << ".wav";
             std::filesystem::path outputPath = runConfig.outputPath.value();
             outputPath.append(outputName.str());
-
-            // Output audio to automatically-named WAV file in a directory
-            std::ofstream audioFile(outputPath.string(), std::ios::binary);
-            textToWavFile(runConfig, piper, options, line.c_str(), audioFile);
+            {
+                // Output audio to automatically-named WAV file in a directory
+                std::ofstream audioFile(outputPath.string(), std::ios::binary);
+                textToWavFile(piper, &local_options, line.c_str(), audioFile);
+            } // audioFile is closed
             std::cout << outputPath.string() << std::endl;
         } else if (outputType == piper::OUTPUT_FILE) {
             if (!maybeOutputPath || maybeOutputPath->empty()) {
@@ -98,18 +78,15 @@ void processInputStream(piper::RunConfig &runConfig, piper_synthesizer *piper, p
 
                 line = text.str();
             }
-
-            // Output audio to WAV file
-            std::ofstream audioFile(outputPath.string(), std::ios::binary);
-            textToWavFile(runConfig, piper, options, line.c_str(), audioFile);
+            {
+                // Output audio to WAV file
+                std::ofstream audioFile(outputPath.string(), std::ios::binary);
+                textToWavFile(piper, &local_options, line.c_str(), audioFile);
+            } // audioFile is closed
             std::cout << outputPath.string() << std::endl;
         } else if (outputType == piper::OUTPUT_STDOUT) {
             // Output WAV to stdout
-            textToWavFile(runConfig, piper, options, line.c_str(), std::cout);
+            textToWavFile(piper, &local_options, line.c_str(), std::cout);
         }
-
-        // Restore config (--json-input)
-        options->speaker_id = speakerId;
-
     } // for each line
 }
