@@ -11,7 +11,6 @@
 #include <string>
 #include <thread>
 #include <vector>
-#include <print>
 
 #ifdef _MSC_VER
 #define WIN32_LEAN_AND_MEAN
