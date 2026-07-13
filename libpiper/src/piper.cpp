@@ -434,5 +434,5 @@ int piper_synthesize_next(struct piper_synthesizer *synth,
         Ort::detail::OrtRelease(input_tensors[i].release());
     }
 
-    return PIPER_OK;
+    return chunk->is_last ? PIPER_DONE : PIPER_OK;
 }

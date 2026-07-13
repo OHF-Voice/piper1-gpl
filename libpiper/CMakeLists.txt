@@ -173,3 +173,13 @@ install(
     DIRECTORY ${ESPEAKNG_DATA_SRC}
     DESTINATION ${CMAKE_INSTALL_PREFIX}
 )
+
+# ----------------
+# Testing
+# ----------------
+option(PIPER_BUILD_TESTS "Build piper tests" OFF)
+
+if(PIPER_BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+endif()
