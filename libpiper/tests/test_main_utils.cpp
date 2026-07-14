@@ -109,3 +109,20 @@ TEST_F(MainUtilsTest, ParseArgsMissingModel) {
       },
       std::runtime_error);
 }
+
+TEST_F(MainUtilsTest, ParseArgsMissingArgument) {
+  piper::RunConfig runConfig;
+
+  const char *argv[] = {"test_program", "--model"};
+  int argc = sizeof(argv) / sizeof(argv[0]);
+
+  EXPECT_THROW(
+      try {
+        parseArgsLogic(argc, const_cast<char **>(argv), runConfig);
+      } catch (const piper::ArgError &e) {
+        EXPECT_STREQ(e.what(), "Missing argument for --model");
+        throw;
+      },
+      piper::ArgError
+  );
+}

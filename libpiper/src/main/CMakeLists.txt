@@ -23,3 +23,8 @@ target_sources(
 target_link_libraries(main_utils PRIVATE piper)
 
 target_link_libraries(piper_exe PRIVATE piper main_utils)
+
+install(
+  TARGETS piper_exe
+  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)

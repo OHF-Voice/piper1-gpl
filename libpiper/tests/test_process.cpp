@@ -106,6 +106,32 @@ TEST_F(ProcessTest, ProcessInputStreamFileOutput) {
   std::filesystem::remove(outputPath);
 }
 
+TEST_F(ProcessTest, ProcessInputStreamDirectoryOutput) {
+  piper::RunConfig runConfig;
+  auto outputDir = std::filesystem::temp_directory_path() / "piper_test_output";
+  std::filesystem::create_directory(outputDir);
+  runConfig.outputPath = outputDir;
+  runConfig.outputType = piper::OUTPUT_DIRECTORY;
+
+  piper_synthesize_options options = piper_default_synthesize_options(synth);
+  options.speaker_id = 0;
+
+  StdinRedirect redirect("This is a test for directory output.");
+
+  std::stringstream cout_buffer;
+  std::streambuf* old_cout = std::cout.rdbuf(cout_buffer.rdbuf());
+
+  processInputStream(runConfig, synth, &options);
+
+  std::cout.rdbuf(old_cout);
+
+  std::string created_path = cout_buffer.str();
+  created_path.erase(created_path.find_last_not_of(" \n\r\t")+1);
+  ASSERT_TRUE(std::filesystem::exists(created_path));
+  ASSERT_GT(std::filesystem::file_size(created_path), 44);
+  std::filesystem::remove_all(outputDir);
+}
+
 TEST_F(ProcessTest, ProcessInputStreamJson) {
   piper::RunConfig runConfig;
   runConfig.outputType = piper::OUTPUT_STDOUT;

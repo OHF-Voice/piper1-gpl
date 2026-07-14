@@ -59,8 +59,9 @@ endif()
 
 include(GoogleTest)
 get_target_property(PIPER_BINARY_DIR piper BINARY_DIR)
+get_target_property(PIPER_EXE_BINARY_DIR piper_exe BINARY_DIR)
 
 gtest_discover_tests(piper_test
     DISCOVERY_MODE PRE_TEST
-    PROPERTIES ENVIRONMENT "PATH=${PIPER_BINARY_DIR}/$<CONFIG>;${ONNXRUNTIME_DIR}/lib;$ENV{PATH}"
+    PROPERTIES ENVIRONMENT "PATH=${PIPER_EXE_BINARY_DIR}/$<CONFIG>;${PIPER_BINARY_DIR}/$<CONFIG>;${ONNXRUNTIME_DIR}/lib;$ENV{PATH}"
 )
