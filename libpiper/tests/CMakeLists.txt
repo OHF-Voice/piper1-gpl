@@ -1,5 +1,4 @@
 cmake_minimum_required(VERSION 3.26)
-project(piper_test)
 
 message(STATUS "Building piper tests")
 include(FetchContent)
@@ -24,6 +23,10 @@ add_executable(piper_test
    test_piper.cpp
    utils/piper_test_assets.h
    utils/piper_test_assets.cpp
+   test_main_utils.cpp
+   test_process.cpp
+   test_wav_headers.cpp
+   test_wavfile.cpp
 )
 
 target_compile_definitions(piper_test
@@ -34,6 +37,7 @@ target_compile_definitions(piper_test
 target_link_libraries(piper_test
     PRIVATE piper
     PRIVATE GTest::gtest_main
+    PRIVATE main_utils
 )
 
 target_link_directories(piper_test PUBLIC
@@ -55,8 +59,9 @@ endif()
 
 include(GoogleTest)
 get_target_property(PIPER_BINARY_DIR piper BINARY_DIR)
+get_target_property(PIPER_EXE_BINARY_DIR piper_exe BINARY_DIR)
 
 gtest_discover_tests(piper_test
     DISCOVERY_MODE PRE_TEST
-    PROPERTIES ENVIRONMENT "PATH=${PIPER_BINARY_DIR}/$<CONFIG>;${ONNXRUNTIME_DIR}/lib;$ENV{PATH}"
+    PROPERTIES ENVIRONMENT "PATH=${PIPER_EXE_BINARY_DIR}/$<CONFIG>;${PIPER_BINARY_DIR}/$<CONFIG>;${ONNXRUNTIME_DIR}/lib;$ENV{PATH}"
 )
