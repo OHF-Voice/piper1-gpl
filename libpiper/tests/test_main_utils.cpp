@@ -55,7 +55,8 @@ TEST_F(MainUtilsTest, ParseArgsNoOutputFile) {
 TEST_F(MainUtilsTest, ParseArgsWithSpeaker) {
   piper::RunConfig runConfig;
 
-  const char *argv[] = {"test_program", "--model", "model.onnx", "--speaker", "1"};
+  const char *argv[] = {"test_program", "--model", "model.onnx", "--speaker",
+                        "1"};
   int argc = sizeof(argv) / sizeof(argv[0]);
 
   parseArgsLogic(argc, const_cast<char **>(argv), runConfig);
@@ -68,11 +69,11 @@ TEST_F(MainUtilsTest, ParseArgsWithSpeaker) {
 TEST_F(MainUtilsTest, ParseArgsAllParams) {
   piper::RunConfig runConfig;
 
-  const char *argv[] = {"test_program",   "--model",        "model.onnx",
-                        "--config",       "config.json",    "--output_file",
-                        "out.wav",        "--speaker",      "5",
-                        "--noise_scale",  "0.5",            "--length_scale",
-                        "1.2",            "--noise_w",      "0.8"};
+  const char *argv[] = {"test_program",  "--model",     "model.onnx",
+                        "--config",      "config.json", "--output_file",
+                        "out.wav",       "--speaker",   "5",
+                        "--noise_scale", "0.5",         "--length_scale",
+                        "1.2",           "--noise_w",   "0.8"};
   int argc = sizeof(argv) / sizeof(argv[0]);
 
   parseArgsLogic(argc, const_cast<char **>(argv), runConfig);
@@ -123,6 +124,5 @@ TEST_F(MainUtilsTest, ParseArgsMissingArgument) {
         EXPECT_STREQ(e.what(), "Missing argument for --model");
         throw;
       },
-      piper::ArgError
-  );
+      piper::ArgError);
 }

@@ -15,6 +15,25 @@ defaults:
     shell: bash
 
 jobs:
+  format-check:
+    name: Check Formatting
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: libpiper
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install clang-format
+        run: sudo apt-get update && sudo apt-get install -y clang-format
+
+      - name: Configure for format check
+        run: cmake -B build -DCLANG_FORMAT_ARGS="--dry-run;--Werror"
+
+      - name: Run clang-format check
+        run: cmake --build build --target format
+
   build:
     name: Build on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
@@ -22,24 +41,23 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
+    defaults:
+      run:
+        working-directory: libpiper
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Configure
-        working-directory: libpiper
-        run: cmake -B build -DPIPER_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$PWD/install"
+        run: cmake -B build -DPIPER_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_INSTALL_PREFIX="$PWD/install"
 
       - name: Build
-        working-directory: libpiper
         run: cmake --build build --config Release
 
       - name: Test
-        working-directory: libpiper
         run: ctest -C Release --output-on-failure --test-dir build 
 
       - name: Install
-        working-directory: libpiper
         run: cmake --install build --config Release
 
       - name: Upload install artifact
