@@ -15,6 +15,10 @@
 #define LIBESPEAK_NG_EXPORT // espeak is exported from piper dll
 #endif
 
+#ifndef PIPER_VERSION
+#define PIPER_VERSION "0.0.1"
+#endif
+
 #include <espeak-ng/speak_lib.h>
 
 using json = nlohmann::json;
@@ -435,4 +439,8 @@ int piper_synthesize_next(struct piper_synthesizer *synth,
     }
 
     return chunk->is_last ? PIPER_DONE : PIPER_OK;
+}
+
+char const *piper_version(void) {
+    return PIPER_VERSION;
 }

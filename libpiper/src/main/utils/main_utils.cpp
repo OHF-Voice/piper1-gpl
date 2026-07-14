@@ -7,6 +7,8 @@
 #include <stdexcept>
 #include <string>
 
+#include "piper.h"
+
 namespace piper {
 
 void printUsage(char *argv[]) {
@@ -96,7 +98,7 @@ void parseArgsLogic(int argc, char *argv[], RunConfig &runConfig) {
     } else if (arg == "--json_input" || arg == "--json-input") {
       runConfig.jsonInput = true;
     } else if (arg == "--version") {
-      std::cout << "0.0.1" << std::endl;
+      std::cout << piper_version() << std::endl;
       exit(0);
     } else if (arg == "-h" || arg == "--help") {
       printUsage(argv);

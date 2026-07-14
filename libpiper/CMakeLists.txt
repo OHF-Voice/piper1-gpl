@@ -149,6 +149,19 @@ target_link_libraries(piper
 
 # ---- piper exe ---
 add_subdirectory(src/main)
+
+# ---- version
+file(READ ${CMAKE_SOURCE_DIR}/../setup.py SETUP_PY_CONTENTS)
+string(REGEX MATCH "version=\"([0-9]+\\.[0-9]+\\.[0-9]+)\"" _ ${SETUP_PY_CONTENTS})
+set(PIPER_VERSION ${CMAKE_MATCH_1})
+
+if(PIPER_VERSION)
+  message(STATUS "Parsed Piper Version: ${PIPER_VERSION}")
+  target_compile_definitions(piper PRIVATE PIPER_VERSION="${PIPER_VERSION}")
+else()
+  message(WARNING "Could not parse version from setup.py")
+endif()
+
 # ---- install ---
 
 include(GNUInstallDirs)

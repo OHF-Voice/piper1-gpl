@@ -225,6 +225,14 @@ int piper_synthesize_start(piper_synthesizer *synth, const char *text,
 EXPORT_SYMBOL
 int piper_synthesize_next(piper_synthesizer *synth, piper_audio_chunk *chunk);
 
+
+/** 
+ * \return piper version
+ */
+EXPORT_SYMBOL
+char const *piper_version(void);
+
+
 #ifdef __cplusplus
 }
 #endif
