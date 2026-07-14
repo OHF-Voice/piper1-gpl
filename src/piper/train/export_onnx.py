@@ -45,7 +45,13 @@ def main() -> None:
     checkpoint_path = Path(args.checkpoint)
 
     # pylint: disable=no-value-for-parameter
-    model = VitsModel.load_from_checkpoint(checkpoint_path, map_location="cpu")
+    # `_instantiator=None` bypasses the LightningCLI jsonargparse instantiator
+    # stored in the checkpoint, which strictly rejects stale hyperparameters
+    # (e.g. `sample_bytes`). VitsModel.__init__ accepts **kwargs, so unknown
+    # hparams are harmless when instantiated directly.
+    model = VitsModel.load_from_checkpoint(
+        checkpoint_path, map_location="cpu", _instantiator=None
+    )
     model_g = model.model_g
 
     # Inference only
@@ -102,6 +108,11 @@ def main() -> None:
             "input_lengths": {0: "batch_size"},
             "output": {0: "batch_size", 2: "time"},
         },
+        # The model relies on data-dependent control flow (e.g. boolean-mask
+        # indexing in the spline transforms) that the dynamo-based exporter
+        # cannot capture. torch>=2.9 defaults dynamo=True, so force the legacy
+        # TorchScript exporter.
+        dynamo=False,
     )
     _LOGGER.info("Exported model to %s", output_path)
 
