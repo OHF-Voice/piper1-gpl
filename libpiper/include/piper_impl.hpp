@@ -34,7 +34,6 @@ const float DEFAULT_NOISE_W_SCALE = 0.8f;
 
 const int DEFAULT_HOP_LENGTH = 256;
 
-
 // espeak
 #define CLAUSE_INTONATION_FULL_STOP 0x00000000
 #define CLAUSE_INTONATION_COMMA 0x00001000
@@ -48,52 +47,52 @@ const int DEFAULT_HOP_LENGTH = 256;
 #define CLAUSE_COMMA (20 | CLAUSE_INTONATION_COMMA | CLAUSE_TYPE_CLAUSE)
 #define CLAUSE_QUESTION (40 | CLAUSE_INTONATION_QUESTION | CLAUSE_TYPE_SENTENCE)
 #define CLAUSE_EXCLAMATION                                                     \
-    (45 | CLAUSE_INTONATION_EXCLAMATION | CLAUSE_TYPE_SENTENCE)
+  (45 | CLAUSE_INTONATION_EXCLAMATION | CLAUSE_TYPE_SENTENCE)
 #define CLAUSE_COLON (30 | CLAUSE_INTONATION_FULL_STOP | CLAUSE_TYPE_CLAUSE)
 #define CLAUSE_SEMICOLON (30 | CLAUSE_INTONATION_COMMA | CLAUSE_TYPE_CLAUSE)
 
 struct piper_synthesizer {
-    // From config JSON file
-    std::string espeak_voice;
-    int sample_rate;
-    int num_speakers;
-    PhonemeIdMap phoneme_id_map;
-    int hop_length = DEFAULT_HOP_LENGTH;
+  // From config JSON file
+  std::string espeak_voice;
+  int sample_rate;
+  int num_speakers;
+  PhonemeIdMap phoneme_id_map;
+  int hop_length = DEFAULT_HOP_LENGTH;
 
-    // Default synthesis settings for the voice
-    float synth_length_scale = DEFAULT_LENGTH_SCALE;
-    float synth_noise_scale = DEFAULT_NOISE_SCALE;
-    float synth_noise_w_scale = DEFAULT_NOISE_W_SCALE;
+  // Default synthesis settings for the voice
+  float synth_length_scale = DEFAULT_LENGTH_SCALE;
+  float synth_noise_scale = DEFAULT_NOISE_SCALE;
+  float synth_noise_w_scale = DEFAULT_NOISE_W_SCALE;
 
-    // onnx
-    std::unique_ptr<Ort::Session> session;
-    Ort::AllocatorWithDefaultOptions session_allocator;
-    Ort::SessionOptions session_options;
-    Ort::Env session_env;
+  // onnx
+  std::unique_ptr<Ort::Session> session;
+  Ort::AllocatorWithDefaultOptions session_allocator;
+  Ort::SessionOptions session_options;
+  Ort::Env session_env;
 
-    // synthesize state
-    std::queue<std::pair<std::vector<Phoneme>, std::vector<PhonemeId>>>
-        phoneme_id_queue;
-    std::vector<float> chunk_samples;
-    std::vector<int> chunk_phoneme_ids;
-    std::vector<Phoneme> chunk_phonemes;
-    std::vector<int> chunk_alignments;
-    float length_scale = DEFAULT_LENGTH_SCALE;
-    float noise_scale = DEFAULT_NOISE_SCALE;
-    float noise_w_scale = DEFAULT_NOISE_W_SCALE;
-    SpeakerId speaker_id = 0;
+  // synthesize state
+  std::queue<std::pair<std::vector<Phoneme>, std::vector<PhonemeId>>>
+      phoneme_id_queue;
+  std::vector<float> chunk_samples;
+  std::vector<int> chunk_phoneme_ids;
+  std::vector<Phoneme> chunk_phonemes;
+  std::vector<int> chunk_alignments;
+  float length_scale = DEFAULT_LENGTH_SCALE;
+  float noise_scale = DEFAULT_NOISE_SCALE;
+  float noise_w_scale = DEFAULT_NOISE_W_SCALE;
+  SpeakerId speaker_id = 0;
 };
 
 // Get the first UTF-8 codepoint of a string
 std::optional<Phoneme> get_codepoint(std::string s) {
-    auto view = una::views::utf8(s);
-    auto it = view.begin();
+  auto view = una::views::utf8(s);
+  auto it = view.begin();
 
-    if (it != view.end()) {
-        return *it;
-    }
+  if (it != view.end()) {
+    return *it;
+  }
 
-    return std::nullopt;
+  return std::nullopt;
 }
 
 #endif // PIPER_IMPL_H_

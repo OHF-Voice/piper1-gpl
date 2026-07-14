@@ -1,14 +1,14 @@
-#include <gtest/gtest.h>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include <gtest/gtest.h>
 #include <iostream>
 #include <memory>
 #include <sstream>
 
-#include "utils/process.hpp"
-#include "utils/piper_test_assets.h"
 #include "piper.h"
+#include "utils/piper_test_assets.h"
+#include "utils/process.hpp"
 
 namespace {
 // RAII class to redirect stdin for tests
@@ -88,7 +88,7 @@ TEST_F(ProcessTest, ProcessInputStreamFileOutput) {
 
   // Redirect cout to capture the output path
   std::stringstream cout_buffer;
-  std::streambuf* old_cout = std::cout.rdbuf(cout_buffer.rdbuf());
+  std::streambuf *old_cout = std::cout.rdbuf(cout_buffer.rdbuf());
 
   processInputStream(runConfig, synth, &options);
 
@@ -119,14 +119,14 @@ TEST_F(ProcessTest, ProcessInputStreamDirectoryOutput) {
   StdinRedirect redirect("This is a test for directory output.");
 
   std::stringstream cout_buffer;
-  std::streambuf* old_cout = std::cout.rdbuf(cout_buffer.rdbuf());
+  std::streambuf *old_cout = std::cout.rdbuf(cout_buffer.rdbuf());
 
   processInputStream(runConfig, synth, &options);
 
   std::cout.rdbuf(old_cout);
 
   std::string created_path = cout_buffer.str();
-  created_path.erase(created_path.find_last_not_of(" \n\r\t")+1);
+  created_path.erase(created_path.find_last_not_of(" \n\r\t") + 1);
   ASSERT_TRUE(std::filesystem::exists(created_path));
   ASSERT_GT(std::filesystem::file_size(created_path), 44);
   std::filesystem::remove_all(outputDir);

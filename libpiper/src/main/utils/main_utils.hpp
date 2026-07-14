@@ -6,7 +6,6 @@
 #include <optional>
 #include <stdexcept>
 
-
 namespace piper {
 
 enum OutputType { OUTPUT_FILE, OUTPUT_DIRECTORY, OUTPUT_STDOUT };
