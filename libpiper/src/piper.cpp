@@ -8,7 +8,7 @@
 // TODO: A static library for espeak-ng library for Windows is impossible?
 //#if defined(__MINGW32__) || defined(__MINGW64__)
     // This prevents declaring imports by declaring exports which are ignored.
-    #define LIBESPEAK_NG_EXPORT
+    //#define LIBESPEAK_NG_EXPORT
 //#endif
 #include <espeak-ng/speak_lib.h>
 

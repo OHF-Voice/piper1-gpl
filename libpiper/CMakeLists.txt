@@ -166,6 +166,8 @@ endif()
 # ---- libpiper ---
 
 add_library(piper SHARED ${CMAKE_CURRENT_SOURCE_DIR}/src/piper.cpp)
+set_target_properties(piper PROPERTIES MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+target_compile_definitions(piper PRIVATE _PIPER_PKG)
 add_library(piper::shared ALIAS piper)
 
 add_dependencies(piper espeak_ng_external)
@@ -187,9 +189,12 @@ target_link_libraries(piper
     onnxruntime
 )
 
+
 # ---- libpiper static ---
 
 add_library(piper-static STATIC ${CMAKE_CURRENT_SOURCE_DIR}/src/piper.cpp)
+target_compile_definitions(piper-static PUBLIC _PIPER_ARC)
+
 add_library(piper::static ALIAS piper-static)
 
 add_dependencies(piper-static espeak_ng_external)

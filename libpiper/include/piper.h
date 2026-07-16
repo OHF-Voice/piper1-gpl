@@ -1,10 +1,43 @@
 #ifndef PIPER_H_
 #define PIPER_H_
 
-#include <stdbool.h>
-#include <stddef.h>
-#include <stdint.h>
 #include <uchar.h>
+
+// Define target visibility macros for Windows and GCC/Clang.
+#if WIN32
+    #if defined(__GNUC__)
+        #define TARGET_EXPORT __attribute__((dllexport))
+        #define TARGET_IMPORT __attribute__((dllimport))
+        #define TARGET_HIDDEN __attribute__((visibility("hidden")))
+    #elif defined(_MSC_VER)
+        #define TARGET_EXPORT __declspec(dllexport)
+        #define TARGET_IMPORT __declspec(dllimport)
+        #define TARGET_HIDDEN
+    #else
+        #error "Failed to detect compiler."
+    #endif
+#else
+    #define TARGET_EXPORT __attribute__((visibility("default")))
+    #define TARGET_IMPORT
+    #define TARGET_HIDDEN __attribute__((visibility("hidden")))
+#endif
+
+// When the package flag is set, the functions are exported.
+#if defined(_PIPER_PKG)
+    #define _PIPER_DATA TARGET_EXPORT
+    #define _PIPER_FUNC TARGET_EXPORT
+    #define _PIPER_CLASS TARGET_EXPORT
+// When the archive flag is set, importing is not needed.
+#elif defined(_PIPER_ARC)
+    #define _PIPER_DATA
+    #define _PIPER_FUNC
+    #define _PIPER_CLASS
+// When no flags are defined, assume function needed to be imported.
+#else
+    #define _PIPER_DATA TARGET_IMPORT
+    #define _PIPER_FUNC TARGET_IMPORT
+    #define _PIPER_CLASS TARGET_IMPORT
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -155,7 +188,7 @@ typedef struct piper_synthesize_options {
  *
  * \return a Piper text-to-speech synthesizer for the voice model.
  */
-piper_synthesizer *piper_create(const char *model_path, const char *config_path,
+_PIPER_FUNC piper_synthesizer *piper_create(const char *model_path, const char *config_path,
                                 const char *espeak_data_path);
 
 /**
@@ -163,7 +196,7 @@ piper_synthesizer *piper_create(const char *model_path, const char *config_path,
  *
  * \param synth Piper synthesizer.
  */
-void piper_free(piper_synthesizer *synth);
+_PIPER_FUNC void piper_free(piper_synthesizer *synth);
 
 /**
  * \brief Get the default synthesis options for a Piper synthesizer.
@@ -172,7 +205,7 @@ void piper_free(piper_synthesizer *synth);
  *
  * \return synthesis options from voice config.
  */
-piper_synthesize_options
+_PIPER_FUNC piper_synthesize_options
 piper_default_synthesize_options(piper_synthesizer *synth);
 
 /**
@@ -188,7 +221,7 @@ piper_default_synthesize_options(piper_synthesizer *synth);
  *
  * \return PIPER_OK or error code.
  */
-int piper_synthesize_start(piper_synthesizer *synth, const char *text,
+_PIPER_FUNC int piper_synthesize_start(piper_synthesizer *synth, const char *text,
                            const piper_synthesize_options *options);
 
 /**
@@ -208,7 +241,7 @@ int piper_synthesize_start(piper_synthesizer *synth, const char *text,
  *
  * \return PIPER_DONE when complete, otherwise PIPER_OK or error code.
  */
-int piper_synthesize_next(piper_synthesizer *synth, piper_audio_chunk *chunk);
+_PIPER_FUNC int piper_synthesize_next(piper_synthesizer *synth, piper_audio_chunk *chunk);
 
 #ifdef __cplusplus
 }

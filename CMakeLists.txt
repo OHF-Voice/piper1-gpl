@@ -4,6 +4,9 @@ cmake_minimum_required(VERSION 3.26)
 # This is called automatically by scikit-build from setup.py.
 project(piper LANGUAGES C CXX)
 
+# Get the required variable 'GIT_EXECUTABLE'.
+find_package(Git REQUIRED)
+
 option(BUILD_TESTING "Enable project tests" ON)
 if(BUILD_TESTING)
     enable_testing()
@@ -32,12 +35,16 @@ else()
     set(UCD_STATIC_LIB ${ESPEAKNG_BUILD_DIR}/src/espeak_ng_external-build/src/ucd-tools/libucd.a)
 endif()
 
+# Add the external 'espeak' project and apply the patch to use it as a static library only.
 ExternalProject_Add(espeak_ng_external
     GIT_REPOSITORY https://github.com/espeak-ng/espeak-ng.git
     GIT_TAG 212928b394a96e8fd2096616bfd54e17845c48f6  # 2025-Mar-22
     PREFIX ${ESPEAKNG_BUILD_DIR}
     CMAKE_ARGS
         -DCMAKE_CROSSCOMPILING:BOOL=${CMAKE_CROSSCOMPILING}
+        # To allow this to work the minimum cmake version is also patched.
+        # By linking the VCRT static libs it will prevent MSVC linker errors in dependent projects.
+        -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded$<$<CONFIG:Debug>:Debug>
         # Forward the current toolchain file.
         -DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE}
         -DCMAKE_SYSTEM_NAME=${CMAKE_SYSTEM_NAME}
@@ -63,6 +70,10 @@ ExternalProject_Add(espeak_ng_external
         ${ESPEAKNG_STATIC_LIB}
         ${UCD_STATIC_LIB}
     UPDATE_DISCONNECTED TRUE
+    # Headers are only importing or exporting functions but no consideration when only as a private static library.
+    # Does not make cmake abort when the patch has already been performed by first checking it.
+    PATCH_COMMAND "${GIT_EXECUTABLE}" apply --check --reverse "${CMAKE_CURRENT_LIST_DIR}/libpiper/src/espeak.patch" ||
+        "${GIT_EXECUTABLE}" apply "${CMAKE_CURRENT_LIST_DIR}/libpiper/src/espeak.patch"
 )
 
 include_directories(

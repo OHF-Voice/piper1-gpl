@@ -342,12 +342,20 @@ def start_git_server(port: int) -> bool:
 					continue
 				payload = json.loads(raw_data)
 				# Assemble the command.
-				cmd = ['git'] + payload['args']
+				cmd = ['git']
+				for arg in payload['args']:
+					# Convert the argument when matching a Windows full path with forward slashes.
+					if bool(re.match(r'^[a-zA-Z]:/(?:[^\\/:*?"<>|\r\n]+/)*[^\\/:*?"<>|\r\n]*$', arg)):
+						cmd.append(translate_path(arg))
+					else:
+						cmd.append(arg)
 				# Execute Git and capture everything
 				logger.info(f"= Git server: {' '.join(cmd)}")
-				proc = subprocess.run(cmd, cwd=translate_path(payload['cwd']), capture_output=True,
+				proc = subprocess.run(cmd, cwd=translate_path(payload['cwd']),
 					# Captures both stdout and stderr
-					text=False  # Keep as bytes for raw data transfer
+					capture_output=True,
+					# Keep as bytes for raw data transfer
+					text=False
 				)
 				# Prepare the response using hex encoding prevents JSON breakages.
 				# noinspection PyUnresolvedReferences
@@ -1565,7 +1573,9 @@ examples:
 		parser.add_argument("-c", "--clean", action="store_true",
 			help="Remove the built artifacts first (cmake option '--clean-first').")
 		parser.add_argument("-f", "--fresh", action="store_true",
-			help="Additional flag for adding (cmake option --fresh).")
+			help="Optional flag for adding (cmake option --fresh).")
+		parser.add_argument("-D", "--debug", action="store_true",
+			help="Optional flag for adding (cmake option --debug-output).")
 		parser.add_argument("-F", "--fresh-all", action="store_true",
 			help="Clears the build tree of all 'CMakeCache.txt' files.")
 		parser.add_argument("-C", "--wipe", action="store_true", help="Wipe build directory contents.")
@@ -1693,6 +1703,8 @@ examples:
 					# Add the command option to delete the CMakeCache.txt file.
 					if args.fresh:
 						cmd.append("--fresh")
+					if args.debug:
+						cmd.append("--debug-output")
 					# Execute the configure command for creating makefiles.
 					run_command(cmd, dbg_mode=DebugMode.REPORT_ONLY)
 
@@ -1710,6 +1722,8 @@ examples:
 			if args.target:
 				cmd.extend(["--target", args.target])
 				logger.debug(f"# Select build target: {args.target}")
+			if args.debug:
+				cmd.append("--verbose")
 			if not args.target_select or args.target_select and not args.target is None:
 				run_command(cmd, dbg_mode=DebugMode.REPORT_ONLY)
 
@@ -1794,7 +1808,6 @@ examples:
 		if shutil.which("wine") is None:
 			logger.error(f"! The 'wine' command not found. Please install required packages.")
 			return 1
-
 		# When the temporary directory by environment variable 'TEMP' is used, the cmake build directory is not preserved.
 		# To make the 'TEMP' a valid location with Wine in Docker, it needs to be in the project which is mounted on the host.
 		if is_docker() and "HOME" in RUN_ENV:
@@ -1809,7 +1822,8 @@ examples:
 				# Split the arguments again on the second '--' and parse the right command arguments and show help when invalid.
 				cmd_args = SubCommandNative().parse_args(split_arguments(args_right)[0], False)
 				if cmd_args:
-					args.git_server = cmd_args.make or cmd_args.build or cmd_args.workflow
+					# Some commands demand the Git server to be present.
+					args.git_server |= cmd_args.make or cmd_args.build or cmd_args.workflow
 				# Start running the git server only when needed or forced.
 				if args.git_server:
 					if not start_git_server(int(RUN_ENV.get('GIT_SERVER_PORT', '9999'))):
