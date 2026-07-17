@@ -15,7 +15,12 @@ from .commons import slice_segments
 from .dataset import Batch
 from .losses import discriminator_loss, feature_loss, generator_loss, kl_loss
 from .mel_processing import mel_spectrogram_torch, spec_to_mel_torch
-from .models import MultiPeriodDiscriminator, SynthesizerTrn
+from .models import (
+    MultiPeriodDiscriminator,
+    MultiResolutionDiscriminator,
+    SynthesizerTrn,
+)
+from .mos import MosPredictor
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -58,6 +63,11 @@ class VitsModel(L.LightningModule):
         gin_channels: int = 0,
         use_sdp: bool = True,
         segment_size: int = 8192,
+        # Multi-Resolution STFT Discriminator (UnivNet/Vocos-style). Training-
+        # only: sharpens spectral detail the period discriminators miss, at
+        # ZERO inference cost (discriminators are discarded after training).
+        # Opt-in so it never destabilizes the existing baseline.
+        use_mrd: bool = False,
         # training
         learning_rate: float = 2e-4,
         learning_rate_d: float = 1e-4,
@@ -72,6 +82,16 @@ class VitsModel(L.LightningModule):
         c_kl: float = 1.0,
         grad_clip: Optional[float] = None,
         vocoder_warmstart_ckpt: Optional[str] = None,
+        # Full non-strict warmstart: copy every matching-shape parameter from an
+        # existing Piper checkpoint (generator + MPD), leaving any new modules
+        # (e.g. the MRD) freshly initialized. Use this instead of --ckpt_path
+        # when fine-tuning with use_mrd=true, since --ckpt_path does a strict
+        # load that fails on the extra MRD keys. Starts a fresh optimizer.
+        warmstart_ckpt: Optional[str] = None,
+        # Optional no-reference MOS predictor for validation audio. Set to None
+        # (or "none") to disable. Logged as "val_mos" -- a perceptual-quality
+        # signal that can be monitored for early stopping (mode="max").
+        mos_metric: Optional[str] = "utmos",
         # unused
         dataset: object = None,
         **kwargs,
@@ -116,6 +136,7 @@ class VitsModel(L.LightningModule):
         # Used to partially load the state dict from a checkpoint.
         # Only the text/phoneme agnostic portions are loaded.
         self._vocoder_warmstart_ckpt = vocoder_warmstart_ckpt
+        self._warmstart_ckpt = warmstart_ckpt
 
         # Set up models
         self.model_g = SynthesizerTrn(
@@ -142,6 +163,18 @@ class VitsModel(L.LightningModule):
         self.model_d = MultiPeriodDiscriminator(
             use_spectral_norm=self.hparams.use_spectral_norm
         )
+
+        # Optional multi-resolution STFT discriminator (training-only).
+        self.model_mrd: Optional[MultiResolutionDiscriminator] = None
+        if self.hparams.use_mrd:
+            self.model_mrd = MultiResolutionDiscriminator(
+                use_spectral_norm=self.hparams.use_spectral_norm
+            )
+
+        # Optional perceptual-quality predictor (lazily loaded on first use).
+        self._mos_predictor: Optional[MosPredictor] = None
+        if mos_metric and (mos_metric.lower() != "none"):
+            self._mos_predictor = MosPredictor(mos_metric.lower())
 
     def forward(self, text, text_lengths, scales, sid=None):
         noise_scale = scales[0]
@@ -179,29 +212,34 @@ class VitsModel(L.LightningModule):
             (_z, z_p, m_p, logs_p, _m_q, logs_q),
         ) = self.model_g(x, x_lengths, spec, spec_lengths, speaker_ids)
 
-        mel = spec_to_mel_torch(
-            spec,
-            self.hparams.filter_length,
-            self.hparams.mel_channels,
-            self.hparams.sample_rate,
-            self.hparams.mel_fmin,
-            self.hparams.mel_fmax,
-        )
-        y_mel = slice_segments(
-            mel,
-            ids_slice,
-            self.hparams.segment_size // self.hparams.hop_length,
-        )
-        y_hat_mel = mel_spectrogram_torch(
-            y_hat.squeeze(1),
-            self.hparams.filter_length,
-            self.hparams.mel_channels,
-            self.hparams.sample_rate,
-            self.hparams.hop_length,
-            self.hparams.win_length,
-            self.hparams.mel_fmin,
-            self.hparams.mel_fmax,
-        )
+        # Mel/STFT must run in fp32: cuFFT does not support bf16, and a stable
+        # mel L1 wants full precision anyway. Disable autocast and cast the
+        # (possibly bf16) generator audio to float here; the discriminators
+        # below still see the autocast dtype for speed.
+        with autocast(self.device.type, enabled=False):
+            mel = spec_to_mel_torch(
+                spec.float(),
+                self.hparams.filter_length,
+                self.hparams.mel_channels,
+                self.hparams.sample_rate,
+                self.hparams.mel_fmin,
+                self.hparams.mel_fmax,
+            )
+            y_mel = slice_segments(
+                mel,
+                ids_slice,
+                self.hparams.segment_size // self.hparams.hop_length,
+            )
+            y_hat_mel = mel_spectrogram_torch(
+                y_hat.squeeze(1).float(),
+                self.hparams.filter_length,
+                self.hparams.mel_channels,
+                self.hparams.sample_rate,
+                self.hparams.hop_length,
+                self.hparams.win_length,
+                self.hparams.mel_fmin,
+                self.hparams.mel_fmax,
+            )
         y = slice_segments(
             y,
             ids_slice * self.hparams.hop_length,
@@ -212,19 +250,34 @@ class VitsModel(L.LightningModule):
         y_hat = y_hat[..., : y.shape[-1]]
 
         _y_d_hat_r, y_d_hat_g, fmap_r, fmap_g = self.model_d(y, y_hat)
+        if self.model_mrd is not None:
+            _y_dr_r, y_dr_g, fmap_r_mrd, fmap_g_mrd = self.model_mrd(y, y_hat)
 
         with autocast(self.device.type, enabled=False):
             # Generator loss
+            mel_l1 = F.l1_loss(y_mel, y_hat_mel)
+            kl = kl_loss(z_p, logs_q, m_p, logs_p, z_mask)
+
             loss_dur = torch.sum(l_length.float())
-            loss_mel = F.l1_loss(y_mel, y_hat_mel) * self.hparams.c_mel
-            loss_kl = kl_loss(z_p, logs_q, m_p, logs_p, z_mask) * self.hparams.c_kl
+            loss_mel = mel_l1 * self.hparams.c_mel
+            loss_kl = kl * self.hparams.c_kl
 
             loss_fm = feature_loss(fmap_r, fmap_g)
             loss_gen, _losses_gen = generator_loss(y_d_hat_g)
             loss_gen_all = loss_gen + loss_fm + loss_mel + loss_dur + loss_kl
 
+            # Multi-resolution STFT discriminator (adversarial + feature match)
+            loss_mrd_gen = y.new_zeros(())
+            loss_mrd_fm = y.new_zeros(())
+            if self.model_mrd is not None:
+                loss_mrd_fm = feature_loss(fmap_r_mrd, fmap_g_mrd)
+                loss_mrd_gen, _ = generator_loss(y_dr_g)
+                loss_gen_all = loss_gen_all + loss_mrd_gen + loss_mrd_fm
+
         # d step
         y_d_hat_r, y_d_hat_g, _, _ = self.model_d(y, y_hat.detach())
+        if self.model_mrd is not None:
+            y_dr_r_det, y_dr_g_det, _, _ = self.model_mrd(y, y_hat.detach())
 
         with autocast(self.device.type, enabled=False):
             # Discriminator
@@ -233,15 +286,44 @@ class VitsModel(L.LightningModule):
             )
             loss_disc_all = loss_disc
 
-        return loss_gen_all, loss_disc_all
+            loss_mrd_disc = y.new_zeros(())
+            if self.model_mrd is not None:
+                loss_mrd_disc, _, _ = discriminator_loss(y_dr_r_det, y_dr_g_det)
+                loss_disc_all = loss_disc_all + loss_mrd_disc
+
+        # Individual components for logging/monitoring. "mel" is the raw
+        # (unweighted) mel L1, which is the most quality-correlated signal and
+        # the recommended target for early stopping/checkpointing -- unlike the
+        # adversarial losses, which only reflect the G/D equilibrium.
+        metrics = {
+            "mel": mel_l1.detach(),
+            "kl": kl.detach(),
+            "dur": loss_dur.detach(),
+            "fm": loss_fm.detach(),
+            "gen": loss_gen.detach(),
+            "disc": loss_disc.detach(),
+        }
+        if self.model_mrd is not None:
+            metrics["mrd_gen"] = loss_mrd_gen.detach()
+            metrics["mrd_fm"] = loss_mrd_fm.detach()
+            metrics["mrd_disc"] = loss_mrd_disc.detach()
+
+        return loss_gen_all, loss_disc_all, metrics
 
     def training_step(self, batch: Batch, batch_idx: int):
         opt_g, opt_d = self.optimizers()
-        loss_g, loss_d = self._compute_loss(batch)
+        loss_g, loss_d, metrics = self._compute_loss(batch)
 
         self.log("loss_g", loss_g, batch_size=self.batch_size)
+        self.log_dict(
+            {f"train_{name}": value for name, value in metrics.items()},
+            batch_size=self.batch_size,
+        )
         opt_g.zero_grad()
-        self.manual_backward(loss_g, retain_graph=True)
+        # No retain_graph: loss_d is built from an independent discriminator
+        # forward on y_hat.detach(), so freeing the generator graph here is
+        # safe and cuts peak memory (lets larger batches fit on 24 GB).
+        self.manual_backward(loss_g)
         opt_g.step()
 
         self.log("loss_d", loss_d, batch_size=self.batch_size)
@@ -250,47 +332,83 @@ class VitsModel(L.LightningModule):
         opt_d.step()
 
     def validation_step(self, batch: Batch, batch_idx: int):
-        loss_g, _loss_d = self._compute_loss(batch)
-        val_loss = loss_g  # only generator loss matters
+        loss_g, _loss_d, metrics = self._compute_loss(batch)
+        val_loss = loss_g  # kept for backwards compatibility
         self.log("val_loss", val_loss, batch_size=self.batch_size)
+
+        # Lightning averages these across the validation epoch, giving a stable
+        # per-epoch signal. "val_mel" (raw mel L1) is the recommended target for
+        # EarlyStopping/ModelCheckpoint -- see train/__main__.py.
+        self.log_dict(
+            {f"val_{name}": value for name, value in metrics.items()},
+            batch_size=self.batch_size,
+            sync_dist=True,
+        )
         return val_loss
 
-    def on_validation_end(self) -> None:
-        # Generate audio examples after validation, but not during sanity check
+    def on_validation_epoch_end(self) -> None:
+        # Generate audio examples after validation, but not during sanity check.
+        # Done in on_validation_epoch_end (not on_validation_end) so that
+        # "val_mos" is logged before the EarlyStopping/ModelCheckpoint callbacks
+        # read it.
         if self.trainer.sanity_checking:
-            return super().on_validation_end()
+            return
 
-        if (
+        has_audio_logger = bool(
             getattr(self, "logger", None)
             and hasattr(self.logger, "experiment")
             and hasattr(self.logger.experiment, "add_audio")
-        ):
-            # Generate audio examples
-            # Requires tensorboard
-            for utt_idx, test_utt in enumerate(self.trainer.datamodule.test_dataset):
-                text = test_utt.phoneme_ids.unsqueeze(0).to(self.device)
-                text_lengths = torch.LongTensor([len(test_utt.phoneme_ids)]).to(
-                    self.device
-                )
-                scales = [0.667, 1.0, 0.8]
-                sid = (
-                    test_utt.speaker_id.to(self.device)
-                    if test_utt.speaker_id is not None
-                    else None
-                )
+        )
+        mos_enabled = self._mos_predictor is not None
+
+        if not (has_audio_logger or mos_enabled):
+            return
+
+        mos_scores = []
+        for utt_idx, test_utt in enumerate(self.trainer.datamodule.test_dataset):
+            text = test_utt.phoneme_ids.unsqueeze(0).to(self.device)
+            text_lengths = torch.LongTensor([len(test_utt.phoneme_ids)]).to(self.device)
+            scales = [0.667, 1.0, 0.8]
+            sid = (
+                test_utt.speaker_id.to(self.device)
+                if test_utt.speaker_id is not None
+                else None
+            )
+            with torch.inference_mode():
                 test_audio = self(text, text_lengths, scales, sid=sid).detach()
 
-                # Scale to make louder in [-1, 1]
-                test_audio = test_audio * (1.0 / max(0.01, abs(test_audio).max()))
+            # Score perceptual quality on the raw (un-normalized) audio.
+            if mos_enabled:
+                score = self._mos_predictor.score(test_audio, self.hparams.sample_rate)
+                if score is not None:
+                    mos_scores.append(score)
 
+            if has_audio_logger:
+                # Requires tensorboard. Scale to make louder in [-1, 1].
+                norm_audio = test_audio * (1.0 / max(0.01, abs(test_audio).max()))
                 tag = test_utt.text or str(utt_idx)
+                # Pass global_step so each validation epoch's clip lands on its
+                # own step. Without it, every epoch's audio is written at step 0,
+                # and TensorBoard's audio dashboard can't scrub across epochs --
+                # it mis-renders the stacked step-0 entries (clips show as 0s).
                 self.logger.experiment.add_audio(
-                    tag, test_audio, sample_rate=self.hparams.sample_rate
+                    tag,
+                    norm_audio,
+                    sample_rate=self.hparams.sample_rate,
+                    global_step=self.global_step,
                 )
 
-        return super().on_validation_end()
+        if mos_scores:
+            val_mos = sum(mos_scores) / len(mos_scores)
+            self.log("val_mos", val_mos, prog_bar=True, sync_dist=True)
 
     def configure_optimizers(self):
+        # The discriminator optimizer also drives the MRD when enabled, so its
+        # parameters are updated by the same opt_d.step() in training_step.
+        disc_params = list(self.model_d.parameters())
+        if self.model_mrd is not None:
+            disc_params += list(self.model_mrd.parameters())
+
         optimizers = [
             torch.optim.AdamW(
                 self.model_g.parameters(),
@@ -299,7 +417,7 @@ class VitsModel(L.LightningModule):
                 eps=self.hparams.eps,
             ),
             torch.optim.AdamW(
-                self.model_d.parameters(),
+                disc_params,
                 lr=self.hparams.learning_rate_d,
                 betas=self.hparams.betas_d,
                 eps=self.hparams.eps,
@@ -340,13 +458,36 @@ class VitsModel(L.LightningModule):
         self.load_state_dict(new_sd, strict=False)
         _LOGGER.info(f"[warmstart] Copied {copied} vocoder parameters from {ckpt_path}")
 
+    def _warmstart_from_ckpt(self, ckpt_path: str):
+        """Copy all matching-shape params from a checkpoint (non-strict)."""
+        ckpt = torch.load(ckpt_path, map_location=self.device, weights_only=False)
+        old_sd = ckpt["state_dict"]
+        new_sd = self.state_dict()
+
+        copied, skipped = 0, 0
+        for k, v in old_sd.items():
+            if (k in new_sd) and (new_sd[k].shape == v.shape):
+                new_sd[k] = v
+                copied += 1
+            else:
+                skipped += 1
+
+        self.load_state_dict(new_sd, strict=False)
+        _LOGGER.info(
+            "[warmstart] Copied %s parameters from %s (%s skipped; new modules "
+            "such as the MRD start fresh)",
+            copied,
+            ckpt_path,
+            skipped,
+        )
+
     def on_fit_start(self):
         # Called once at the start of fit()
-        if self._vocoder_warmstart_ckpt is None:
-            return
+        if self._vocoder_warmstart_ckpt is not None:
+            # Make sure we're on the correct device
+            self._warmstart_vocoder_from_ckpt(self._vocoder_warmstart_ckpt)
+            self._vocoder_warmstart_ckpt = None  # avoid re-running on restart
 
-        # Make sure we’re on the correct device
-        self._warmstart_vocoder_from_ckpt(self._vocoder_warmstart_ckpt)
-
-        # Avoid re-running if Trainer restarts
-        self._vocoder_warmstart_ckpt = None
+        if self._warmstart_ckpt is not None:
+            self._warmstart_from_ckpt(self._warmstart_ckpt)
+            self._warmstart_ckpt = None
