@@ -15,6 +15,7 @@ class PhonemeType(str, Enum):
     ESPEAK = "espeak"
     TEXT = "text"
     PINYIN = "pinyin"  # zh-CN
+    HEBREW = "hebrew"  # he-IL: Nakdimon niqqud + IPA G2P
 
 
 @dataclass

@@ -223,6 +223,17 @@ class PiperVoice:
 
             return phonemizer.phonemize(text)
 
+        if self.config.phoneme_type == PhonemeType.HEBREW:
+            from .phonemize_hebrew import HebrewPhonemizer
+
+            # Nakdimon (niqqud) + rule-based IPA G2P
+            phonemizer = getattr(self, "_hebrew_phonemizer", None)
+            if phonemizer is None:
+                phonemizer = HebrewPhonemizer()
+                setattr(self, "_hebrew_phonemizer", phonemizer)
+
+            return phonemizer.phonemize(text)
+
         if self.config.phoneme_type != PhonemeType.ESPEAK:
             raise ValueError(f"Unexpected phoneme type: {self.config.phoneme_type}")
 
