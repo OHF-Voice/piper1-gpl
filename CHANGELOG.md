@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.5.0
+
+- Add `libpiper` C++ CLI executable ported from the legacy Piper repository, plus a C++ test suite
+- Fix `libpiper` builds on Windows (MSVC, MSYS2-GCC) and Windows CI
+- Bump embedded espeak-ng version
+- Add default speaker id for multi-speaker voices
+- Add vowel clustering support (`--data.vowel_clusters`)
+- Add in-memory patching for alignments
+- Training: add MRD (Multi-Resolution STFT) discriminator, loss/MOS tracking with UTMOS, silence-trim fixes, and dataloader performance improvements
+- Pass custom phoneme id map when training
+
 ## 1.4.2
 
 - Fix `pathvalidate` dependency
