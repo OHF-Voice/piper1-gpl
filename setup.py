@@ -93,7 +93,13 @@ setup(
             "requests>=2,<3",
         ],
     },
-    packages=["piper", "piper.tashkeel", "piper.train"],
+    packages=[
+        "piper",
+        "piper.tashkeel",
+        "piper.train",
+        "piper.train.vits",
+        "piper.train.vits.monotonic_align",
+    ],
     package_dir={"": "src"},
     include_package_data=True,
     package_data={

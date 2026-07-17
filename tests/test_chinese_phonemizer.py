@@ -4,7 +4,11 @@ from pathlib import Path
 
 import pytest
 
-from piper.phonemize_chinese import ChinesePhonemizer, phonemes_to_ids
+# Chinese phonemization requires the optional [zh] dependencies (g2pW, torch, ...).
+# Skip the whole module if they are not installed.
+phonemize_chinese = pytest.importorskip("piper.phonemize_chinese")
+ChinesePhonemizer = phonemize_chinese.ChinesePhonemizer
+phonemes_to_ids = phonemize_chinese.phonemes_to_ids
 
 PAD_ID = 0
 BOS_ID = 1
