@@ -6,7 +6,6 @@ import wave
 from pathlib import Path
 from unittest.mock import patch
 
-import onnx
 import pytest
 from onnx import TensorProto, helper
 
@@ -392,6 +391,7 @@ def test_add_alignment_output_autodetect() -> None:
     """Test autodetecting and marking the Ceil tensor as an output."""
     from piper.patch_voice_with_alignment import add_alignment_output
 
+    onnx = pytest.importorskip("onnx")
     model = onnx.parser.parse_model(
         """
         <ir_version: 8, opset_import: ["": 15]>
@@ -412,6 +412,8 @@ def test_add_alignment_output_errors() -> None:
     """Test errors when no Ceil tensor exists or it is already an output."""
     from piper.patch_voice_with_alignment import add_alignment_output
 
+    onnx = pytest.importorskip("onnx")
+
     # No Ceil node
     no_ceil = onnx.parser.parse_model(
         """
@@ -431,8 +433,9 @@ def test_add_alignment_output_errors() -> None:
 
 def test_load_include_alignments_in_memory(tmp_path: Path) -> None:
     """Test patching an unpatched model in memory at load time."""
+    onnx = pytest.importorskip("onnx")
     model_path = tmp_path / "ceil_voice.onnx"
-    _make_ceil_model(model_path)
+    _make_ceil_model(onnx, model_path)
     shutil.copy(_TEST_CONFIG, f"{model_path}.json")
 
     # Without alignments: single (unpatched) output
@@ -458,7 +461,7 @@ def test_load_include_alignments_no_ceil() -> None:
 # -----------------------------------------------------------------------------
 
 
-def _make_ceil_model(path: Path) -> None:
+def _make_ceil_model(onnx, path: Path) -> None:
     """Write a minimal ONNX model with a Ceil node (unpatched, single output)."""
 
     inp = helper.make_tensor_value_info("input", TensorProto.FLOAT, [None])
