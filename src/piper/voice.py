@@ -504,7 +504,7 @@ class PiperVoice:
 
         if (self.config.num_speakers > 1) and (speaker_id is None):
             # Default speaker
-            speaker_id = 0
+            speaker_id = self.config.default_speaker_id
 
         if speaker_id is not None:
             sid = np.array([speaker_id], dtype=np.int64)

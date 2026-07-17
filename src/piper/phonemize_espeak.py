@@ -2,13 +2,12 @@
 
 import re
 import unicodedata
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple, Union
+from typing import List, Optional, Set, Tuple, Union
 
 _DIR = Path(__file__).parent
 ESPEAK_DATA_DIR = _DIR / "espeak-ng-data"
-
-from collections.abc import Sequence
 
 
 class EspeakPhonemizer:

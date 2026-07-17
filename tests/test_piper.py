@@ -13,6 +13,7 @@ from onnx import TensorProto, helper
 from piper import PiperVoice
 from piper.const import BOS, EOS
 from piper.phonemize_espeak import EspeakPhonemizer
+from piper.train.vits.dataset import VitsDataModule
 
 from . import EN_US_VOWEL_CLUSTERS
 
@@ -554,9 +555,6 @@ def test_training_phonemize_matches_inference_with_vowel_clusters() -> None:
     diphthong ids it never saw during training).
     """
     import json
-
-    from piper.phonemize_espeak import EspeakPhonemizer
-    from piper.train.vits.dataset import VitsDataModule
 
     data_module = VitsDataModule(
         csv_path="dataset.csv",
