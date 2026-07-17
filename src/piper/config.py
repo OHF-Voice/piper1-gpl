@@ -58,6 +58,9 @@ class PiperConfig:
     The final cluster phoneme must be present in the id map.
     """
 
+    default_speaker_id: int = 0
+    """Id of the default speaker for multi-speaker voices."""
+
     @staticmethod
     def from_dict(config: dict[str, Any]) -> "PiperConfig":
         """Load configuration from a dictionary."""
@@ -84,6 +87,8 @@ class PiperConfig:
             vowel_clusters=(
                 {tuple(vc) for vc in vowel_clusters} if vowel_clusters else None
             ),
+            #
+            default_speaker_id=config.get("default_speaker_id", 0),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -106,6 +111,7 @@ class PiperConfig:
             "phoneme_id_map": self.phoneme_id_map,
             "speaker_id_map": self.speaker_id_map,
             "hop_length": self.hop_length,
+            "default_speaker_id": self.default_speaker_id,
         }
 
         if self.piper_version:

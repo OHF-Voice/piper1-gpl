@@ -262,7 +262,7 @@ def main() -> None:
                     speaker,
                     voice.config.speaker_id_map.keys(),
                 )
-                speaker_id = args.speaker or 0
+                speaker_id = args.speaker or voice.config.default_speaker_id
 
         if (speaker_id is not None) and (speaker_id > voice.config.num_speakers):
             speaker_id = 0
