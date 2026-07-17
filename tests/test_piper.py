@@ -7,7 +7,6 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from onnx import TensorProto, helper
 
 from piper import PiperVoice
 from piper.const import BOS, EOS
@@ -389,9 +388,9 @@ def test_synthesize_alignment() -> None:
 
 def test_add_alignment_output_autodetect() -> None:
     """Test autodetecting and marking the Ceil tensor as an output."""
+    onnx = pytest.importorskip("onnx")
     from piper.patch_voice_with_alignment import add_alignment_output
 
-    onnx = pytest.importorskip("onnx")
     model = onnx.parser.parse_model(
         """
         <ir_version: 8, opset_import: ["": 15]>
@@ -410,9 +409,8 @@ def test_add_alignment_output_autodetect() -> None:
 
 def test_add_alignment_output_errors() -> None:
     """Test errors when no Ceil tensor exists or it is already an output."""
-    from piper.patch_voice_with_alignment import add_alignment_output
-
     onnx = pytest.importorskip("onnx")
+    from piper.patch_voice_with_alignment import add_alignment_output
 
     # No Ceil node
     no_ceil = onnx.parser.parse_model(
@@ -463,6 +461,8 @@ def test_load_include_alignments_no_ceil() -> None:
 
 def _make_ceil_model(onnx, path: Path) -> None:
     """Write a minimal ONNX model with a Ceil node (unpatched, single output)."""
+    helper = onnx.helper
+    TensorProto = onnx.TensorProto
 
     inp = helper.make_tensor_value_info("input", TensorProto.FLOAT, [None])
     out = helper.make_tensor_value_info("output", TensorProto.FLOAT, [None])
