@@ -308,6 +308,7 @@ class Segment:
     onset: List[str]  # consonant IPA (may include placeholders like <GLT>)
     nucleus: str  # vowel ipa ('a e i o u ə' or '')
     coda: List[str]
+    dagesh: bool = False  # onset consonant carried a dagesh (for shva-na rule)
 
 
 def _word_to_segments(word: str) -> List[Segment]:
@@ -362,10 +363,11 @@ def _word_to_segments(word: str) -> List[Segment]:
         else:
             # No vowel mark (or only sheva which we'll resolve later)
             if g.has(SHEVA):
-                # Temporary nucleus 'ə' to resolve as na'/nach later
+                # Temporary nucleus 'ə' to resolve as na'/nach later.
+                # Record the dagesh so the resolver can spot dagesh-chazak.
                 if cons and cons != "<GLT>":
                     onset.append(cons)
-                segs.append(Segment(onset, "ə", []))
+                segs.append(Segment(onset, "ə", [], g.has(DAGESH)))
                 onset = []
             else:
                 # Pure consonant (may be mater or silent letters)
@@ -384,42 +386,39 @@ def _word_to_segments(word: str) -> List[Segment]:
 
 
 def _resolve_sheva_and_qamats(segs: List[Segment]) -> List[Segment]:
-    """Apply practical sheva-na/nach and qamats-qatan heuristics."""
-    # Sheva: treat 'ə' as:
-    # - word-initial nucleus -> ə (na')
-    # - first of two consecutive 'ə' nuclei -> ə; the second -> ∅ (attach its onset to next)
-    # - before impossible cluster -> ə
-    # - otherwise, final 'ə' -> ∅ (nach)
+    """Resolve each shva ('ə' nucleus) to na (pronounced /e/) or nach (silent).
+
+    Modern Israeli Hebrew: a shva is *na* (realized as /e/, not schwa) only in a
+    few positions; otherwise it is *nach* (silent, closing the previous syllable).
+    We treat as na:
+      - word-initial shva (prefixes be-/le-/ve-/she-/ke-, etc.),
+      - a shva under a consonant with dagesh chazak (gemination),
+      - the second of two consecutive shvas (the first is nach).
+    Everything else is nach. Defaulting to nach matches how the marks are actually
+    spoken (careful modern reading) and avoids the spurious schwas that made words
+    like nir'eit / le'eineinu unintelligible.
+    """
+    prev_silenced_shva = False
     for i, s in enumerate(segs):
         if s.nucleus != "ə":
+            prev_silenced_shva = False
             continue
-        is_first = i == 0
-        is_last = i == len(segs) - 1
-        prev_has_vowel = i - 1 >= 0 and segs[i - 1].nucleus not in ("",)
 
-        make_schwa = False
-        if is_first:
-            make_schwa = True
-        elif i + 1 < len(segs) and segs[i + 1].nucleus == "ə":
-            # first of two consecutive shevas -> ə; second processed next loop
-            make_schwa = True
-        elif is_last:
-            make_schwa = False
+        # dagesh chazak: a dagesh mid-word (i.e. not the very first consonant) is
+        # gemination, which forces the shva to be na.
+        dagesh_chazak = s.dagesh and i > 0
+        na = (i == 0) or dagesh_chazak or prev_silenced_shva
+
+        if na:
+            s.nucleus = "e"
+            prev_silenced_shva = False
         else:
-            # Favor ə if previous nucleus is long (e,i,o,u) to avoid heavy clusters
-            if prev_has_vowel and segs[i - 1].nucleus in ("e", "i", "o", "u"):
-                make_schwa = True
-            else:
-                # If onset would be too big (>=2), prefer ə
-                if len(s.onset) >= 2:
-                    make_schwa = True
-
-        if not make_schwa:
-            # turn into ∅: push its onset to coda of previous syllable if exists
+            # nach: silent; its onset closes the previous syllable
             if i - 1 >= 0:
                 segs[i - 1].coda.extend(s.onset)
             s.onset = []
             s.nucleus = ""
+            prev_silenced_shva = True
 
     # Collapse empty-nucleus segments by merging onsets/codas
     merged: List[Segment] = []
@@ -434,16 +433,6 @@ def _resolve_sheva_and_qamats(segs: List[Segment]) -> List[Segment]:
         merged.append(s)
 
     segs = merged
-
-    # Qamats qatan: set 'a' -> 'o' when in closed, unstressed (approximate) syllable.
-    # We'll mark qatan when the vowel came from QAMATS and:
-    # - syllable is closed (has coda), and
-    # - not the last syllable (approximate "unstressed")
-    # Because we lost the original mark, we approximate by common patterns on lexemes later if needed.
-    # Here, we apply a heuristic: any 'a' nucleus with non-empty coda and not last -> 'o'.
-    for i, s in enumerate(segs):
-        if s.nucleus == "a" and s.coda and i < len(segs) - 1:
-            s.nucleus = "o"
 
     return segs
 

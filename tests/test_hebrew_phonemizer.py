@@ -45,6 +45,20 @@ def test_holam_male_is_vowel_not_consonant() -> None:
     assert hebrew_to_ipa("הַכּוֹחַ").count("v") == 0
 
 
+def test_shva_na_resolution() -> None:
+    """Shva na -> /e/, shva nach -> silent (modern Israeli rules)."""
+    # No leftover schwa anywhere.
+    assert "ə" not in hebrew_to_ipa("נִרְאֵית לְעֵינֵינוּ בְּטִפּוֹת")
+    # Shva nach is silent: nir'eit, not ni-re-eit.
+    assert hebrew_to_ipa("נִרְאֵית") == "nˈiʁejt"
+    # Word-initial shva na is pronounced /e/ (prefix kept).
+    assert hebrew_to_ipa("בְּטִפּוֹת").startswith("be")
+    # Two consecutive shvas: first nach, second na (yish-me-ru).
+    assert hebrew_to_ipa("יִשְׁמְרוּ") == "jiʃmeʁˈu"
+    # Dagesh chazak forces shva na (me-dab-e-rim).
+    assert "medabe" in hebrew_to_ipa("מְדַבְּרִים")
+
+
 def test_phonemes_are_in_default_map(phonemizer: HebrewPhonemizer) -> None:
     """Every phoneme must exist in Piper's default IPA map (warmstart compat)."""
     text = "שלום מה שלומך היום. אני רוצה לשמוע מוזיקה"
