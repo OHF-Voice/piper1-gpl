@@ -45,6 +45,14 @@ voice = PiperVoice.load(..., use_cuda=True)
 
 This requires the `onnxruntime-gpu` package to be installed.
 
+To use ROCm for GPU acceleration in AMD GPUs instead:
+
+``` python
+voice = PiperVoice.load(..., use_rocm=True)
+```
+
+This requires the `onnxruntime-rocm` package to be [installed](https://rocm.docs.amd.com/projects/radeon-ryzen/en/docs-6.1.3/docs/install/native_linux/install-onnx.html) and the appropiate version of torch to be used. You can find more information in [here](https://rocm.docs.amd.com/projects/radeon-ryzen/en/latest/docs/install/installrad/native_linux/install-pytorch.html#verify-pytorch-installation)
+
 For streaming, use `PiperVoice.synthesize`:
 
 ``` python
