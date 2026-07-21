@@ -136,6 +136,7 @@ RUN_QT_VER_DIR=${RUN_DIR}\lib\qt\w64-x86_64\${RUN_QT_VER}
 ; Even though this variable is not used by Windows it is used to locate the DLL's for running the application.
 LD_LIBRARY_PATH=${RUN_QT_VER_DIR}\msvc_64\bin
 PATH=${LD_LIBRARY_PATH};${PATH}
+WINEDEBUG=fixme-all
 
 ; Environment added before running with the compiler msvc in Wine.
 [env.msvc.wine@]
@@ -143,15 +144,18 @@ __inherit__=env.msvc@
 
 ; Environment added before running Wine in the Docker container.
 [env.wine.docker@]
-__inherit__=qt-ver
+__inherit__=qt-ver,pulse-audio
 ; Overrides QT_VER_DIR for subcommand 'run'.
 RUN_QT_VER_DIR=Z:\home\${USER}\lib\qt\w64-x86_64\${RUN_QT_VER}
 
 ; Environment added before running with the compiler msvc in Wine in the Docker container.
 [env.msvc.wine.docker@]
+__inherit__=qt-ver,pulse-audio
 # The Docker container is build with the MSVC toolchain. (fuse-zip mounted in the home directory).
 MSVC_ROOT=Z:\home\${USER}\toolchain\w64-x86_64-msvc-2022
 SF_EXEC_DIR_SUFFIX=-msvc
+RUN_QT_VER_DIR=Z:\home\${USER}\lib\qt\w64-x86_64\${RUN_QT_VER}
+PATH=${RUN_QT_VER_DIR}\msvc_64\bin;${PATH}
 
 ; Environment added before running the 'gnu' compiler natively.
 [env.gnu@]
@@ -194,12 +198,13 @@ PATH=Z:\home\${USER}\toolchain\w64-x86_64-mingw-1320-posix\bin;Z:\home\${USER}\l
 
 ; Environment added before running the 'ga' compiler in Docker.
 [env.ga.docker@]
+__inherit__=qt-ver,pulse-audio
 ; Puts the binary in 'bin/lnx64-ga'.
 SF_EXEC_DIR_SUFFIX=-ga
 
 ; Environment added before running the 'gw' compiler in the Docker container.
 [env.gw.docker@]
-__inherit__=qt-ver
+__inherit__=qt-ver,pulse-audio
 SF_EXEC_DIR_SUFFIX=-gw
 ; Provides compiler std libraries to be found.
 WINEPATH=Z:\usr\x86_64-w64-mingw32\lib;Z:\usr\lib\gcc\x86_64-w64-mingw32\13-posix;
@@ -455,7 +460,7 @@ logger.setLevel(logging.INFO)
 start_time = time.time()
 
 
-def create_config_parser(ini_path: str, cfg: configparser.ConfigParser = None) -> configparser.ConfigParser:
+def create_config_parser(ini_path: str, cfg: configparser.ConfigParser | None = None) -> configparser.ConfigParser:
 	"""Creates the config parser."""
 	create_flag = True if cfg is None else False
 	if not cfg:
@@ -1040,8 +1045,8 @@ def set_environment(compiler_type: str | None = None) -> None:
 	# Start with a fresh copy of the parent environment.
 	RUN_ENV = PARENT_ENV.copy()
 	# Assemble the name of the section.
-	parts = ["env"]
-	parts += [compiler_type if compiler_type is not None else sys.platform]
+	parts: List[str] = ["env"]
+	parts += [str(compiler_type if compiler_type is not None else sys.platform)]
 	if is_wine():
 		parts += ["wine"]
 	if is_docker():
@@ -1111,7 +1116,8 @@ def set_environment_by_preset(preset_name: str, preset_type: PresetTypes = Prese
 	return False
 
 
-def expand_macros(preset: Optional[dict], value: Any, is_path: bool = False, context: Dict[str, str] = None) -> Any:
+def expand_macros(preset: Optional[dict], value: Any, is_path: bool = False,
+	context: Dict[str, str] | None = None) -> Any:
 	"""
 	Recursively expands macros, substituting environment variables in strings from CMakePresets.json.
 	"""
@@ -1148,10 +1154,8 @@ def expand_macros(preset: Optional[dict], value: Any, is_path: bool = False, con
 	return value
 
 
-def run_command(cmd_list: List[str], input_data: bytes = None, shell: bool = False, capture_output: bool = False,
-	check: bool = True,
-	cwd: str = None, dbg_mode: DebugMode = DebugMode.REPORT
-) -> subprocess.CompletedProcess:
+def run_command(cmd_list: List[str], input_data: bytes | None = None, shell: bool = False, capture_output: bool = False,
+	check: bool = True, cwd: str | None = None, dbg_mode: DebugMode = DebugMode.REPORT) -> subprocess.CompletedProcess:
 	"""
 	Utility to run shell commands.
 	Raises 'subprocess.CalledProcessError' if the command fails.
@@ -1434,7 +1438,7 @@ def get_configure_preset_name(preset_type: PresetTypes, preset_name: str) -> str
 	if preset_type == PresetTypes.WORKFLOW:
 		p = get_preset_by_name(preset_type, preset_name)
 		if p is not None:
-			steps = p.get("steps", None)
+			steps = p.get("steps", "")
 			# Sanity check on the first step.
 			if len(steps) and all(k in steps[0] for k in ["name", "type"]) and steps[0]["type"] == PresetTypes.CONFIGURE:
 				return steps[0]["name"]
@@ -1463,7 +1467,7 @@ class SubCommand(ABC):
 	# Get the script's name.
 	script = os.path.basename(__file__)
 
-	def __init__(self, command: str, aliases: list[str] = None):
+	def __init__(self, command: str, aliases: list[str] | None = None):
 		"""Initializes the SubCommand with a specific parser instance."""
 		# Command name.
 		self.command: str = command
@@ -1675,7 +1679,7 @@ examples:
 				logger.error(f"! Configure preset with name '{config_preset_name}' not found.")
 				return 1
 			# Get the binary directory from preset expanding then macros.
-			bin_dir = expand_macros(config_preset, config_preset.get("binaryDir", None), True)
+			bin_dir: str | None = expand_macros(config_preset, config_preset.get("binaryDir", None), True)
 			if bin_dir is None:
 				logger.error(f"! Field 'binaryDir' not found for configure preset '{config_preset_name}'.")
 				return 1
@@ -1685,7 +1689,7 @@ examples:
 			bin_dir = os.path.abspath(bin_dir)
 			# Check if the build directory needs to have cleaned all 'CMakeLists.txt' files recursively.
 			if args.fresh_all:
-				remove_files_from_tree(Path(bin_dir), ["CMakeCache.txt"])
+				remove_files_from_tree(Path(str(bin_dir)), ["CMakeCache.txt"])
 			# When build only, do not configure.
 			if not args.build_only:
 				# Check if the directory should be wiped.
@@ -1695,7 +1699,7 @@ examples:
 						if not args.dry_run:
 							remove_tree(Path(bin_dir))
 				# When the build triggered a make and the binary directory exists, make is not needed.
-				if args.make or (make_by_build and not os.path.exists(os.path.join(bin_dir, "CMakeCache.txt"))):
+				if args.make or (make_by_build and not os.path.exists(os.path.join(str(bin_dir), "CMakeCache.txt"))):
 					# os.makedirs(bin_dir, exist_ok=True)
 					# Logic for configuration
 					cmd = ["cmake", "-Wno-dev", "--preset", config_preset_name]
@@ -1710,7 +1714,7 @@ examples:
 
 		if args.build or args.build_only:
 			# Check if a preset was passed and if not, select one.
-			if not os.path.exists(os.path.join(bin_dir, "CMakeCache.txt")):
+			if not os.path.exists(os.path.join(str(bin_dir), "CMakeCache.txt")):
 				logger.error(f"! Missing build directory: {bin_dir}")
 				return 1
 			cmd: List[str] = ["cmake", "--build", "--preset", str(build_preset_name)]
@@ -1907,7 +1911,10 @@ This ignores the options: --qt-ver, --platform'
 			"""Determines whether to use 'docker exec' on a running container or 'docker run' for a new one."""
 			if get_container_id():
 				# If the container is already running (detached), use exec.
-				full_cmd = ["docker", "exec", "--interactive", "--tty", CONTAINER_NAME, "sudo", "--login", "--user=user", "--"]
+				full_cmd = ["docker", "exec"]
+				if sys.stdin.isatty():
+					full_cmd += ["--interactive", "--tty"]
+				full_cmd += [CONTAINER_NAME, "sudo", "--login", "--user=user", "--"]
 				full_cmd += cmd_args
 			else:
 				# Otherwise start a fresh container.
@@ -1920,10 +1927,13 @@ This ignores the options: --qt-ver, --platform'
 		img_name = get_config_section("config", fail=True).get("docker-image", img_name)
 		logger.info(f"# Docker image used: {img_name}")
 		# Prepare standard Docker options for running the container.
-		docker_opts = ["--platform", f"linux/{args.platform}", "--rm", "--tty", "--interactive", "--device", "/dev/fuse",
+		docker_opts = ["--platform", f"linux/{args.platform}", "--rm", "--device", "/dev/fuse",
 			"--cap-add", "SYS_ADMIN", "--cap-add", "SYS_PTRACE", "--security-opt", "apparmor:unconfined",
 			"--security-opt", "seccomp=unconfined", "--hostname", platform.node(), "--user", "0:0",
 			"--env", f"LOCAL_USER={os.getuid()}:{os.getgid()}", "--network", "host"]
+		# Only add TTY and interactive flags when stdin is a terminal.
+		if sys.stdin.isatty():
+			docker_opts += ["--tty", "--interactive"]
 		# Handle X11 Display forwarding if available on the host.
 		if os.environ.get("DISPLAY"):
 			# noinspection SpellCheckingInspection
@@ -1996,7 +2006,10 @@ This ignores the options: --qt-ver, --platform'
 			if not get_container_id():
 				logger.warning(f": Container '{CONTAINER_NAME}' is not running.")
 				return 1
-			cmd = ["docker", "exec", "--interactive", "--tty", CONTAINER_NAME, "sudo", "--login", "--user=user", "--"]
+			cmd = ["docker", "exec"]
+			if sys.stdin.isatty():
+				cmd += ["--interactive", "--tty"]
+			cmd += [CONTAINER_NAME, "sudo", "--login", "--user=user", "--"]
 			return run_command(cmd + (args_right or []), dbg_mode=DebugMode.REPORT_ONLY).returncode
 		#
 		elif command == "sshd":
@@ -2214,7 +2227,7 @@ Choices are depended on the host platform:
 	def install_toolchain(toolchain: str) -> bool:
 		"""Installs toolchains."""
 
-		def get_file_from_url(url: str, suffix: str = None) -> str:
+		def get_file_from_url(url: str, suffix: str | None = None) -> str:
 			"""Copies the file from the url to a temporary file."""
 			import requests
 			with (tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp):
@@ -2604,11 +2617,9 @@ Signed-By:
 					"Ninja build system": "Ninja-build.Ninja",
 					"Nullsoft Install System": "NSIS.NSIS",
 					"Termurin JRE": "EclipseAdoptium.Temurin.21.JRE",
-					"LLVM Clang-Format": "LLVM.ClangFormat",
+					"LLVM (Clang-Format)": "LLVM.LLVM",
 					"Doxygen": "DimitriVanHeesch.Doxygen",
-					# TODO: Sadly, the WinGet package is missing some MinGW DLL's. The official installer does not.
-					# "Graphviz": "Graphviz.Graphviz"
-					"!Graphviz": "https://gitlab.com/api/v4/projects/4207231/packages/generic/graphviz-releases/14.1.2/windows_10_cmake_Release_graphviz-install-14.1.2-win64.exe"
+					"Graphviz": "Graphviz.Graphviz"
 				}
 				for name, pkg_id in wg_pkgs.items():
 					if name[:1] == "!":
@@ -2666,7 +2677,7 @@ class SubCommandVersion(SubCommand):
 		super().__init__("version", ["v"])
 		# Read the type map from the ini config file.
 		for key, value in get_config_section("config-ver-type-map", fail=True).items():
-			self._type_map[key] = value.split(',', 1)
+			self._type_map[key] = (*value.split(',', 1),)
 
 	def create_parser(self, subparsers: argparse._SubParsersAction) -> argparse.ArgumentParser:
 		self.parser = subparsers.add_parser(self.command, aliases=self.aliases, add_help=False,
@@ -2705,7 +2716,7 @@ bump: Generate release notes from the last or given commit hash.""")
 
 message header format:
   <type>(<scope>)!: <short summary>
-  │       │      │      └─⫸ Summary in present tense.
+  │       │      │      └─⫸ Summary in an imperative mood.
   │       │      └─⫸ Optional exclamation mark '!' indicating a breaking change.
   │       └─⫸ Commit Scope: common|compiler|config|cmake|changelog|docs-infra|pack|iface|etc...
   └─⫸ Commit Type: build|ci|chore|docs|feat|fix|perf|refactor|style|test|revert
@@ -2757,7 +2768,7 @@ examples:
 		return 0
 
 	@staticmethod
-	def escape_markdown(text: str) -> str:
+	def escape_markdown(text: str | None) -> str:
 		"""Escapes basic Markdown characters."""
 		if text is None:
 			return ""
@@ -2841,7 +2852,7 @@ examples:
 		return result
 
 	# noinspection PyMethodMayBeStatic
-	def load_message_overrides(self, msg_file: str) -> Dict[str, str]:
+	def load_message_overrides(self, msg_file: str | None) -> Dict[str, str]:
 		"""Loads message overrides from JSON or shell-format file."""
 		if msg_file is None:
 			json_default = os.path.join(RUN_DIR, ".version-bump.json")
@@ -3100,7 +3111,7 @@ examples:
 		parser.add_argument("-v", "--verbose", action="store_true",
 			help="Shows information when the command is executed for error analysis.")
 
-	def handle(self, args: argparse.Namespace, args_left: List[str], args_right: List[str]) -> int:
+	def handle(self, args: argparse.Namespace, args_left: List[str], args_right: List[str] | None) -> int:
 		"""
 		Handles the 'create' command execution of the script.
 		:return: Exit code.
@@ -3108,7 +3119,7 @@ examples:
 		# Call parent to handle the common dry-run option.
 		super().handle(args, args_left, args_right)
 		# When no command is given, list the files in the directory.
-		if not len(args_right):
+		if args_right is None or not len(args_right):
 			# When executing from Linux and the Windows cross-compiler is used.
 			if sys.platform != "win32" and not args.exec and get_compiler_type(args.preset, PresetTypes.CONFIGURE) == "gw":
 				args_right = ["cmd", "/c", "dir", "/a"]
@@ -3119,15 +3130,19 @@ examples:
 		# Toolchain environment by preset and bailout when not set.
 		if not set_environment_by_preset(args.preset, PresetTypes.CONFIGURE):
 			return 1
-		# Check if an application is to be executed.
+
+		# Get the preset object.
+		preset = get_preset_by_name(PresetTypes.CONFIGURE, args.preset)
+
+		# Populate RUN_ENV with environment variables from the preset to allow macro expansion.
+		env = preset.get("environment", {})
+		for var in env:
+			RUN_ENV[var] = expand_macros(preset, env.get(var), context=env)
+
+		# Check if an application is to be executed without the cmake script.
 		if args.exec:
-			# Check if the preset was found.
-			preset = get_preset_by_name(PresetTypes.CONFIGURE, args.preset)
 			# Get the binary directory from preset expanding then macros.
-			bin_dir = expand_macros(preset, preset.get("environment", {}).get("SF_EXECUTABLE_DIR"), True)
-			env = preset.get("environment", {})
-			for var in env:
-				RUN_ENV[var] = expand_macros(preset, env.get(var), context=env)
+			bin_dir = expand_macros(preset, env.get("SF_EXECUTABLE_DIR"), True)
 			cmake_bin_dir = expand_macros(preset,
 				preset.get("cacheVariables", {}).get("CMAKE_RUNTIME_OUTPUT_DIRECTORY", {}).get("value"), True)
 			logger.debug(f"~ Working directory set as 'CMAKE_RUNTIME_OUTPUT_DIRECTORY' to: {cmake_bin_dir}")
@@ -3137,16 +3152,35 @@ examples:
 			return run_command(args_right, cwd=bin_dir, dbg_mode=DebugMode.REPORT_ONLY).returncode
 		else:
 			# Holds the cmake script and raise an exception on failure.
-			cmake_script = get_config_section("config", fail=True).get("cmake-run-file",
-				os.path.join(*(CMAKE_LIB_SUBDIR + ["run-executable.cmake"])))
+			cmake_script = str(get_config_section("config", fail=True).get("cmake-run-file",
+				os.path.join(*(CMAKE_LIB_SUBDIR + ["run-executable.cmake"]))))
 			# Check if the required cmake script is present and if not, bailout.
 			if not os.path.exists(cmake_script):
 				logger.info(f": Sub command 'run' disabled due to missing '{cmake_script}' file.")
 				return 1
-			# Preset is required, so no check there.
-			cmd = ["cmake", "--preset", args.preset, f"-DSF_EXECUTABLE={self.cmake_encode(args_right)}"]
+			# Since CMake v4.4.0 the '--preset' option is not allowed in script mode (-P).
+			# So the variables are passed manually using the '-D' option.
+			cmd: List[str] = ["cmake", f"-DSF_EXECUTABLE={self.cmake_encode(args_right)}"]
 			if args.verbose:
 				cmd += [f"-DSF_VERBOSE=ON"]
+			# Pass SF_COMPILER if available
+			compiler_type = get_compiler_type(args.preset)
+			if compiler_type:
+				cmd += [f"-DSF_COMPILER={compiler_type}"]
+			# Pass CMAKE_BINARY_DIR
+			binary_dir = expand_macros(preset, preset.get("binaryDir"), True)
+			if binary_dir:
+				cmd += [f"-DCMAKE_BINARY_DIR={binary_dir}"]
+			# Pass output directories from cacheVariables
+			cache_vars = preset.get("cacheVariables", {})
+			for var in ["CMAKE_RUNTIME_OUTPUT_DIRECTORY", "CMAKE_LIBRARY_OUTPUT_DIRECTORY"]:
+				val = cache_vars.get(var)
+				if isinstance(val, dict):
+					val = val.get("value")
+				expanded_val = expand_macros(preset, val, True)
+				if expanded_val:
+					cmd += [f"-D{var}={expanded_val}"]
+			# Add the script to be executed.
 			cmd += ["-P", cmake_script]
 			return run_command(cmd, dbg_mode=DebugMode.REPORT_ONLY).returncode
 
@@ -3215,7 +3249,10 @@ for creating environments for each nested call of this script.
 To Build and test the example project:
 
   On Linux:
+
     ./{script} i -r lnx                    # Required packages for Linux (Debian only).
+    ./{script} i --project                 # Install the skeleton project by Git cloning and sets up a git 
+                                           # repository with this repository as submodule.
     ./{script} i -p                        # Clone the cmake-lib repository and copy the sample project.
     ./{script} -bt gnu-debug               # Build and test a preset local.
     ./{script} run -p gnu-debug -- ./<exe> # Execute an application from the presets' output directory.
@@ -3228,6 +3265,8 @@ To Build and test the example project:
 
   On Windows:
     {script} i -r win                      # Required packages (WinGet/Pip) for Windows.
+    {script} i --project                   # Install the skeleton project by Git cloning and sets up a git 
+                                           # repository with this repository as submodule.
     {script} i -p                          # Clone the cmake-lib repository and copy the sample project.
     {script} i -t msvc                     # Install the MSVC toolchain.
     {script} -bt msvc-debug                # Preset make, build and test.
