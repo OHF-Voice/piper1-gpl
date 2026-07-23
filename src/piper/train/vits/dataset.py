@@ -228,6 +228,15 @@ class VitsDataModule(L.LightningDataModule):
             def phonemize(text: str) -> list[list[str]]:
                 return phonemizer.phonemize(text)
 
+        elif self.phoneme_type == PhonemeType.HEBREW:
+            from piper.phonemize_hebrew import HebrewPhonemizer
+
+            # Nakdimon (niqqud) -> IPA G2P (default IPA id map)
+            hebrew_phonemizer = HebrewPhonemizer()
+
+            def phonemize(text: str) -> list[list[str]]:
+                return hebrew_phonemizer.phonemize(text)
+
         elif self.phoneme_type == PhonemeType.TEXT:
             # text = phonemes
 
