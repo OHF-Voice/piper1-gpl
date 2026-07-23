@@ -67,8 +67,10 @@ include_directories(
 
 # ---- onnxruntime ---
 
+find_package(onnxruntime QUIET)
+
 # Look for onnxruntime files in <root>/lib
-if(NOT DEFINED ONNXRUNTIME_DIR)
+if(NOT TARGET onnxruntime::onnxruntime AND NOT DEFINED ONNXRUNTIME_DIR)
     if(NOT DEFINED ONNXRUNTIME_VERSION)
         set(ONNXRUNTIME_VERSION "1.22.0")
     endif()
@@ -126,6 +128,15 @@ if(NOT DEFINED ONNXRUNTIME_DIR)
     endif()
 endif()
 
+if(DEFINED ONNXRUNTIME_DIR)
+    find_library(ONNXRUNTIME_LIB NAMES onnxruntime PATHS ${ONNXRUNTIME_DIR}/lib REQUIRED)
+    add_library(onnxruntime::onnxruntime UNKNOWN IMPORTED)
+    set_target_properties(onnxruntime::onnxruntime PROPERTIES
+        IMPORTED_LOCATION ${ONNXRUNTIME_LIB}
+        INTERFACE_INCLUDE_DIRECTORIES ${ONNXRUNTIME_DIR}/include
+    )
+endif()
+
 # ---- libpiper ---
 
 add_library(piper SHARED
@@ -135,16 +146,12 @@ add_library(piper SHARED
 add_dependencies(piper espeak_ng_external)
 target_include_directories(piper PUBLIC
     ${ESPEAKNG_INSTALL_DIR}/include
-    ${ONNXRUNTIME_DIR}/include
     ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
-target_link_directories(piper PUBLIC
-    ${ONNXRUNTIME_DIR}/lib
 )
 target_link_libraries(piper
     ${ESPEAKNG_STATIC_LIB}
     ${UCD_STATIC_LIB}
-    onnxruntime
+    onnxruntime::onnxruntime
 )
 
 # ---- piper exe ---
