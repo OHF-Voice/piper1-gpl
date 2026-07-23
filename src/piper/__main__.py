@@ -97,6 +97,12 @@ def main() -> None:
     )
     #
     parser.add_argument(
+        "--download-dir",
+        "--download_dir",
+        help="Directory for downloadable resources like the Chinese g2pW model (default: current directory)",
+    )
+    #
+    parser.add_argument(
         "--debug", action="store_true", help="Print DEBUG messages to console"
     )
     args, unknown_args = parser.parse_known_args()
@@ -146,7 +152,11 @@ def main() -> None:
 
     # Load voice
     _LOGGER.debug("Loading voice: '%s'", model_path)
-    voice = PiperVoice.load(model_path, use_cuda=args.cuda)
+    voice = PiperVoice.load(
+        model_path,
+        use_cuda=args.cuda,
+        download_dir=args.download_dir,
+    )
     syn_config = SynthesisConfig(
         speaker_id=args.speaker,
         length_scale=args.length_scale,
