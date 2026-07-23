@@ -198,3 +198,37 @@ if(PIPER_BUILD_TESTS)
     enable_testing()
     add_subdirectory(tests)
 endif()
+
+
+
+# ---- clang format ---
+find_program(CLANG_FORMAT clang-format)
+
+set(CLANG_FORMAT_ARGS "-i" CACHE STRING "Arguments for clang-format")
+
+if(CLANG_FORMAT)
+    file(GLOB_RECURSE FORMAT_SOURCES
+        "src/*.cpp"
+        "src/*.h"
+        "src/*.hpp"
+        "src/**/*.cpp"
+        "src/**/*.h"
+        "src/**/*.hpp"
+        "tests/**/*.cpp"
+        "tests/**/*.h"
+        "tests/**/*.hpp"
+        "tests/*.cpp"
+        "tests/*.h"
+        "include/piper.h"
+        "include/piper_impl.hpp"
+    )
+
+    add_custom_target(format
+        COMMAND ${CLANG_FORMAT} ${CLANG_FORMAT_ARGS} ${FORMAT_SOURCES}
+        COMMENT "Formatting C/C++ files with clang-format"
+    )
+    message(STATUS "Added 'format' target to run clang-format.")
+    add_dependencies(piper format)
+else()
+    message(WARNING "clang-format not found. The 'format' target will not be available.")
+endif()
