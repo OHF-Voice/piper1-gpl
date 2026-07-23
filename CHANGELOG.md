@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.6.0
+
+- Add Hebrew phonemizer using Nakdimon
+
 ## 1.5.0
 
 - Add `libpiper` C++ CLI executable ported from the legacy Piper repository, plus a C++ test suite
