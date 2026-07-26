@@ -128,6 +128,7 @@ setup(
     entry_points={
         "console_scripts": [
             "piper = piper.__main__:main",
+            "piper-server = piper.http_server:main",
         ]
     },
 )
