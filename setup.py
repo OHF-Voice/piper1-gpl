@@ -129,6 +129,7 @@ setup(
         "console_scripts": [
             "piper = piper.__main__:main",
             "piper-server = piper.http_server:main",
+            "piper-train = piper.train.__main__:main",
         ]
     },
 )
