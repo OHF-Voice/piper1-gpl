@@ -131,6 +131,7 @@ setup(
             "piper-server = piper.http_server:main",
             "piper-train = piper.train.__main__:main",
             "piper-alignment = piper.patch_voice_with_alignment:main",
+            "piper-download-voices = piper.download_voices:main",
         ]
     },
 )
