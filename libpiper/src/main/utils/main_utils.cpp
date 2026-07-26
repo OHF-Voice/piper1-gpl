@@ -31,14 +31,17 @@ void printUsage(char *argv[]) {
             << std::endl;
   std::cerr << "   -s  NUM   --speaker     NUM   id of speaker (default: 0)"
             << std::endl;
-  std::cerr << "   --noise_scale           NUM   generator noise (default: 0.667)"
-            << std::endl;
+  std::cerr
+      << "   --noise_scale           NUM   generator noise (default: 0.667)"
+      << std::endl;
   std::cerr << "   --length_scale          NUM   phoneme length (default: 1.0)"
             << std::endl;
-  std::cerr << "   --noise_w               NUM   phoneme width noise (default: 0.8)"
-            << std::endl;
-  std::cerr << "   --espeak_data           DIR   path to espeak-ng data directory"
-            << std::endl;
+  std::cerr
+      << "   --noise_w               NUM   phoneme width noise (default: 0.8)"
+      << std::endl;
+  std::cerr
+      << "   --espeak_data           DIR   path to espeak-ng data directory"
+      << std::endl;
   std::cerr << "   --json-input                  stdin input is lines of JSON "
                "instead of plain text"
             << std::endl;
@@ -46,10 +49,9 @@ void printUsage(char *argv[]) {
 }
 
 void ensureArg(int argc, char *argv[], int argi) {
-    if ((argi + 1) >= argc)
-    {
-        throw ArgError(std::string("Missing argument for ") + argv[argi]);
-    }
+  if ((argi + 1) >= argc) {
+    throw ArgError(std::string("Missing argument for ") + argv[argi]);
+  }
 }
 
 // Parse command-line arguments

@@ -26,8 +26,8 @@
 #include <mach-o/dyld.h>
 #endif
 
-#include "utils/process.hpp"
 #include "utils/main_utils.hpp"
+#include "utils/process.hpp"
 
 #include "json.hpp"
 #include "piper.h"
@@ -68,21 +68,20 @@ int main(int argc, char *argv[]) {
 #endif
 #endif
 
-    if (runConfig.eSpeakDataPath) {
-      // User provided path
-      runConfig.eSpeakDataPath = runConfig.eSpeakDataPath.value().string();
-    } else {
-      // Assume next to piper executable
-      runConfig.eSpeakDataPath =
-          std::filesystem::absolute(
-              exePath.parent_path().append("espeak-ng-data"))
-              .string();
-    }
+  if (runConfig.eSpeakDataPath) {
+    // User provided path
+    runConfig.eSpeakDataPath = runConfig.eSpeakDataPath.value().string();
+  } else {
+    // Assume next to piper executable
+    runConfig.eSpeakDataPath =
+        std::filesystem::absolute(
+            exePath.parent_path().append("espeak-ng-data"))
+            .string();
+  }
   auto startTime = chrono::steady_clock::now();
   piper = piper_create(runConfig.modelPath.string().c_str(),
                        runConfig.modelConfigPath.string().c_str(),
-                       runConfig.eSpeakDataPath->string().c_str()
-                      );
+                       runConfig.eSpeakDataPath->string().c_str());
   auto endTime = chrono::steady_clock::now();
 
   piper_synthesize_options options;

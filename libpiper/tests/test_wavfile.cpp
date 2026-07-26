@@ -2,9 +2,9 @@
 #include <memory>
 #include <sstream>
 
-#include "utils/wavfile.hpp"
 #include "piper.h"
 #include "utils/piper_test_assets.h"
+#include "utils/wavfile.hpp"
 
 class WavFileTest : public ::testing::Test {
 protected:

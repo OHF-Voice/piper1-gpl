@@ -6,11 +6,11 @@
 #include <stdint.h>
 #include <uchar.h>
 
-#if defined (WIN32) && (defined(__GNUC__) || defined (_MSC_VER))
+#if defined(WIN32) && (defined(__GNUC__) || defined(_MSC_VER))
 #if defined(BUILDING_LIBPIPER)
-#define EXPORT_SYMBOL __declspec( dllexport )
+#define EXPORT_SYMBOL __declspec(dllexport)
 #else
-#define EXPORT_SYMBOL __declspec( dllimport )
+#define EXPORT_SYMBOL __declspec(dllimport)
 #endif
 #else
 #define EXPORT_SYMBOL
@@ -225,13 +225,11 @@ int piper_synthesize_start(piper_synthesizer *synth, const char *text,
 EXPORT_SYMBOL
 int piper_synthesize_next(piper_synthesizer *synth, piper_audio_chunk *chunk);
 
-
-/** 
+/**
  * \return piper version
  */
 EXPORT_SYMBOL
 char const *piper_version(void);
-
 
 #ifdef __cplusplus
 }
