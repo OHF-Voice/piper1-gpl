@@ -1,5 +1,7 @@
 #include "wav_headers.hpp"
 
+#include <cstdint>
+
 namespace {
 template <typename T> void writeNumber(T num, std::ostream &stream) {
   stream.write(reinterpret_cast<char *>(&num), sizeof(num));
@@ -12,14 +14,15 @@ void writeWavStreamHeader(std::ostream &stream, int sample_rate) {
   // ChunkID
   stream.write("RIFF", 4);
   // ChunkSize = 36 + Subchunk2Size
-  writeNumber<uint32_t>(unspec_count + 36, stream);
+  writeNumber<uint32_t>(unspec_count + 36, // NOLINT(readability-magic-numbers)
+                        stream);
   // Format
   stream.write("WAVE", 4);
 
   // Subchunk1ID
   stream.write("fmt ", 4);
   // Subchunk1Size = 16 for PCM/IEEE_FLOAT
-  writeNumber<uint32_t>(16, stream);
+  writeNumber<uint32_t>(16, stream); // NOLINT(readability-magic-numbers)
   // AudioFormat = 3 (IEEE float)
   writeNumber<uint16_t>(3, stream);
   // NumChannels = 1 (mono)
@@ -31,7 +34,7 @@ void writeWavStreamHeader(std::ostream &stream, int sample_rate) {
   // BlockAlign = NumChannels * BitsPerSample/8
   writeNumber<uint16_t>(4, stream);
   // BitsPerSample = 32
-  writeNumber<uint16_t>(32, stream);
+  writeNumber<uint16_t>(32, stream); // NOLINT(readability-magic-numbers)
 
   // Subchunk2ID
   stream.write("data", 4);

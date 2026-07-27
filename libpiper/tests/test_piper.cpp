@@ -89,8 +89,8 @@ TEST_F(PiperTest, DeterministicSynthesis) {
 
   piper_synthesize_options options = piper_default_synthesize_options(synth);
   // Disable noise to make synthesis deterministic
-  options.noise_scale = 0.0f;
-  options.noise_w_scale = 0.0f;
+  options.noise_scale = 0.0F;
+  options.noise_w_scale = 0.0F;
 
   // First synthesis
   int result = piper_synthesize_start(synth, "This is a test.", &options);
@@ -123,16 +123,16 @@ TEST_F(PiperTest, DefaultSynthesizeOptions) {
   piper_synthesize_options options = piper_default_synthesize_options(synth);
   ASSERT_EQ(options.speaker_id, 0);
   // These values are from the test model's config file
-  ASSERT_FLOAT_EQ(options.length_scale, 1.0f);
-  ASSERT_FLOAT_EQ(options.noise_scale, 0.667f);
-  ASSERT_FLOAT_EQ(options.noise_w_scale, 0.8f);
+  ASSERT_FLOAT_EQ(options.length_scale, 1.0F);
+  ASSERT_FLOAT_EQ(options.noise_scale, 0.667F);
+  ASSERT_FLOAT_EQ(options.noise_w_scale, 0.8F);
 
   // Test with null synth
   options = piper_default_synthesize_options(nullptr);
   ASSERT_EQ(options.speaker_id, 0);
-  ASSERT_FLOAT_EQ(options.length_scale, 1.0f);
-  ASSERT_FLOAT_EQ(options.noise_scale, 0.667f);
-  ASSERT_FLOAT_EQ(options.noise_w_scale, 0.8f);
+  ASSERT_FLOAT_EQ(options.length_scale, 1.0F);
+  ASSERT_FLOAT_EQ(options.noise_scale, 0.667F);
+  ASSERT_FLOAT_EQ(options.noise_w_scale, 0.8F);
 
   piper_free(synth);
 }
@@ -145,9 +145,9 @@ TEST_F(PiperTest, CustomSynthesizeOptions) {
   ASSERT_NE(synth, nullptr);
 
   piper_synthesize_options options = piper_default_synthesize_options(synth);
-  options.length_scale = 0.5f;
-  options.noise_scale = 0.25f;
-  options.noise_w_scale = 0.125f;
+  options.length_scale = 0.5F;
+  options.noise_scale = 0.25F;
+  options.noise_w_scale = 0.125F;
 
   int result = piper_synthesize_start(synth, "This is a test.", &options);
   ASSERT_EQ(result, PIPER_OK);

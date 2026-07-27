@@ -4,22 +4,22 @@
 PiperTestAssets::PiperTestAssets(std::filesystem::path modelDir)
     : modelDir(std::move(modelDir)) {}
 
-std::filesystem::path PiperTestAssets::modelPath() const {
+auto PiperTestAssets::modelPath() const -> std::filesystem::path {
   return modelDir / "model.onnx";
 }
 
-std::filesystem::path PiperTestAssets::configPath() const {
+auto PiperTestAssets::configPath() const -> std::filesystem::path {
   return modelDir / "model.onnx.json";
 }
 
-std::filesystem::path PiperTestAssets::espeakDataPath() {
-  return std::filesystem::path(ESPEAK_DATA_PATH);
+auto PiperTestAssets::espeakDataPath() -> std::filesystem::path {
+  return {ESPEAK_DATA_PATH};
 }
 
-std::unique_ptr<PiperTestAssets> PiperTestAssets::enModel() {
+auto PiperTestAssets::enModel() -> std::unique_ptr<PiperTestAssets> {
   return std::make_unique<PiperTestAssets>(EN_TEST_MODEL_DIR);
 }
 
-std::unique_ptr<PiperTestAssets> PiperTestAssets::textModel() {
+auto PiperTestAssets::textModel() -> std::unique_ptr<PiperTestAssets> {
   return std::make_unique<PiperTestAssets>(TEXT_TEST_MODEL_DIR);
 }

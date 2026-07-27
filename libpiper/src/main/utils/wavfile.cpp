@@ -15,6 +15,7 @@ void textToWavFile(piper_synthesizer *piper, piper_synthesize_options *options,
         isHeaderWritten = true;
       }
       stream.write(reinterpret_cast<const char *>(chunk.samples),
+                   // NOLINTNEXTLINE(bugprone-narrowing-conversions)
                    chunk.num_samples * sizeof(float));
     }
   } while (!chunk.is_last);
