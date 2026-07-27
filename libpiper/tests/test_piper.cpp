@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "piper.h"
+#include "piper_impl.hpp"
 #include "utils/piper_test_assets.h"
 
 class PiperTest : public ::testing::Test {
@@ -43,6 +44,29 @@ TEST_F(PiperTest, PiperSynthesis) {
 
   // Start synthesis
   int result = piper_synthesize_start(synth, "This is a test.", nullptr);
+  ASSERT_EQ(result, PIPER_OK);
+
+  // Get audio chunks
+  piper_audio_chunk chunk;
+  do {
+    result = piper_synthesize_next(synth, &chunk);
+    ASSERT_EQ(result, chunk.is_last ? PIPER_DONE : PIPER_OK);
+    ASSERT_GT(chunk.num_samples, 0);
+  } while (!chunk.is_last);
+
+  piper_free(synth);
+}
+
+TEST_F(PiperTest, PiperSynthesisText) {
+  auto textAssets = PiperTestAssets::textModel();
+  piper_synthesizer *synth =
+      piper_create(textAssets->modelPath().string().c_str(),
+                   textAssets->configPath().string().c_str(), nullptr);
+  ASSERT_NE(synth, nullptr);
+  ASSERT_EQ(synth->phoneme_type, PhonemeType::Text);
+
+  // Start synthesis
+  int result = piper_synthesize_start(synth, "Це є тест.", nullptr);
   ASSERT_EQ(result, PIPER_OK);
 
   // Get audio chunks

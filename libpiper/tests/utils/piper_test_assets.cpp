@@ -19,3 +19,7 @@ std::filesystem::path PiperTestAssets::espeakDataPath() {
 std::unique_ptr<PiperTestAssets> PiperTestAssets::enModel() {
   return std::make_unique<PiperTestAssets>(EN_TEST_MODEL_DIR);
 }
+
+std::unique_ptr<PiperTestAssets> PiperTestAssets::textModel() {
+  return std::make_unique<PiperTestAssets>(TEXT_TEST_MODEL_DIR);
+}

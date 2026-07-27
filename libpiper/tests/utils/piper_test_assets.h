@@ -23,6 +23,11 @@ public:
    */
   static std::unique_ptr<PiperTestAssets> enModel();
 
+  /**
+   * @brief Static factory method to get the model with Text phonemes assets.
+   */
+  static std::unique_ptr<PiperTestAssets> textModel();
+
 private:
   std::filesystem::path modelDir;
 };
