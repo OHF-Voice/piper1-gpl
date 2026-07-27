@@ -51,6 +51,18 @@ const int DEFAULT_HOP_LENGTH = 256;
 #define CLAUSE_COLON (30 | CLAUSE_INTONATION_FULL_STOP | CLAUSE_TYPE_CLAUSE)
 #define CLAUSE_SEMICOLON (30 | CLAUSE_INTONATION_COMMA | CLAUSE_TYPE_CLAUSE)
 
+enum class PhonemeType {
+  Invalid = 0,
+  Text,
+  Espeak,
+};
+
+NLOHMANN_JSON_SERIALIZE_ENUM(PhonemeType, {
+                                              {PhonemeType::Text, nullptr},
+                                              {PhonemeType::Espeak, "espeak"},
+                                              {PhonemeType::Text, "text"},
+                                          })
+
 struct piper_synthesizer {
   // From config JSON file
   std::string espeak_voice;
@@ -58,6 +70,7 @@ struct piper_synthesizer {
   int num_speakers;
   PhonemeIdMap phoneme_id_map;
   int hop_length = DEFAULT_HOP_LENGTH;
+  PhonemeType phoneme_type = PhonemeType::Espeak;
 
   // Default synthesis settings for the voice
   float synth_length_scale = DEFAULT_LENGTH_SCALE;
