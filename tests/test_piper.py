@@ -2,6 +2,8 @@
 
 import io
 import shutil
+import struct
+import sys
 import wave
 from pathlib import Path
 from unittest.mock import patch
@@ -160,6 +162,61 @@ def test_synthesize_wav() -> None:
                 == voice.config.sample_rate * wav_input.getsampwidth() * 2
             )
             assert not any(audio_data)
+
+
+@pytest.mark.parametrize(
+    "sentence_silence",
+    # At 22050 Hz these all made int(rate * s * 2) odd under the old code, which
+    # wrote a half frame of 16-bit PCM between sentences and misaligned the rest
+    # of the stream (issue #253). 0.30 is an even control.
+    [0.15, 0.25, 0.30, 0.45, 0.75],
+)
+def test_sentence_silence_even_byte_count(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, sentence_silence: float
+) -> None:
+    """Inter-sentence silence must never leave the WAV data chunk odd-length."""
+    from piper.__main__ import main
+
+    output_path = tmp_path / "out.wav"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "piper",
+            "-m",
+            str(_TEST_VOICE),
+            "-f",
+            str(output_path),
+            "--sentence-silence",
+            str(sentence_silence),
+        ],
+    )
+    # Two sentences => silence is written once, between the chunks.
+    monkeypatch.setattr(sys, "stdin", io.StringIO("This is a test. This is another."))
+
+    main()
+
+    with wave.open(str(output_path), "rb") as wav_input:
+        assert wav_input.getsampwidth() == 2
+        assert wav_input.getnchannels() == 1
+
+    # Read the on-disk `data` chunk size field directly. This is the byte the
+    # bug leaves odd; wave's own reader hides it because readframes() returns
+    # getnframes() * frame_size, silently dropping the trailing orphan byte.
+    raw = output_path.read_bytes()
+    data_idx = raw.find(b"data")
+    data_size = struct.unpack("<I", raw[data_idx + 4 : data_idx + 8])[0]
+
+    # A 16-bit mono data chunk must be a whole number of frames (even byte count).
+    assert data_size % 2 == 0, f"odd data chunk ({data_size} bytes)"
+
+    # No trailing orphan byte was written: the data chunk is exactly the two
+    # one-second chunks (test voice emits 1 s of silence per sentence at 22050 Hz)
+    # plus a whole number of silence samples.
+    sample_rate = 22050
+    silence_samples = int(sample_rate * sentence_silence)
+    expected_bytes = (sample_rate * 2 * 2) + (silence_samples * 2)
+    assert data_size == expected_bytes
 
 
 def test_ar_tashkeel() -> None:
