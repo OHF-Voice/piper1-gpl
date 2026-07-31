@@ -481,11 +481,13 @@ class VitsDataModule(L.LightningDataModule):
                 )
 
         full_dataset = VitsDataset(all_utts)
-
-        valid_set_size = int(len(full_dataset) * self.validation_split)
-        train_set_size = len(full_dataset) - valid_set_size - self.num_test_examples
+        
+        n = len(full_dataset)
+        valid_set_size = int(n * self.validation_split)
+        num_test = min(self.num_test_examples, max(0, n - valid_set_size - 1))
+        train_set_size = n - valid_set_size - num_test
         self.train_dataset, self.test_dataset, self.val_dataset = random_split(
-            full_dataset, [train_set_size, self.num_test_examples, valid_set_size]
+            full_dataset, [train_set_size, num_test, valid_set_size]
         )
 
     def _make_dataloader(
@@ -510,7 +512,14 @@ class VitsDataModule(L.LightningDataModule):
     def train_dataloader(self):
         # shuffle=True: main never shuffles, so batch order is identical every
         # epoch. drop_last avoids a tiny ragged final batch.
-        return self._make_dataloader(self.train_dataset, shuffle=True, drop_last=True)
+        drop_last = len(self.train_dataset) > self.batch_size
+        if not drop_last:
+            _LOGGER.warning(
+                "Train split (%s) is not larger than batch_size (%s) ",
+                len(self.train_dataset),
+                self.batch_size,
+            )
+        return self._make_dataloader(self.train_dataset, shuffle=True, drop_last=drop_last)
 
     def test_dataloader(self):
         return self._make_dataloader(self.test_dataset)
