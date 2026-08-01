@@ -115,6 +115,12 @@ auto piper_create(const char *model_path, const char *config_path,
   synth->session_options.DisableMemPattern();
   synth->session_options.DisableProfiling();
 
+  synth->session_options.SetIntraOpNumThreads(1);
+  synth->session_options.SetInterOpNumThreads(1);
+  synth->session_options.SetGraphOptimizationLevel(
+      GraphOptimizationLevel::ORT_ENABLE_BASIC);
+  synth->session_options.SetExecutionMode(ExecutionMode::ORT_SEQUENTIAL);
+
 #if !defined(WIN32) // ort on WIN32 uses wchar_t
   const auto *model_path_ort = model_path;
 #else
@@ -346,7 +352,7 @@ auto piper_synthesize_next(struct piper_synthesizer *synth,
   synth->phoneme_id_queue.pop();
 
   auto memoryInfo = Ort::MemoryInfo::CreateCpu(
-      OrtAllocatorType::OrtArenaAllocator, OrtMemType::OrtMemTypeDefault);
+      OrtAllocatorType::OrtDeviceAllocator, OrtMemType::OrtMemTypeDefault);
 
   // Allocate
   std::vector<int64_t> phoneme_id_lengths{
