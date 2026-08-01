@@ -245,6 +245,8 @@ auto piper_synthesize_start(struct piper_synthesizer *synth, const char *text,
     sentence_phonemes.push_back(nfd_text);
     break;
   }
+  // Pinyin it not supported at this moment
+  case PhonemeType::Pinyin:
   case PhonemeType::Invalid: {
     return PIPER_ERR_GENERIC;
   }
