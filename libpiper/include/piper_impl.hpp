@@ -4,11 +4,11 @@
 #include "json.hpp"
 #include "uni_algo.h"
 
+#include <cstdint>
 #include <map>
 #include <memory>
 #include <optional>
 #include <queue>
-#include <stdint.h>
 #include <string>
 #include <vector>
 
