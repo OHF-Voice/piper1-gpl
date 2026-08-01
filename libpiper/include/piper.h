@@ -1,15 +1,19 @@
 #ifndef PIPER_H_
 #define PIPER_H_
 
-#include <cstddef>
-
 #if defined(__has_include)
 #if __has_include(<cuchar>)
 #include <cuchar>
 #endif
+#if __has_include(<cstddef>)
+#include <cstddef>
+#else
+#include <stdbool.h>
+#endif
 #endif
 
 #if !defined(__cplusplus) && !defined(__char32_t_defined)
+#include <stdint.h>
 typedef uint32_t char32_t;
 #define __char32_t_defined
 #endif
@@ -28,9 +32,9 @@ typedef uint32_t char32_t;
 extern "C" {
 #endif
 
-#define PIPER_OK 0
-#define PIPER_DONE 1
-#define PIPER_ERR_GENERIC -1
+#define PIPER_OK (0)
+#define PIPER_DONE (1)
+#define PIPER_ERR_GENERIC (-1)
 
 /**
  * \brief Text-to-speech synthesizer.
