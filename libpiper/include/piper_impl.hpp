@@ -28,9 +28,9 @@ const Phoneme PHONEME_BOS = U'^';
 const Phoneme PHONEME_EOS = U'$';
 const Phoneme PHONEME_SEPARATOR = 0;
 
-const float DEFAULT_LENGTH_SCALE = 1.0f;
-const float DEFAULT_NOISE_SCALE = 0.667f;
-const float DEFAULT_NOISE_W_SCALE = 0.8f;
+const float DEFAULT_LENGTH_SCALE = 1.0F;
+const float DEFAULT_NOISE_SCALE = 0.667F;
+const float DEFAULT_NOISE_W_SCALE = 0.8F;
 
 const int DEFAULT_HOP_LENGTH = 256;
 

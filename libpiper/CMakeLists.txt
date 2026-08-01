@@ -137,11 +137,14 @@ if(DEFINED ONNXRUNTIME_DIR)
     )
 endif()
 
+# ---- linting ----
+include(ClangTidy.cmake)
 # ---- libpiper ---
 
 add_library(piper SHARED
     ${CMAKE_CURRENT_SOURCE_DIR}/src/piper.cpp
 )
+enable_clang_tidy(piper)
 
 add_dependencies(piper espeak_ng_external)
 target_include_directories(piper PUBLIC

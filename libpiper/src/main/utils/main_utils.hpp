@@ -1,7 +1,6 @@
 #ifndef PIPER_MAIN_UTILS_HPP
 #define PIPER_MAIN_UTILS_HPP
 
-#include <chrono>
 #include <filesystem>
 #include <optional>
 #include <stdexcept>

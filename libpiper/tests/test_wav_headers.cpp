@@ -15,12 +15,12 @@ template <typename T> void pushLittleEndian(std::vector<char> &vec, T val) {
 } // namespace
 
 TEST(WavHeadersTest, WriteWavStreamHeader) {
-  std::stringstream ss;
+  std::stringstream stringStream;
   const int sampleRate = 22050;
 
-  writeWavStreamHeader(ss, sampleRate);
+  writeWavStreamHeader(stringStream, sampleRate);
 
-  std::string headerStr = ss.str();
+  std::string headerStr = stringStream.str();
   ASSERT_EQ(headerStr.length(), 44);
 
   std::vector<char> expectedHeader;

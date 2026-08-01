@@ -18,22 +18,31 @@ function(download_piper_model)
     set(MODEL_URL "${MODEL_BASE_URL}/${ARG_VOICE}.onnx")
     set(MODEL_CONFIG_URL "${MODEL_URL}.json")
 
-    message(STATUS "Downloading ${MODEL_URL}")
-    file(DOWNLOAD
-        ${MODEL_URL}
-        ${MODEL_PATH}
-        SHOW_PROGRESS
-        TLS_VERIFY ON
-    )
-    message(STATUS "Downloaded ${MODEL_URL}")
-    message(STATUS "Downloading ${MODEL_CONFIG_URL}")
-    file(DOWNLOAD
-        ${MODEL_CONFIG_URL}
-        ${MODEL_CONFIG_PATH}
-        SHOW_PROGRESS
-        TLS_VERIFY ON
-    )
-    message(STATUS "Downloaded ${MODEL_CONFIG_URL}")
+    # Download model.onnx if it does not exist
+    if(NOT EXISTS "${MODEL_PATH}")
+        message(STATUS "Downloading ${MODEL_URL}")
+        file(DOWNLOAD
+            ${MODEL_URL}
+            ${MODEL_PATH}
+            SHOW_PROGRESS
+            TLS_VERIFY ON
+        )
+    else()
+        message(STATUS "Model already exists at ${MODEL_PATH}, skipping download.")
+    endif()
+
+    # Download model.onnx.json if it does not exist
+    if(NOT EXISTS "${MODEL_CONFIG_PATH}")
+        message(STATUS "Downloading ${MODEL_CONFIG_URL}")
+        file(DOWNLOAD
+            ${MODEL_CONFIG_URL}
+            ${MODEL_CONFIG_PATH}
+            SHOW_PROGRESS
+            TLS_VERIFY ON
+        )
+    else()
+        message(STATUS "Model config already exists at ${MODEL_CONFIG_PATH}, skipping download.")
+    endif()
 
     set(${ARG_OUTPUT_DIR} ${MODEL_DIR} PARENT_SCOPE)
 endfunction()

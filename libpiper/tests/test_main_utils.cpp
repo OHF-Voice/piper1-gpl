@@ -2,8 +2,6 @@
 
 #include <filesystem>
 #include <fstream>
-#include <string>
-#include <vector>
 
 #include "utils/main_utils.hpp"
 
@@ -28,6 +26,7 @@ protected:
 TEST_F(MainUtilsTest, ParseArgsBasic) {
   piper::RunConfig runConfig;
 
+  // NOLINTNEXTLINE(modernize-avoid-c-arrays)
   const char *argv[] = {"test_program", "--model", "model.onnx",
                         "--output_file", "output.wav"};
   int argc = sizeof(argv) / sizeof(argv[0]);
@@ -41,6 +40,7 @@ TEST_F(MainUtilsTest, ParseArgsBasic) {
 TEST_F(MainUtilsTest, ParseArgsNoOutputFile) {
   piper::RunConfig runConfig;
 
+  // NOLINTNEXTLINE(modernize-avoid-c-arrays)
   const char *argv[] = {"test_program", "--model", "model.onnx"};
   int argc = sizeof(argv) / sizeof(argv[0]);
 
@@ -55,6 +55,7 @@ TEST_F(MainUtilsTest, ParseArgsNoOutputFile) {
 TEST_F(MainUtilsTest, ParseArgsWithSpeaker) {
   piper::RunConfig runConfig;
 
+  // NOLINTNEXTLINE(modernize-avoid-c-arrays)
   const char *argv[] = {"test_program", "--model", "model.onnx", "--speaker",
                         "1"};
   int argc = sizeof(argv) / sizeof(argv[0]);
@@ -69,6 +70,7 @@ TEST_F(MainUtilsTest, ParseArgsWithSpeaker) {
 TEST_F(MainUtilsTest, ParseArgsAllParams) {
   piper::RunConfig runConfig;
 
+  // NOLINTNEXTLINE(modernize-avoid-c-arrays)
   const char *argv[] = {"test_program",  "--model",     "model.onnx",
                         "--config",      "config.json", "--output_file",
                         "out.wav",       "--speaker",   "5",
@@ -84,11 +86,11 @@ TEST_F(MainUtilsTest, ParseArgsAllParams) {
   ASSERT_TRUE(runConfig.speakerId.has_value());
   EXPECT_EQ(runConfig.speakerId.value(), 5);
   ASSERT_TRUE(runConfig.noiseScale.has_value());
-  EXPECT_FLOAT_EQ(runConfig.noiseScale.value(), 0.5f);
+  EXPECT_FLOAT_EQ(runConfig.noiseScale.value(), 0.5F);
   ASSERT_TRUE(runConfig.lengthScale.has_value());
-  EXPECT_FLOAT_EQ(runConfig.lengthScale.value(), 1.2f);
+  EXPECT_FLOAT_EQ(runConfig.lengthScale.value(), 1.2F);
   ASSERT_TRUE(runConfig.noiseW.has_value());
-  EXPECT_FLOAT_EQ(runConfig.noiseW.value(), 0.8f);
+  EXPECT_FLOAT_EQ(runConfig.noiseW.value(), 0.8F);
 }
 
 TEST_F(MainUtilsTest, ParseArgsMissingModel) {
@@ -97,6 +99,7 @@ TEST_F(MainUtilsTest, ParseArgsMissingModel) {
   // Don't create dummy model file
   std::filesystem::remove("model.onnx");
 
+  // NOLINTNEXTLINE(modernize-avoid-c-arrays)
   const char *argv[] = {"test_program", "--model", "model.onnx"};
   int argc = sizeof(argv) / sizeof(argv[0]);
 
@@ -114,6 +117,7 @@ TEST_F(MainUtilsTest, ParseArgsMissingModel) {
 TEST_F(MainUtilsTest, ParseArgsMissingArgument) {
   piper::RunConfig runConfig;
 
+  // NOLINTNEXTLINE(modernize-avoid-c-arrays)
   const char *argv[] = {"test_program", "--model"};
   int argc = sizeof(argv) / sizeof(argv[0]);
 

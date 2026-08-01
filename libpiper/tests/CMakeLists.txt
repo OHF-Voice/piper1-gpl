@@ -34,6 +34,7 @@ add_executable(piper_test
    test_wav_headers.cpp
    test_wavfile.cpp
 )
+enable_clang_tidy(piper_test)
 
 target_compile_definitions(piper_test
     PRIVATE "ESPEAK_DATA_PATH=\"${CMAKE_BINARY_DIR}/espeak_ng-install/share/espeak-ng-data\""

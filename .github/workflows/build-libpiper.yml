@@ -34,6 +34,29 @@ jobs:
       - name: Run clang-format check
         run: cmake --build build --target format
 
+  clang-tidy:
+    name: Static Analysis (clang-tidy)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: libpiper
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install clang-tidy
+        run: | 
+          sudo apt-get update && sudo apt-get install -y clang-tidy
+          clang-tidy --version
+
+      - name: Configure and build with clang-tidy and Clang
+        run: |
+          cmake -B build -DPIPER_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$PWD/install" -DENABLE_CLANG_TIDY=ON
+          cmake --build build --config Release
+        env:
+          CC: clang
+          CXX: clang++
+
   build:
     name: Build on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}

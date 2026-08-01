@@ -1,4 +1,3 @@
-#include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <gtest/gtest.h>
@@ -140,7 +139,7 @@ TEST_F(ProcessTest, ProcessInputStreamJson) {
   piper_synthesize_options options = piper_default_synthesize_options(synth);
   options.speaker_id = 0;
 
-  StdinRedirect redirect("{\"text\": \"This is a JSON test.\"}");
+  StdinRedirect redirect(R"({"text": "This is a JSON test."})");
 
   std::stringstream cout_buffer;
   std::streambuf *old_cout = std::cout.rdbuf(cout_buffer.rdbuf());

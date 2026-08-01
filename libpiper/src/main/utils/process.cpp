@@ -11,6 +11,7 @@
 
 using json = nlohmann::json;
 
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 void processInputStream(piper::RunConfig &runConfig, piper_synthesizer *piper,
                         piper_synthesize_options *options) {
 
@@ -53,6 +54,7 @@ void processInputStream(piper::RunConfig &runConfig, piper_synthesizer *piper,
       // Generate path using timestamp
       std::stringstream outputName;
       outputName << timestamp << ".wav";
+      // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
       std::filesystem::path outputPath = runConfig.outputPath.value();
       outputPath.append(outputName.str());
       {
@@ -60,12 +62,12 @@ void processInputStream(piper::RunConfig &runConfig, piper_synthesizer *piper,
         std::ofstream audioFile(outputPath.string(), std::ios::binary);
         textToWavFile(piper, &local_options, line.c_str(), audioFile);
       } // audioFile is closed
-      std::cout << outputPath.string() << std::endl;
+      std::cout << outputPath.string() << '\n';
     } else if (outputType == piper::OUTPUT_FILE) {
       if (!maybeOutputPath || maybeOutputPath->empty()) {
         throw std::runtime_error("No output path provided");
       }
-      std::filesystem::path outputPath = maybeOutputPath.value();
+      const std::filesystem::path &outputPath = maybeOutputPath.value();
 
       if (!runConfig.jsonInput) {
         // Read all of standard input before synthesizing.
@@ -83,7 +85,7 @@ void processInputStream(piper::RunConfig &runConfig, piper_synthesizer *piper,
         std::ofstream audioFile(outputPath.string(), std::ios::binary);
         textToWavFile(piper, &local_options, line.c_str(), audioFile);
       } // audioFile is closed
-      std::cout << outputPath.string() << std::endl;
+      std::cout << outputPath.string() << '\n';
     } else if (outputType == piper::OUTPUT_STDOUT) {
       // Output WAV to stdout
       textToWavFile(piper, &local_options, line.c_str(), std::cout);
