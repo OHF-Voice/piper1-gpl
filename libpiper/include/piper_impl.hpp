@@ -55,12 +55,14 @@ enum class PhonemeType {
   Invalid = 0,
   Text,
   Espeak,
+  Pinyin,
 };
 
 NLOHMANN_JSON_SERIALIZE_ENUM(PhonemeType, {
                                               {PhonemeType::Text, nullptr},
                                               {PhonemeType::Espeak, "espeak"},
                                               {PhonemeType::Text, "text"},
+                                              {PhonemeType::Pinyin, "pinyin"},
                                           })
 
 struct piper_synthesizer {
