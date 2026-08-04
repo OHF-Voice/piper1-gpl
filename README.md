@@ -43,6 +43,10 @@ People/projects using Piper:
 * [Narration Studio](https://github.com/phyce/Narration-Studio)
 * [Basic TTS](https://basictts.com/) - Simple online text-to-speech converter.
 
+Bindings to use Piper in programming languages other than Python and C/C++:
+
+* Java: [Piper JNI](https://github.com/jvoice-project/piper-jni)
+
 [![A library from the Open Home Foundation](https://www.openhomefoundation.org/badges/ohf-library.png)](https://www.openhomefoundation.org/)
 
 <!-- Links -->
