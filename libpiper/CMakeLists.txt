@@ -236,7 +236,6 @@ if(CLANG_FORMAT)
         COMMENT "Formatting C/C++ files with clang-format"
     )
     message(STATUS "Added 'format' target to run clang-format.")
-    add_dependencies(piper format)
 else()
     message(WARNING "clang-format not found. The 'format' target will not be available.")
 endif()
