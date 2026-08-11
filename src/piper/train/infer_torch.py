@@ -49,6 +49,7 @@ def main() -> None:
     # Phonemizer is created lazily depending on phoneme type
     espeak_phonemizer = None
     chinese_phonemizer = None
+    japanese_phonemizer = None
 
     model = VitsModel.load_from_checkpoint(args.checkpoint, map_location="cpu")
 
@@ -82,6 +83,13 @@ def main() -> None:
                 chinese_phonemizer = ChinesePhonemizer(Path.cwd() / "g2pW")
 
             sentence_phonemes = chinese_phonemizer.phonemize(text)
+        elif config.phoneme_type == PhonemeType.JAPANESE:
+            from ..phonemize_japanese import JapanesePhonemizer
+
+            if japanese_phonemizer is None:
+                japanese_phonemizer = JapanesePhonemizer()
+
+            sentence_phonemes = japanese_phonemizer.phonemize(text)
         else:
             if espeak_phonemizer is None:
                 espeak_phonemizer = EspeakPhonemizer()

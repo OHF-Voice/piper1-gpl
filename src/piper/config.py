@@ -16,6 +16,7 @@ class PhonemeType(str, Enum):
     TEXT = "text"
     PINYIN = "pinyin"  # zh-CN
     HEBREW = "hebrew"  # he-IL: Nakdimon niqqud + IPA G2P
+    JAPANESE = "japanese"  # ja-JP: OpenJTalk + pitch accent -> IPA
 
 
 @dataclass

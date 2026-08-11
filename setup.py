@@ -101,6 +101,9 @@ setup(
             "torch>=2,<3",
             "requests>=2,<3",
         ],
+        "ja": [
+            "pyopenjtalk-plus>=0.4,<1",
+        ],
     },
     packages=[
         "piper",
