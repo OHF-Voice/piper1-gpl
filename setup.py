@@ -95,11 +95,13 @@ setup(
             "onnx>=1,<2",
         ],
         "zh": [
+            # g2pW supplies the pinyin/bopomofo lookup tables. Its model is run
+            # by piper.g2pw_onnx rather than g2pw.api, which is what keeps torch
+            # (~750 MB) out of this extra: g2pw.api imports it for a DataLoader.
             "g2pW>=0.1.1,<1",
+            "transformers>=4,<6",
             "sentence-stream>=1.2.1,<2",
             "unicode-rbnf>=2.4.0,<3",
-            "torch>=2,<3",
-            "requests>=2,<3",
         ],
     },
     packages=[
