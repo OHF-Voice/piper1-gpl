@@ -18,6 +18,7 @@ tokenization and index mapping stay identical.
 
 Ported from g2pW, Copyright (c) 2022 Yi-Chang Chen, Apache License 2.0.
 https://github.com/GitYCC/g2pW
+A copy of the license is distributed as licenses/LICENSE.g2pW-Apache-2.0.
 """
 
 import json

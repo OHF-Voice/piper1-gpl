@@ -46,6 +46,8 @@ setup(
     description="Fast and local neural text-to-speech engine",
     url="http://github.com/OHF-voice/piper1-gpl",
     license="GPL-3.0-or-later",
+    # g2pW is Apache-2.0; see src/piper/g2pw_onnx.py.
+    license_files=["COPYING", "licenses/LICENSE.g2pW-Apache-2.0"],
     author="The Home Assistant Authors",
     author_email="hello@home-assistant.io",
     keywords=["home", "assistant", "tts", "text-to-speech"],
