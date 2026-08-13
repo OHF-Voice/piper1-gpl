@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.6.1
+
+- Run the g2pW model through `piper.g2pw_onnx` instead of `g2pw.api`, dropping `torch` (~750 MB installed) and `requests` from the `zh` extra
+    - `g2pw.api` imports torch only to build padded tensors and iterate batches; the model itself already ran under onnxruntime
+    - Also 1.5-2x faster, since it no longer forks DataLoader worker processes on every call
+    - `g2pW` is still required, for its pinyin/bopomofo lookup tables
+
 ## 1.6.0
 
 - Add Hebrew phonemizer using Nakdimon
