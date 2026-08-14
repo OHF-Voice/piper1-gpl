@@ -196,6 +196,26 @@ typedef struct piper_create_options {
    * phonemes).
    */
   const char *espeak_data_path;
+
+  /**
+   * \brief Path to g2pw ONNX model directory for pinyin, or NULL for
+   * auto-discovery.
+   *
+   * Directory must contain g2pw.onnx, POLYPHONIC_CHARS.txt,
+   * MONOPHONIC_CHARS.txt, and the lookup tables
+   * (bopomofo_to_pinyin_wo_tune_dict.json etc) or be next to espeak data /
+   * data_dir.
+   */
+  const char *g2pw_model_dir;
+
+  /**
+   * \brief Optional root data directory that may contain espeak-ng-data/ and
+   * g2pw/.
+   *
+   * If espeak_data_path or g2pw_model_dir is NULL, library will search inside
+   * data_dir/espeak-ng-data and data_dir/g2pw / data_dir.
+   */
+  const char *data_dir;
 } piper_create_options;
 
 /**
@@ -209,6 +229,8 @@ static inline void piper_init_create_options(piper_create_options *opts) {
     opts->model_path = NULL;
     opts->config_path = NULL;
     opts->espeak_data_path = NULL;
+    opts->g2pw_model_dir = NULL;
+    opts->data_dir = NULL;
   }
 }
 

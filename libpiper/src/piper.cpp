@@ -3,6 +3,8 @@
 #include "piper_impl.hpp"
 
 #include <array>
+#include <cstddef>
+#include <filesystem>
 #include <fstream>
 #include <limits>
 
@@ -42,6 +44,44 @@ auto piper_create_with_options(const piper_create_options *options)
   const char *model_path = options->model_path;
   const char *config_path = options->config_path;
   const char *espeak_data_path = options->espeak_data_path;
+  const char *g2pw_model_dir_opt = nullptr;
+  const char *data_dir_opt = nullptr;
+
+  // Read newer fields if struct is large enough
+  if (options->struct_size >= offsetof(piper_create_options, g2pw_model_dir) +
+                                  sizeof(options->g2pw_model_dir)) {
+    g2pw_model_dir_opt = options->g2pw_model_dir;
+  }
+  if (options->struct_size >=
+      offsetof(piper_create_options, data_dir) + sizeof(options->data_dir)) {
+    data_dir_opt = options->data_dir;
+  }
+
+  // Resolve espeak_data_path via data_dir fallback
+  std::string resolved_espeak_data;
+  const char *final_espeak_data_path = espeak_data_path;
+  if (!final_espeak_data_path && data_dir_opt) {
+    // Try data_dir/espeak-ng-data
+    std::string cand = std::string(data_dir_opt) + "/espeak-ng-data";
+    // exists check would be nice but keep non-blocking; let espeak_Initialize
+    // fail if bad
+    resolved_espeak_data = cand;
+    final_espeak_data_path = resolved_espeak_data.c_str();
+  }
+
+  // Resolve g2pw_model_dir via data_dir fallback (for later use)
+  std::string resolved_g2pw_dir;
+  const char *final_g2pw_model_dir = g2pw_model_dir_opt;
+  if (!final_g2pw_model_dir && data_dir_opt) {
+    // Try data_dir/g2pw then data_dir itself if it contains g2pw.onnx
+    // We don't validate here, just pick first candidate for synth storage
+    std::string cand1 = std::string(data_dir_opt) + "/g2pw";
+    std::string cand2 = std::string(data_dir_opt);
+    // Heuristic: if user pointed data_dir to model root that already has
+    // g2pw.onnx, candid 2 works; we store cand1 and let later init search.
+    resolved_g2pw_dir = cand1;
+    final_g2pw_model_dir = resolved_g2pw_dir.c_str();
+  }
 
   if (model_path == nullptr) {
     return nullptr;
@@ -63,7 +103,8 @@ auto piper_create_with_options(const piper_create_options *options)
   }
 
   if (phoneme_type == PhonemeType::Espeak &&
-      espeak_Initialize(AUDIO_OUTPUT_SYNCHRONOUS, 0, espeak_data_path, 0) < 0) {
+      espeak_Initialize(AUDIO_OUTPUT_SYNCHRONOUS, 0, final_espeak_data_path,
+                        0) < 0) {
     return nullptr;
   }
 
@@ -121,6 +162,88 @@ auto piper_create_with_options(const piper_create_options *options)
 
     if (inference_value.contains("noise_w")) {
       synth->synth_noise_w_scale = inference_value["noise_w"].get<float>();
+    }
+  }
+
+  // Resolve final g2pw model dir for storage and optional loading
+  // Candidate search if explicit not provided:
+  // 1) explicit g2pw_model_dir_opt
+  // 2) data_dir/g2pw
+  // 3) data_dir (if contains g2pw.onnx)
+  // 4) voice model dir + /g2pw
+  // 5) ./g2pw , ./local/g2pw
+  std::string effective_g2pw_dir;
+  if (final_g2pw_model_dir && final_g2pw_model_dir[0] != '\0') {
+    effective_g2pw_dir = final_g2pw_model_dir;
+  }
+  if (effective_g2pw_dir.empty() && data_dir_opt) {
+    std::filesystem::path cand1 = std::filesystem::path(data_dir_opt) / "g2pw";
+    if (std::filesystem::exists(cand1 / "g2pw.onnx")) {
+      effective_g2pw_dir = cand1.string();
+    } else if (std::filesystem::exists(std::filesystem::path(data_dir_opt) /
+                                       "g2pw.onnx")) {
+      effective_g2pw_dir = data_dir_opt;
+    } else {
+      effective_g2pw_dir = cand1.string(); // keep for error reporting / future
+    }
+  }
+  if (effective_g2pw_dir.empty() && phoneme_type == PhonemeType::Pinyin) {
+    // Try sibling of voice model
+    std::filesystem::path model_path_fs(model_path);
+    std::filesystem::path model_dir = model_path_fs.parent_path();
+    std::vector<std::filesystem::path> fallbacks = {
+        model_dir / "g2pw",
+        std::filesystem::path("./g2pw"),
+        std::filesystem::path("./local/g2pw"),
+        std::filesystem::path("local/g2pw"),
+    };
+    for (auto &p : fallbacks) {
+      if (std::filesystem::exists(p / "g2pw.onnx")) {
+        effective_g2pw_dir = p.string();
+        break;
+      }
+    }
+    if (effective_g2pw_dir.empty()) {
+      effective_g2pw_dir = (model_dir / "g2pw").string();
+    }
+  }
+  synth->g2pw_model_dir = effective_g2pw_dir;
+
+  // Attempt to load g2pw session if pinyin and model exists (non-fatal if
+  // missing for now)
+  if (phoneme_type == PhonemeType::Pinyin && !synth->g2pw_model_dir.empty()) {
+    std::filesystem::path g2pw_onnx =
+        std::filesystem::path(synth->g2pw_model_dir) / "g2pw.onnx";
+    if (std::filesystem::exists(g2pw_onnx)) {
+      try {
+        synth->g2pw_session_options.DisableCpuMemArena();
+        synth->g2pw_session_options.DisableMemPattern();
+        synth->g2pw_session_options.DisableProfiling();
+        synth->g2pw_session_options.SetIntraOpNumThreads(2);
+        synth->g2pw_session_options.SetInterOpNumThreads(2);
+        synth->g2pw_session_options.SetGraphOptimizationLevel(
+            GraphOptimizationLevel::ORT_ENABLE_ALL);
+        synth->g2pw_session_options.SetExecutionMode(
+            ExecutionMode::ORT_SEQUENTIAL);
+
+#if !defined(WIN32)
+        const auto *g2pw_path_ort = g2pw_onnx.c_str();
+#else
+        auto sz = ::MultiByteToWideChar(CP_ACP, 0, g2pw_onnx.string().c_str(),
+                                        -1, 0, 0);
+        std::vector<wchar_t> g2pw_path_wc(sz + 1);
+        ::MultiByteToWideChar(CP_ACP, 0, g2pw_onnx.string().c_str(), -1,
+                              &g2pw_path_wc[0], sz);
+        auto *g2pw_path_ort = &g2pw_path_wc[0];
+#endif
+        synth->g2pw_session = std::make_unique<Ort::Session>(
+            Ort::Session(ort_env, g2pw_path_ort, synth->g2pw_session_options));
+        // NOTE: full dict/tokenizer loading will be added in following commits
+      } catch (...) {
+        // Allow creation to succeed even if g2pw load fails for now; synthesize
+        // will error
+        synth->g2pw_session.reset();
+      }
     }
   }
 

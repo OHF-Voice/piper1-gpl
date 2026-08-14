@@ -85,6 +85,11 @@ struct piper_synthesizer {
   Ort::SessionOptions session_options;
   Ort::Env session_env;
 
+  // g2pw - for pinyin (zh-CN)
+  std::string g2pw_model_dir;
+  std::unique_ptr<Ort::Session> g2pw_session;
+  Ort::SessionOptions g2pw_session_options;
+
   // synthesize state
   std::queue<std::pair<std::vector<Phoneme>, std::vector<PhonemeId>>>
       phoneme_id_queue;
