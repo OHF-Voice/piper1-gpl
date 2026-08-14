@@ -204,25 +204,21 @@ auto piper_create_with_options(const piper_create_options *options)
         std::filesystem::path("local/g2pw"),
     };
     for (auto &p : fallbacks) {
-      if (std::filesystem::exists(p / "g2pw.onnx")) {
+      if (std::filesystem::exists(p / "MONOPHONIC_CHARS.txt") ||
+          std::filesystem::exists(p / "char_bopomofo_dict.json")) {
         effective_g2pw_dir = p.string();
         break;
       }
     }
     if (effective_g2pw_dir.empty()) {
-      // attempt build/models dir
-      if (std::filesystem::exists(
-              std::filesystem::path("/tmp/g2pw_full/g2pw.onnx"))) {
-        effective_g2pw_dir = "/tmp/g2pw_full";
-      } else {
-        effective_g2pw_dir = (model_dir / "g2pw").string();
-      }
+      effective_g2pw_dir = (model_dir / "g2pw").string();
     }
   }
   synth->g2pw_model_dir = effective_g2pw_dir;
 
   if (phoneme_type == PhonemeType::Pinyin) {
     // attempt to load chinese phonemizer dicts (non-fatal)
+    // Phase 1: monophonic fallback only; g2pw BERT deferred
     try {
       if (!synth->g2pw_model_dir.empty()) {
         auto ph = std::make_unique<piper::ChinesePhonemizer>();
@@ -234,39 +230,6 @@ auto piper_create_with_options(const piper_create_options *options)
         }
       }
     } catch (...) {
-    }
-
-    if (!synth->g2pw_model_dir.empty()) {
-      std::filesystem::path g2pw_onnx =
-          std::filesystem::path(synth->g2pw_model_dir) / "g2pw.onnx";
-      if (std::filesystem::exists(g2pw_onnx)) {
-        try {
-          synth->g2pw_session_options.DisableCpuMemArena();
-          synth->g2pw_session_options.DisableMemPattern();
-          synth->g2pw_session_options.DisableProfiling();
-          synth->g2pw_session_options.SetIntraOpNumThreads(2);
-          synth->g2pw_session_options.SetInterOpNumThreads(2);
-          synth->g2pw_session_options.SetGraphOptimizationLevel(
-              GraphOptimizationLevel::ORT_ENABLE_ALL);
-          synth->g2pw_session_options.SetExecutionMode(
-              ExecutionMode::ORT_SEQUENTIAL);
-
-#if !defined(WIN32)
-          const auto *g2pw_path_ort = g2pw_onnx.c_str();
-#else
-          auto sz = ::MultiByteToWideChar(CP_ACP, 0, g2pw_onnx.string().c_str(),
-                                          -1, 0, 0);
-          std::vector<wchar_t> g2pw_path_wc(sz + 1);
-          ::MultiByteToWideChar(CP_ACP, 0, g2pw_onnx.string().c_str(), -1,
-                                &g2pw_path_wc[0], sz);
-          auto *g2pw_path_ort = &g2pw_path_wc[0];
-#endif
-          synth->g2pw_session = std::make_unique<Ort::Session>(Ort::Session(
-              ort_env, g2pw_path_ort, synth->g2pw_session_options));
-        } catch (...) {
-          synth->g2pw_session.reset();
-        }
-      }
     }
   }
 

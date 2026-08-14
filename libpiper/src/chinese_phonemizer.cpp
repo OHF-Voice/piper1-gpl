@@ -197,30 +197,6 @@ bool ChinesePhonemizer::load(const std::string &g2pw_model_dir) {
     }
   }
 
-  std::string poly_path = base + "/POLYPHONIC_CHARS.txt";
-  std::ifstream pf(poly_path);
-  if (pf) {
-    std::string line;
-    while (std::getline(pf, line)) {
-      // lines: char<TAB>bopomofo1 bopomofo2 ...?
-      // Actually format is char + "\t" + bopo list? Let's parse.
-      if (line.empty())
-        continue;
-      size_t tab = line.find('\t');
-      if (tab == std::string::npos)
-        continue;
-      std::string ch = line.substr(0, tab);
-      std::string rest = line.substr(tab + 1);
-      std::istringstream iss(rest);
-      std::vector<std::string> vals;
-      std::string v;
-      while (iss >> v)
-        vals.push_back(v);
-      if (!ch.empty() && !vals.empty())
-        poly_dict[ch] = vals;
-    }
-  }
-
   std::string char_bopo_path = base + "/char_bopomofo_dict.json";
   std::ifstream cbf(char_bopo_path);
   if (cbf) {
@@ -252,29 +228,6 @@ bool ChinesePhonemizer::load(const std::string &g2pw_model_dir) {
           bopomofo2pinyin[el.key()] = el.value().get<std::string>();
       }
     } catch (...) {
-    }
-  }
-
-  std::string s2t_path = base + "/bert-base-chinese_s2t_dict.txt";
-  std::ifstream s2t_f(s2t_path);
-  if (s2t_f) {
-    std::string line;
-    while (std::getline(s2t_f, line)) {
-      if (line.empty())
-        continue;
-      size_t tab = line.find('\t');
-      if (tab == std::string::npos)
-        tab = line.find(' ');
-      if (tab == std::string::npos)
-        continue;
-      std::string simp = line.substr(0, tab);
-      std::string trad = line.substr(tab + 1);
-      // trim
-      simp.erase(0, simp.find_first_not_of(" \t\r\n"));
-      simp.erase(simp.find_last_not_of(" \t\r\n") + 1);
-      trad.erase(0, trad.find_first_not_of(" \t\r\n"));
-      trad.erase(trad.find_last_not_of(" \t\r\n") + 1);
-      s2t[simp] = trad;
     }
   }
 

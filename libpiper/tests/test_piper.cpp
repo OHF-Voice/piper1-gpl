@@ -436,8 +436,6 @@ TEST_F(PinyinTest, DirectPinyin) {
   opts.espeak_data_path = nullptr;
   if (!g2pw_dir.empty()) {
     opts.g2pw_model_dir = g2pw_dir.c_str();
-  } else {
-    opts.g2pw_model_dir = "/tmp/g2pw_full";
   }
 
   auto *synth = piper_create_with_options(&opts);
@@ -519,6 +517,57 @@ TEST_F(PinyinTest, MissingG2pwFallback) {
   piper_audio_chunk chunk;
   rc = piper_synthesize_next(synth, &chunk);
   EXPECT_GT(chunk.num_samples, 0);
+
+  piper_free(synth);
+}
+
+TEST_F(PinyinTest, PolyphonicKnownLimitation) {
+  if (!std::filesystem::exists(assets->modelPath())) {
+    GTEST_SKIP();
+  }
+  piper_create_options opts;
+  piper_init_create_options(&opts);
+  std::string model = assets->modelPath().string();
+  std::string config = assets->configPath().string();
+  opts.model_path = model.c_str();
+  opts.config_path = config.c_str();
+  if (!g2pw_dir.empty())
+    opts.g2pw_model_dir = g2pw_dir.c_str();
+
+  auto *synth = piper_create_with_options(&opts);
+  ASSERT_NE(synth, nullptr);
+  ASSERT_NE(synth->chinese_phonemizer, nullptr);
+  ASSERT_TRUE(synth->chinese_phonemizer->hasDicts());
+
+  // Phase 1 is monophonic fallback only: phonemize() picks
+  // char_bopomofo_dict[ch][0] These assertions document the current limitation
+  // flagged in review. After full g2pw BERT integration, these should become
+  // chong2, hang2, chang2.
+  auto seq_cq = synth->chinese_phonemizer->phonemize("重庆");
+  ASSERT_FALSE(seq_cq.empty()) << "重庆 phonemize empty";
+  auto flat_cq = seq_cq[0];
+  bool has_zhong =
+      std::find(flat_cq.begin(), flat_cq.end(), "zhong") != flat_cq.end() ||
+      std::find(flat_cq.begin(), flat_cq.end(), "zh") != flat_cq.end();
+  // At least contains zhONG path (zhong4) – known limitation
+  EXPECT_TRUE(has_zhong) << "expected mono fallback zhong for 重庆, got "
+                         << flat_cq.size();
+
+  auto seq_yh = synth->chinese_phonemizer->phonemize("银行");
+  ASSERT_FALSE(seq_yh.empty());
+  // yin2 xing2 is current mono fallback (should be hang2 after g2pw)
+  auto flat_yh = seq_yh[0];
+  bool has_yin =
+      std::find(flat_yh.begin(), flat_yh.end(), "yin") != flat_yh.end() ||
+      std::find(flat_yh.begin(), flat_yh.end(), "y") != flat_yh.end();
+  EXPECT_TRUE(has_yin);
+
+  // Also verify IDs - ensures not just sample>0 but actual phoneme IDs produced
+  auto ids = piper::ChinesePhonemizer::phonemes_to_ids_pinyin(
+      flat_cq, synth->pinyin_id_map);
+  EXPECT_GT(ids.size(), 2u); // BOS + something + EOS
+  EXPECT_EQ(ids.front(), 1); // BOS
+  EXPECT_EQ(ids.back(), 2);  // EOS
 
   piper_free(synth);
 }

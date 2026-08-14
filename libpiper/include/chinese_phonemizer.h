@@ -25,11 +25,13 @@ extern CHINESE_PHONEMIZER_API const std::vector<std::string> PINYIN_INITIALS;
 extern CHINESE_PHONEMIZER_API const std::set<std::string> GROUP_END_PHONEMES;
 extern CHINESE_PHONEMIZER_API const std::set<std::string> PINYIN_PUNCTUATIONS;
 
-CHINESE_PHONEMIZER_API std::string normalize_g2pw_syllable(const std::string &syl);
+CHINESE_PHONEMIZER_API std::string
+normalize_g2pw_syllable(const std::string &syl);
 CHINESE_PHONEMIZER_API std::tuple<std::string, std::string, std::string>
 split_initial_final_tone(const std::string &syl);
 
-CHINESE_PHONEMIZER_API std::optional<char32_t> get_codepoint_str(const std::string &s);
+CHINESE_PHONEMIZER_API std::optional<char32_t>
+get_codepoint_str(const std::string &s);
 
 CHINESE_PHONEMIZER_API std::vector<int64_t>
 phonemes_to_ids(const std::vector<std::string> &phonemes,
@@ -54,10 +56,8 @@ public:
 
 private:
   std::map<std::string, std::string> mono_dict; // char utf8 -> bopomofo
-  std::map<std::string, std::vector<std::string>> poly_dict;
   std::map<std::string, std::vector<std::string>> char_bopomofo_dict;
   std::map<std::string, std::string> bopomofo2pinyin;
-  std::map<std::string, std::string> s2t;
   bool has_dicts = false;
 
   std::string bopomofo_to_pinyin(const std::string &bopomofo) const;

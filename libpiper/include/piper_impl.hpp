@@ -88,10 +88,9 @@ struct piper_synthesizer {
   Ort::SessionOptions session_options;
   Ort::Env session_env;
 
-  // g2pw - for pinyin (zh-CN)
+  // g2pw dict dir - for pinyin (zh-CN) - monophonic fallback only (Phase 1)
+  // Full BERT disambiguation deferred; see PR 271 review
   std::string g2pw_model_dir;
-  std::unique_ptr<Ort::Session> g2pw_session;
-  Ort::SessionOptions g2pw_session_options;
   std::unique_ptr<piper::ChinesePhonemizer> chinese_phonemizer;
 
   // synthesize state
