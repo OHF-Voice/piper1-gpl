@@ -1,6 +1,7 @@
 #ifndef PIPER_IMPL_H_
 #define PIPER_IMPL_H_
 
+#include "chinese_phonemizer.h"
 #include "json.hpp"
 #include "uni_algo.h"
 
@@ -18,6 +19,7 @@ typedef char32_t Phoneme;
 typedef int64_t PhonemeId;
 typedef int64_t SpeakerId;
 typedef std::map<Phoneme, std::vector<PhonemeId>> PhonemeIdMap;
+typedef std::map<std::string, std::vector<PhonemeId>> PinyinIdMap;
 
 const PhonemeId ID_PAD = 0; // interleaved
 const PhonemeId ID_BOS = 1; // beginning of sentence
@@ -71,6 +73,7 @@ struct piper_synthesizer {
   int sample_rate;
   int num_speakers;
   PhonemeIdMap phoneme_id_map;
+  PinyinIdMap pinyin_id_map;
   int hop_length = DEFAULT_HOP_LENGTH;
   PhonemeType phoneme_type = PhonemeType::Espeak;
 
@@ -89,6 +92,7 @@ struct piper_synthesizer {
   std::string g2pw_model_dir;
   std::unique_ptr<Ort::Session> g2pw_session;
   Ort::SessionOptions g2pw_session_options;
+  std::unique_ptr<piper::ChinesePhonemizer> chinese_phonemizer;
 
   // synthesize state
   std::queue<std::pair<std::vector<Phoneme>, std::vector<PhonemeId>>>
@@ -104,7 +108,7 @@ struct piper_synthesizer {
 };
 
 // Get the first UTF-8 codepoint of a string
-std::optional<Phoneme> get_codepoint(std::string s) {
+inline std::optional<Phoneme> get_codepoint(std::string s) {
   auto view = una::views::utf8(s);
   auto it = view.begin();
 

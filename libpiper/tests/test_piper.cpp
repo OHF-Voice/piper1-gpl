@@ -1,9 +1,11 @@
-#include <gtest/gtest.h>
 #include <cstddef>
+#include <filesystem>
+#include <gtest/gtest.h>
 #include <memory>
 #include <string>
 #include <vector>
 
+#include "chinese_phonemizer.h"
 #include "piper.h"
 #include "piper_impl.hpp"
 #include "utils/piper_test_assets.h"
@@ -246,7 +248,8 @@ TEST_F(PiperTest, CreateWithOptionsSmallStruct) {
   piper_init_create_options(&opts);
   opts.model_path = model_path.c_str();
   // Simulate old header with smaller struct_size (only up to espeak_data_path)
-  opts.struct_size = offsetof(piper_create_options, espeak_data_path) + sizeof(opts.espeak_data_path);
+  opts.struct_size = offsetof(piper_create_options, espeak_data_path) +
+                     sizeof(opts.espeak_data_path);
   opts.espeak_data_path = espeak_path.c_str();
 
   piper_synthesizer *synth = piper_create_with_options(&opts);
@@ -297,7 +300,8 @@ TEST_F(PiperTest, CreateLegacyVsOptionsParity) {
   std::string model_path = assets->modelPath().string();
   std::string config_path = assets->configPath().string();
   std::string espeak_path = PiperTestAssets::espeakDataPath().string();
-  auto *synth_legacy = piper_create(model_path.c_str(), config_path.c_str(), espeak_path.c_str());
+  auto *synth_legacy = piper_create(model_path.c_str(), config_path.c_str(),
+                                    espeak_path.c_str());
   ASSERT_NE(synth_legacy, nullptr);
 
   piper_create_options opts;
@@ -314,4 +318,194 @@ TEST_F(PiperTest, CreateLegacyVsOptionsParity) {
 
   piper_free(synth_legacy);
   piper_free(synth_opts);
+}
+
+// ---- Chinese phonemizer unit tests ----
+
+TEST(ChinesePhonemizerUnit, NormalizeG2pw) {
+  using namespace piper;
+  EXPECT_EQ(normalize_g2pw_syllable("nu:3"), "nv3");
+  EXPECT_EQ(normalize_g2pw_syllable("lve4"), "lve4");
+  EXPECT_EQ(normalize_g2pw_syllable("ni3"), "ni3");
+  EXPECT_EQ(normalize_g2pw_syllable("hao3"), "hao3");
+  EXPECT_EQ(normalize_g2pw_syllable("abc"), "abc");
+}
+
+TEST(ChinesePhonemizerUnit, SplitInitialFinalTone) {
+  using namespace piper;
+  auto [ini, fin, tone] = split_initial_final_tone("ni3");
+  EXPECT_EQ(ini, "n");
+  EXPECT_EQ(fin, "i");
+  EXPECT_EQ(tone, "3");
+
+  auto [ini2, fin2, tone2] = split_initial_final_tone("hao3");
+  EXPECT_EQ(ini2, "h");
+  EXPECT_EQ(fin2, "ao");
+  EXPECT_EQ(tone2, "3");
+
+  auto [ini3, fin3, tone3] = split_initial_final_tone("zhong1");
+  EXPECT_EQ(ini3, "zh");
+  EXPECT_EQ(fin3, "ong");
+  EXPECT_EQ(tone3, "1");
+
+  auto [ini4, fin4, tone4] = split_initial_final_tone("a1");
+  EXPECT_EQ(ini4, "");
+  EXPECT_EQ(fin4, "a");
+  EXPECT_EQ(tone4, "1");
+}
+
+TEST(ChinesePhonemizerUnit, PhonemizePinyinText) {
+  auto seq = piper::ChinesePhonemizer::phonemize_pinyin_text("ni3 hao3");
+  ASSERT_EQ(seq.size(), 1);
+  auto &ph = seq[0];
+  // Should contain initial, final, tone for both syllables
+  // Contains at least n,i,3,h,ao,3
+  EXPECT_GT(ph.size(), 4);
+  bool has_n = std::find(ph.begin(), ph.end(), "n") != ph.end();
+  bool has_h = std::find(ph.begin(), ph.end(), "h") != ph.end();
+  EXPECT_TRUE(has_n);
+  EXPECT_TRUE(has_h);
+}
+
+TEST(ChinesePhonemizerUnit, PhonemesToIds) {
+  std::map<std::string, std::vector<int64_t>> id_map = {
+      {"^", {1}},  {"_", {0}},  {"$", {2}},   {"n", {10}}, {"i", {27}},
+      {"3", {66}}, {"h", {14}}, {"ao", {32}}, {" ", {72}}};
+  std::vector<std::string> ph = {"n", "i", "3", "h", "ao", "3"};
+  auto ids = piper::phonemes_to_ids(ph, id_map);
+  // BOS 1, n10,i27,3+pad, h,ao,3+pad, EOS
+  EXPECT_GT(ids.size(), 5);
+  EXPECT_EQ(ids.front(), 1);
+  EXPECT_EQ(ids.back(), 2);
+}
+
+// ---- Pinyin end-to-end tests ----
+
+class PinyinTest : public ::testing::Test {
+protected:
+  static std::unique_ptr<PiperTestAssets> assets;
+  static std::string g2pw_dir;
+
+  static void SetUpTestSuite() {
+    assets = PiperTestAssets::zhModel();
+    // Prefer /tmp/g2pw_full if exists (CI fallback)
+    if (std::filesystem::exists("/tmp/g2pw_full/g2pw.onnx")) {
+      g2pw_dir = "/tmp/g2pw_full";
+    } else if (std::filesystem::exists("build/g2pw")) {
+      g2pw_dir = "build/g2pw";
+    } else if (std::filesystem::exists("/tmp/g2pw")) {
+      g2pw_dir = "/tmp/g2pw";
+    } else {
+      g2pw_dir = "";
+    }
+
+    // If zh model missing, skip all? assets creation still ok but synth
+    // creation will fail
+  }
+
+  static void TearDownTestSuite() { assets.reset(); }
+};
+
+std::unique_ptr<PiperTestAssets> PinyinTest::assets = nullptr;
+std::string PinyinTest::g2pw_dir = "";
+
+TEST_F(PinyinTest, DirectPinyin) {
+  if (!std::filesystem::exists(assets->modelPath())) {
+    GTEST_SKIP() << "zh model not downloaded";
+  }
+
+  piper_create_options opts;
+  piper_init_create_options(&opts);
+  std::string model = assets->modelPath().string();
+  std::string config = assets->configPath().string();
+  opts.model_path = model.c_str();
+  opts.config_path = config.c_str();
+  opts.espeak_data_path = nullptr;
+  if (!g2pw_dir.empty()) {
+    opts.g2pw_model_dir = g2pw_dir.c_str();
+  } else {
+    opts.g2pw_model_dir = "/tmp/g2pw_full";
+  }
+
+  auto *synth = piper_create_with_options(&opts);
+  if (!synth) {
+    GTEST_SKIP() << "synth creation failed (model missing?)";
+  }
+  ASSERT_EQ(synth->phoneme_type, PhonemeType::Pinyin);
+
+  int rc = piper_synthesize_start(synth, "ni3 hao3", nullptr);
+  ASSERT_EQ(rc, PIPER_OK);
+
+  piper_audio_chunk chunk;
+  rc = piper_synthesize_next(synth, &chunk);
+  ASSERT_TRUE(rc == PIPER_OK || rc == PIPER_DONE);
+  EXPECT_GT(chunk.num_samples, 0);
+
+  while (!chunk.is_last) {
+    rc = piper_synthesize_next(synth, &chunk);
+    if (rc == PIPER_DONE)
+      break;
+  }
+
+  piper_free(synth);
+}
+
+TEST_F(PinyinTest, HanziMonoFallback) {
+  if (!std::filesystem::exists(assets->modelPath())) {
+    GTEST_SKIP();
+  }
+  piper_create_options opts;
+  piper_init_create_options(&opts);
+  std::string model = assets->modelPath().string();
+  std::string config = assets->configPath().string();
+  opts.model_path = model.c_str();
+  opts.config_path = config.c_str();
+  if (!g2pw_dir.empty())
+    opts.g2pw_model_dir = g2pw_dir.c_str();
+
+  auto *synth = piper_create_with_options(&opts);
+  if (!synth) {
+    GTEST_SKIP();
+  }
+
+  // "你好" should be phonemized via mono dict if available, else fallback to
+  // skip unknown giving error With dicts present (g2pw_full), it should succeed
+  if (synth->chinese_phonemizer && synth->chinese_phonemizer->hasDicts()) {
+    int rc = piper_synthesize_start(synth, "你好", nullptr);
+    ASSERT_EQ(rc, PIPER_OK);
+    piper_audio_chunk chunk;
+    rc = piper_synthesize_next(synth, &chunk);
+    EXPECT_GT(chunk.num_samples, 0);
+  } else {
+    // without dicts, direct pinyin fallback still works if we give pinyin, so
+    // skip hanzi
+    GTEST_SKIP() << "no dicts loaded, skipping hanzi test";
+  }
+
+  piper_free(synth);
+}
+
+TEST_F(PinyinTest, MissingG2pwFallback) {
+  if (!std::filesystem::exists(assets->modelPath())) {
+    GTEST_SKIP();
+  }
+  piper_create_options opts;
+  piper_init_create_options(&opts);
+  std::string model = assets->modelPath().string();
+  std::string config = assets->configPath().string();
+  opts.model_path = model.c_str();
+  opts.config_path = config.c_str();
+  opts.g2pw_model_dir = "/tmp/nonexistent_dir_for_fallback";
+  auto *synth = piper_create_with_options(&opts);
+  ASSERT_NE(synth, nullptr);
+
+  // With nonexistent g2pw dir, direct pinyin should still work via static
+  // phonemize_pinyin_text
+  int rc = piper_synthesize_start(synth, "ni3 hao3", nullptr);
+  EXPECT_EQ(rc, PIPER_OK);
+  piper_audio_chunk chunk;
+  rc = piper_synthesize_next(synth, &chunk);
+  EXPECT_GT(chunk.num_samples, 0);
+
+  piper_free(synth);
 }

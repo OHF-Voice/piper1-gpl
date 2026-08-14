@@ -143,6 +143,7 @@ include(ClangTidy.cmake)
 
 add_library(piper SHARED
     ${CMAKE_CURRENT_SOURCE_DIR}/src/piper.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/chinese_phonemizer.cpp
 )
 enable_clang_tidy(piper)
 

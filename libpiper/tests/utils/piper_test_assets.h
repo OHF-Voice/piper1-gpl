@@ -27,6 +27,8 @@ public:
    */
   static auto textModel() -> std::unique_ptr<PiperTestAssets>;
 
+  static auto zhModel() -> std::unique_ptr<PiperTestAssets>;
+
 private:
   std::filesystem::path modelDir;
 };

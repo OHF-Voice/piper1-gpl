@@ -25,6 +25,9 @@ download_piper_model(VOICE "en/en_US/lessac/medium/en_US-lessac-medium"
 download_piper_model(VOICE "uk/uk_UA/ukrainian_tts/medium/uk_UA-ukrainian_tts-medium"
                      OUTPUT_DIR TEXT_MODEL_DIR)
 
+download_piper_model(VOICE "zh/zh_CN/chaowen/medium/zh_CN-chaowen-medium"
+                     OUTPUT_DIR ZH_MODEL_DIR)
+
 add_executable(piper_test
    test_piper.cpp
    utils/piper_test_assets.h
@@ -40,6 +43,7 @@ target_compile_definitions(piper_test
     PRIVATE "ESPEAK_DATA_PATH=\"${CMAKE_BINARY_DIR}/espeak_ng-install/share/espeak-ng-data\""
     PRIVATE "EN_TEST_MODEL_DIR=\"${EN_MODEL_DIR}\""
     PRIVATE "TEXT_TEST_MODEL_DIR=\"${TEXT_MODEL_DIR}\""
+    PRIVATE "ZH_TEST_MODEL_DIR=\"${ZH_MODEL_DIR}\""
 )
 
 target_link_libraries(piper_test
