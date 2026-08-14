@@ -393,16 +393,19 @@ protected:
     if (!cmake_g2pw.empty() && std::filesystem::exists(cmake_g2pw)) {
       g2pw_dir = cmake_g2pw.string();
     } else if (std::filesystem::exists("/tmp/g2pw_full/g2pw.onnx") ||
-               std::filesystem::exists("/tmp/g2pw_full/char_bopomofo_dict.json")) {
+               std::filesystem::exists(
+                   "/tmp/g2pw_full/char_bopomofo_dict.json")) {
       g2pw_dir = "/tmp/g2pw_full";
     } else if (std::filesystem::exists("build/g2pw")) {
       g2pw_dir = "build/g2pw";
     } else if (std::filesystem::exists("/tmp/g2pw")) {
       g2pw_dir = "/tmp/g2pw";
-    } else if (std::filesystem::exists(cmake_g2pw / "char_bopomofo_dict.json")) {
+    } else if (std::filesystem::exists(cmake_g2pw /
+                                       "char_bopomofo_dict.json")) {
       g2pw_dir = cmake_g2pw.string();
     } else {
-      // Still set cmake dir even if files downloading – phonemizer will load what it can
+      // Still set cmake dir even if files downloading – phonemizer will load
+      // what it can
       if (!cmake_g2pw.empty())
         g2pw_dir = cmake_g2pw.string();
       else
@@ -480,7 +483,8 @@ TEST_F(PinyinTest, HanziMonoFallback) {
 
   // Require dicts – they are now downloaded via CMake (G2PW_TEST_DATA_DIR)
   // No skipping – if dicts missing, this fails so CI catches it
-  ASSERT_NE(synth->chinese_phonemizer, nullptr) << "chinese_phonemizer not created, g2pw_dir=" << g2pw_dir;
+  ASSERT_NE(synth->chinese_phonemizer, nullptr)
+      << "chinese_phonemizer not created, g2pw_dir=" << g2pw_dir;
   ASSERT_TRUE(synth->chinese_phonemizer->hasDicts())
       << "g2pw dicts not loaded from " << g2pw_dir;
 

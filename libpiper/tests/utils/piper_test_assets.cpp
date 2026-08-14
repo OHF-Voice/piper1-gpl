@@ -35,4 +35,3 @@ auto PiperTestAssets::g2pwDataDir() -> std::filesystem::path {
   return {};
 #endif
 }
-
