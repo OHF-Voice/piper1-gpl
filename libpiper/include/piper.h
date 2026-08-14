@@ -18,6 +18,10 @@ typedef uint32_t char32_t;
 #define __char32_t_defined
 #endif
 
+#if !defined(__cplusplus)
+#include <stddef.h>
+#endif
+
 #if defined(WIN32) && (defined(__GNUC__) || defined(_MSC_VER))
 #if defined(BUILDING_LIBPIPER)
 #define EXPORT_SYMBOL __declspec(dllexport)
@@ -163,6 +167,63 @@ typedef struct piper_synthesize_options {
    */
   float noise_w_scale;
 } piper_synthesize_options;
+
+/**
+ * \brief Options for creating a synthesizer.
+ *
+ * This struct is versioned by struct_size. Set struct_size =
+ * sizeof(piper_create_options) before passing to piper_create_with_options.
+ * Future fields will be appended at the end and gated by struct_size.
+ */
+typedef struct piper_create_options {
+  /**
+   * \brief Size of this struct in bytes, for versioning.
+   */
+  size_t struct_size;
+
+  /**
+   * \brief Path to ONNX voice model file.
+   */
+  const char *model_path;
+
+  /**
+   * \brief Path to JSON voice config file or NULL if it's model_path + .json
+   */
+  const char *config_path;
+
+  /**
+   * \brief Path to espeak-ng data directory, or NULL if not needed (text
+   * phonemes).
+   */
+  const char *espeak_data_path;
+} piper_create_options;
+
+/**
+ * \brief Initialize piper_create_options with defaults.
+ *
+ * Sets struct_size and nulls paths. Caller must fill model_path at least.
+ */
+static inline void piper_init_create_options(piper_create_options *opts) {
+  if (opts) {
+    opts->struct_size = sizeof(piper_create_options);
+    opts->model_path = NULL;
+    opts->config_path = NULL;
+    opts->espeak_data_path = NULL;
+  }
+}
+
+/**
+ * \brief Create a Piper text-to-speech synthesizer from a voice model (options
+ * version).
+ *
+ * \param options creation options, must have struct_size set.
+ *
+ * \return a Piper text-to-speech synthesizer for the voice model, or NULL on
+ * failure.
+ */
+EXPORT_SYMBOL
+piper_synthesizer *
+piper_create_with_options(const piper_create_options *options);
 
 /**
  * \brief Create a Piper text-to-speech synthesizer from a voice model.

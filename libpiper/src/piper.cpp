@@ -23,11 +23,25 @@
 
 using json = nlohmann::json;
 
-// NOLINTNEXTLINE(readability-function-cognitive-complexity,bugprone-easily-swappable-parameters)
-auto piper_create(const char *model_path, const char *config_path,
-                  const char *espeak_data_path) -> struct piper_synthesizer * {
+auto piper_create_with_options(const piper_create_options *options)
+    -> struct piper_synthesizer * {
   // onnx
   static Ort::Env ort_env{ORT_LOGGING_LEVEL_WARNING, "piper"};
+
+  if (options == nullptr) {
+    return nullptr;
+  }
+
+  // Basic version check - allow forward compatible larger structs
+  if (options->struct_size < offsetof(piper_create_options, espeak_data_path) +
+                                 sizeof(options->espeak_data_path)) {
+    // Struct too small to contain required fields
+    return nullptr;
+  }
+
+  const char *model_path = options->model_path;
+  const char *config_path = options->config_path;
+  const char *espeak_data_path = options->espeak_data_path;
 
   if (model_path == nullptr) {
     return nullptr;
@@ -133,6 +147,16 @@ auto piper_create(const char *model_path, const char *config_path,
       Ort::Session(ort_env, model_path_ort, synth->session_options));
 
   return synth;
+}
+
+auto piper_create(const char *model_path, const char *config_path,
+                  const char *espeak_data_path) -> struct piper_synthesizer * {
+  piper_create_options opts;
+  piper_init_create_options(&opts);
+  opts.model_path = model_path;
+  opts.config_path = config_path;
+  opts.espeak_data_path = espeak_data_path;
+  return piper_create_with_options(&opts);
 }
 
 void piper_free(struct piper_synthesizer *synth) {
