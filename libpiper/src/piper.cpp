@@ -390,7 +390,10 @@ auto piper_synthesize_start(struct piper_synthesizer *synth, const char *text,
   synth->noise_w_scale = options->noise_w_scale;
   synth->speaker_id = options->speaker_id;
 
-  if (synth->phoneme_type == PhonemeType::Pinyin) {
+  // phonemize (single dispatch)
+  std::vector<std::string> sentence_phonemes{""};
+  switch (synth->phoneme_type) {
+  case PhonemeType::Pinyin: {
     if (synth->pinyin_id_map.empty()) {
       return PIPER_ERR_GENERIC;
     }
@@ -497,10 +500,6 @@ auto piper_synthesize_start(struct piper_synthesizer *synth, const char *text,
 
     return synth->phoneme_id_queue.empty() ? PIPER_ERR_GENERIC : PIPER_OK;
   }
-
-  // phonemize for Espeak/Text
-  std::vector<std::string> sentence_phonemes{""};
-  switch (synth->phoneme_type) {
   case PhonemeType::Espeak: {
     std::size_t current_idx = 0;
     const void *text_ptr = text;
@@ -547,7 +546,6 @@ auto piper_synthesize_start(struct piper_synthesizer *synth, const char *text,
     sentence_phonemes.push_back(nfd_text);
     break;
   }
-  case PhonemeType::Pinyin:
   case PhonemeType::Invalid: {
     return PIPER_ERR_GENERIC;
   }
