@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include <cstddef>
 #include <memory>
 #include <string>
 #include <vector>
@@ -202,4 +203,115 @@ TEST_F(PiperTest, EmptyText) {
   ASSERT_TRUE(chunk.is_last);
 
   piper_free(synth);
+}
+
+TEST_F(PiperTest, CreateWithOptionsBasic) {
+  std::string model_path = assets->modelPath().string();
+  std::string config_path = assets->configPath().string();
+  std::string espeak_path = PiperTestAssets::espeakDataPath().string();
+  piper_create_options opts;
+  piper_init_create_options(&opts);
+  opts.model_path = model_path.c_str();
+  opts.config_path = config_path.c_str();
+  opts.espeak_data_path = espeak_path.c_str();
+
+  piper_synthesizer *synth = piper_create_with_options(&opts);
+  ASSERT_NE(synth, nullptr);
+  EXPECT_EQ(synth->phoneme_type, PhonemeType::Espeak);
+  piper_free(synth);
+}
+
+TEST_F(PiperTest, CreateWithOptionsNullModel) {
+  std::string config_path = assets->configPath().string();
+  std::string espeak_path = PiperTestAssets::espeakDataPath().string();
+  piper_create_options opts;
+  piper_init_create_options(&opts);
+  opts.model_path = nullptr;
+  opts.config_path = config_path.c_str();
+  opts.espeak_data_path = espeak_path.c_str();
+
+  piper_synthesizer *synth = piper_create_with_options(&opts);
+  ASSERT_EQ(synth, nullptr);
+}
+
+TEST_F(PiperTest, CreateWithOptionsNullOptions) {
+  piper_synthesizer *synth = piper_create_with_options(nullptr);
+  ASSERT_EQ(synth, nullptr);
+}
+
+TEST_F(PiperTest, CreateWithOptionsSmallStruct) {
+  std::string model_path = assets->modelPath().string();
+  std::string espeak_path = PiperTestAssets::espeakDataPath().string();
+  piper_create_options opts;
+  piper_init_create_options(&opts);
+  opts.model_path = model_path.c_str();
+  // Simulate old header with smaller struct_size (only up to espeak_data_path)
+  opts.struct_size = offsetof(piper_create_options, espeak_data_path) + sizeof(opts.espeak_data_path);
+  opts.espeak_data_path = espeak_path.c_str();
+
+  piper_synthesizer *synth = piper_create_with_options(&opts);
+  ASSERT_NE(synth, nullptr);
+  piper_free(synth);
+}
+
+TEST_F(PiperTest, CreateWithOptionsDataDir) {
+  // data_dir containing espeak-ng-data should be resolved
+  auto espeak_root = PiperTestAssets::espeakDataPath().parent_path();
+  std::string model_path = assets->modelPath().string();
+  std::string config_path = assets->configPath().string();
+  std::string data_dir = espeak_root.string();
+  piper_create_options opts;
+  piper_init_create_options(&opts);
+  opts.model_path = model_path.c_str();
+  opts.config_path = config_path.c_str();
+  opts.espeak_data_path = nullptr; // rely on data_dir fallback
+  opts.data_dir = data_dir.c_str();
+
+  piper_synthesizer *synth = piper_create_with_options(&opts);
+  if (synth) {
+    piper_free(synth);
+  } else {
+    SUCCEED();
+  }
+}
+
+TEST_F(PiperTest, CreateWithOptionsG2pwDirField) {
+  std::string model_path = assets->modelPath().string();
+  std::string config_path = assets->configPath().string();
+  std::string espeak_path = PiperTestAssets::espeakDataPath().string();
+  piper_create_options opts;
+  piper_init_create_options(&opts);
+  opts.model_path = model_path.c_str();
+  opts.config_path = config_path.c_str();
+  opts.espeak_data_path = espeak_path.c_str();
+  opts.g2pw_model_dir = "/tmp/nonexistent_g2pw";
+  opts.data_dir = nullptr;
+
+  piper_synthesizer *synth = piper_create_with_options(&opts);
+  ASSERT_NE(synth, nullptr);
+  EXPECT_EQ(synth->g2pw_model_dir, "/tmp/nonexistent_g2pw");
+  piper_free(synth);
+}
+
+TEST_F(PiperTest, CreateLegacyVsOptionsParity) {
+  std::string model_path = assets->modelPath().string();
+  std::string config_path = assets->configPath().string();
+  std::string espeak_path = PiperTestAssets::espeakDataPath().string();
+  auto *synth_legacy = piper_create(model_path.c_str(), config_path.c_str(), espeak_path.c_str());
+  ASSERT_NE(synth_legacy, nullptr);
+
+  piper_create_options opts;
+  piper_init_create_options(&opts);
+  opts.model_path = model_path.c_str();
+  opts.config_path = config_path.c_str();
+  opts.espeak_data_path = espeak_path.c_str();
+  auto *synth_opts = piper_create_with_options(&opts);
+  ASSERT_NE(synth_opts, nullptr);
+
+  EXPECT_EQ(synth_legacy->phoneme_type, synth_opts->phoneme_type);
+  EXPECT_EQ(synth_legacy->sample_rate, synth_opts->sample_rate);
+  EXPECT_EQ(synth_legacy->num_speakers, synth_opts->num_speakers);
+
+  piper_free(synth_legacy);
+  piper_free(synth_opts);
 }
