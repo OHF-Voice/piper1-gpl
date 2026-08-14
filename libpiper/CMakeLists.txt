@@ -173,6 +173,10 @@ else()
   message(WARNING "Could not parse version from setup.py")
 endif()
 
+# Windows DLL export for Chinese phonemizer symbols (fixes LNK2019)
+target_compile_definitions(piper PRIVATE BUILDING_LIBPIPER)
+
+
 # ---- install ---
 
 include(GNUInstallDirs)

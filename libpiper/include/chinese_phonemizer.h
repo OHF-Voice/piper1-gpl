@@ -9,23 +9,33 @@
 #include <tuple>
 #include <vector>
 
+#if defined(_WIN32) || defined(_WIN64)
+#if defined(BUILDING_LIBPIPER)
+#define CHINESE_PHONEMIZER_API __declspec(dllexport)
+#else
+#define CHINESE_PHONEMIZER_API __declspec(dllimport)
+#endif
+#else
+#define CHINESE_PHONEMIZER_API
+#endif
+
 namespace piper {
 
-extern const std::vector<std::string> PINYIN_INITIALS;
-extern const std::set<std::string> GROUP_END_PHONEMES;
-extern const std::set<std::string> PINYIN_PUNCTUATIONS;
+extern CHINESE_PHONEMIZER_API const std::vector<std::string> PINYIN_INITIALS;
+extern CHINESE_PHONEMIZER_API const std::set<std::string> GROUP_END_PHONEMES;
+extern CHINESE_PHONEMIZER_API const std::set<std::string> PINYIN_PUNCTUATIONS;
 
-std::string normalize_g2pw_syllable(const std::string &syl);
-std::tuple<std::string, std::string, std::string>
+CHINESE_PHONEMIZER_API std::string normalize_g2pw_syllable(const std::string &syl);
+CHINESE_PHONEMIZER_API std::tuple<std::string, std::string, std::string>
 split_initial_final_tone(const std::string &syl);
 
-std::optional<char32_t> get_codepoint_str(const std::string &s);
+CHINESE_PHONEMIZER_API std::optional<char32_t> get_codepoint_str(const std::string &s);
 
-std::vector<int64_t>
+CHINESE_PHONEMIZER_API std::vector<int64_t>
 phonemes_to_ids(const std::vector<std::string> &phonemes,
                 const std::map<std::string, std::vector<int64_t>> &id_map);
 
-class ChinesePhonemizer {
+class CHINESE_PHONEMIZER_API ChinesePhonemizer {
 public:
   ChinesePhonemizer() = default;
 
