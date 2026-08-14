@@ -388,15 +388,25 @@ protected:
 
   static void SetUpTestSuite() {
     assets = PiperTestAssets::zhModel();
-    // Prefer /tmp/g2pw_full if exists (CI fallback)
-    if (std::filesystem::exists("/tmp/g2pw_full/g2pw.onnx")) {
+    // Prefer CMake-downloaded g2pw dir
+    auto cmake_g2pw = PiperTestAssets::g2pwDataDir();
+    if (!cmake_g2pw.empty() && std::filesystem::exists(cmake_g2pw)) {
+      g2pw_dir = cmake_g2pw.string();
+    } else if (std::filesystem::exists("/tmp/g2pw_full/g2pw.onnx") ||
+               std::filesystem::exists("/tmp/g2pw_full/char_bopomofo_dict.json")) {
       g2pw_dir = "/tmp/g2pw_full";
     } else if (std::filesystem::exists("build/g2pw")) {
       g2pw_dir = "build/g2pw";
     } else if (std::filesystem::exists("/tmp/g2pw")) {
       g2pw_dir = "/tmp/g2pw";
+    } else if (std::filesystem::exists(cmake_g2pw / "char_bopomofo_dict.json")) {
+      g2pw_dir = cmake_g2pw.string();
     } else {
-      g2pw_dir = "";
+      // Still set cmake dir even if files downloading – phonemizer will load what it can
+      if (!cmake_g2pw.empty())
+        g2pw_dir = cmake_g2pw.string();
+      else
+        g2pw_dir = "";
     }
 
     // If zh model missing, skip all? assets creation still ok but synth
@@ -468,19 +478,18 @@ TEST_F(PinyinTest, HanziMonoFallback) {
     GTEST_SKIP();
   }
 
-  // "你好" should be phonemized via mono dict if available, else fallback to
-  // skip unknown giving error With dicts present (g2pw_full), it should succeed
-  if (synth->chinese_phonemizer && synth->chinese_phonemizer->hasDicts()) {
-    int rc = piper_synthesize_start(synth, "你好", nullptr);
-    ASSERT_EQ(rc, PIPER_OK);
-    piper_audio_chunk chunk;
-    rc = piper_synthesize_next(synth, &chunk);
-    EXPECT_GT(chunk.num_samples, 0);
-  } else {
-    // without dicts, direct pinyin fallback still works if we give pinyin, so
-    // skip hanzi
-    GTEST_SKIP() << "no dicts loaded, skipping hanzi test";
-  }
+  // Require dicts – they are now downloaded via CMake (G2PW_TEST_DATA_DIR)
+  // No skipping – if dicts missing, this fails so CI catches it
+  ASSERT_NE(synth->chinese_phonemizer, nullptr) << "chinese_phonemizer not created, g2pw_dir=" << g2pw_dir;
+  ASSERT_TRUE(synth->chinese_phonemizer->hasDicts())
+      << "g2pw dicts not loaded from " << g2pw_dir;
+
+  // "你好" should be phonemized via char_bopomofo dict
+  int rc = piper_synthesize_start(synth, "你好", nullptr);
+  ASSERT_EQ(rc, PIPER_OK);
+  piper_audio_chunk chunk;
+  rc = piper_synthesize_next(synth, &chunk);
+  EXPECT_GT(chunk.num_samples, 0);
 
   piper_free(synth);
 }
