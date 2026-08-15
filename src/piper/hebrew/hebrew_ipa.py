@@ -1,6 +1,7 @@
 from __future__ import annotations
-import unicodedata as _ud
+
 import re as _re
+import unicodedata as _ud
 from dataclasses import dataclass
 from typing import List, Tuple
 

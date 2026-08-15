@@ -490,7 +490,7 @@ class VitsDataModule(L.LightningDataModule):
                 )
 
         full_dataset = VitsDataset(all_utts)
-        
+
         n = len(full_dataset)
         valid_set_size = int(n * self.validation_split)
         num_test = min(self.num_test_examples, max(0, n - valid_set_size - 1))
@@ -528,7 +528,9 @@ class VitsDataModule(L.LightningDataModule):
                 len(self.train_dataset),
                 self.batch_size,
             )
-        return self._make_dataloader(self.train_dataset, shuffle=True, drop_last=drop_last)
+        return self._make_dataloader(
+            self.train_dataset, shuffle=True, drop_last=drop_last
+        )
 
     def test_dataloader(self):
         return self._make_dataloader(self.test_dataset)

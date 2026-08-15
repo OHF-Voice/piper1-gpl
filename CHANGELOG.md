@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.7.0
+
+- Add Japanese phonemizer using OpenJTalk (`pyopenjtalk-plus`) in the new `ja` extra
+    - `--data.phoneme_type japanese` for training; `"phoneme_type": "japanese"` in a voice config for synthesis
+    - espeak-ng has no kanji coverage (it reads out Unicode character names) and no pitch accent
+    - Full-context labels are parsed for pitch accent and mapped to IPA, so Japanese voices stay compatible with the IPA-based (espeak) warmstart
+- Add `script/setup --ja`, and install the `ja` extra in CI so the Japanese tests run
+- `libpiper`: add `piper_create_options` and `piper_create_with_options()`, with `piper_create()` kept as a wrapper for ABI compatibility
+
 ## 1.6.1
 
 - Run the g2pW model through `piper.g2pw_onnx` instead of `g2pw.api`, dropping `torch` (~750 MB installed) and `requests` from the `zh` extra
