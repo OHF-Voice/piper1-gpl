@@ -105,6 +105,9 @@ setup(
             "sentence-stream>=1.2.1,<2",
             "unicode-rbnf>=2.4.0,<3",
         ],
+        "ja": [
+            "pyopenjtalk-plus>=0.4,<1",
+        ],
     },
     packages=[
         "piper",

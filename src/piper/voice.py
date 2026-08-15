@@ -234,6 +234,17 @@ class PiperVoice:
 
             return phonemizer.phonemize(text)
 
+        if self.config.phoneme_type == PhonemeType.JAPANESE:
+            from .phonemize_japanese import JapanesePhonemizer
+
+            # OpenJTalk -> IPA + pitch accent (default IPA id map)
+            phonemizer = getattr(self, "_japanese_phonemizer", None)
+            if phonemizer is None:
+                phonemizer = JapanesePhonemizer()
+                setattr(self, "_japanese_phonemizer", phonemizer)
+
+            return phonemizer.phonemize(text)
+
         if self.config.phoneme_type != PhonemeType.ESPEAK:
             raise ValueError(f"Unexpected phoneme type: {self.config.phoneme_type}")
 

@@ -237,6 +237,15 @@ class VitsDataModule(L.LightningDataModule):
             def phonemize(text: str) -> list[list[str]]:
                 return hebrew_phonemizer.phonemize(text)
 
+        elif self.phoneme_type == PhonemeType.JAPANESE:
+            from piper.phonemize_japanese import JapanesePhonemizer
+
+            # OpenJTalk -> IPA + pitch accent (default IPA id map)
+            japanese_phonemizer = JapanesePhonemizer()
+
+            def phonemize(text: str) -> list[list[str]]:
+                return japanese_phonemizer.phonemize(text)
+
         elif self.phoneme_type == PhonemeType.TEXT:
             # text = phonemes
 
