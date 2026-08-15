@@ -81,6 +81,7 @@ setup(
         "dev": [
             "black==24.8.0",
             "flake8==7.1.1",
+            "isort==5.13.2",  # used by script/lint and script/format
             "mypy==1.14.0",
             "pylint==3.2.7",
             "pytest==8.3.4",
