@@ -14,6 +14,7 @@ parser.add_argument(
     "--train", action="store_true", help="Install training requirements"
 )
 parser.add_argument("--zh", action="store_true", help="Install Chinese requirements")
+parser.add_argument("--ja", action="store_true", help="Install Japanese requirements")
 parser.add_argument(
     "--torch-cpu", action="store_true", help="Install CPU-only version of PyTorch"
 )
@@ -51,6 +52,9 @@ if args.train:
 
 if args.zh:
     extras.append("zh")
+
+if args.ja:
+    extras.append("ja")
 
 extras_str = ""
 if extras:

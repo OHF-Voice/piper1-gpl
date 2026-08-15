@@ -3,14 +3,19 @@
 import subprocess
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
-# Chinese phonemization requires the optional [zh] dependencies (g2pW, ...).
-# Skip the whole module if they are not installed.
-phonemize_chinese = pytest.importorskip("piper.phonemize_chinese")
-ChinesePhonemizer = phonemize_chinese.ChinesePhonemizer
-phonemes_to_ids = phonemize_chinese.phonemes_to_ids
+if TYPE_CHECKING:
+    # Real names for type checking, which doesn't need the deps installed.
+    from piper.phonemize_chinese import ChinesePhonemizer, phonemes_to_ids
+else:
+    # Chinese phonemization requires the optional [zh] dependencies (g2pW, ...).
+    # Skip the whole module if they are not installed.
+    phonemize_chinese = pytest.importorskip("piper.phonemize_chinese")
+    ChinesePhonemizer = phonemize_chinese.ChinesePhonemizer
+    phonemes_to_ids = phonemize_chinese.phonemes_to_ids
 
 PAD_ID = 0
 BOS_ID = 1

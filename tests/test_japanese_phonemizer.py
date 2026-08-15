@@ -18,8 +18,8 @@ from piper.voice import PiperVoice
 pytest.importorskip("pyopenjtalk", reason="pyopenjtalk-plus is not installed")
 
 
-@pytest.fixture(scope="module")
-def phonemizer() -> JapanesePhonemizer:
+@pytest.fixture(name="phonemizer", scope="module")
+def phonemizer_fixture() -> JapanesePhonemizer:
     return JapanesePhonemizer()
 
 
