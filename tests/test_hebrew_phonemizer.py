@@ -19,13 +19,13 @@ _ORACLE = (
 )
 
 
-@pytest.fixture(scope="module")
-def diacritizer() -> NakdimonDiacritizer:
+@pytest.fixture(name="diacritizer", scope="module")
+def diacritizer_fixture() -> NakdimonDiacritizer:
     return NakdimonDiacritizer()
 
 
-@pytest.fixture(scope="module")
-def phonemizer() -> HebrewPhonemizer:
+@pytest.fixture(name="phonemizer", scope="module")
+def phonemizer_fixture() -> HebrewPhonemizer:
     return HebrewPhonemizer()
 
 

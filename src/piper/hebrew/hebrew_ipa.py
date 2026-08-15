@@ -160,7 +160,7 @@ def _map_consonant(
     b = FINAL_FORM_BASE.get(base, base)
 
     # Silent letters and special cases
-    if b == ALEF or b == AYIN:
+    if b in (ALEF, AYIN):
         # Realize glottal stop only when it separates vowels or hosts its own vowel
         # Actual decision is postponed to vowel handling; here return placeholder
         return "<GLT>"  # may collapse later
