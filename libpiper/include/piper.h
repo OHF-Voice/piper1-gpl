@@ -198,13 +198,17 @@ typedef struct piper_create_options {
   const char *espeak_data_path;
 
   /**
-   * \brief Path to g2pw ONNX model directory for pinyin, or NULL for
+   * \brief Path to g2pw / pinyin dictionary directory for pinyin, or NULL for
    * auto-discovery.
    *
-   * Directory must contain g2pw.onnx, POLYPHONIC_CHARS.txt,
-   * MONOPHONIC_CHARS.txt, and the lookup tables
-   * (bopomofo_to_pinyin_wo_tune_dict.json etc) or be next to espeak data /
-   * data_dir.
+   * Phase 1 (monophonic fallback) directory should contain
+   * MONOPHONIC_CHARS.txt (118K) and/or char_bopomofo_dict.json and
+   * bopomofo_to_pinyin_wo_tune_dict.json. g2pw.onnx and
+   * POLYPHONIC_CHARS.txt are not required in Phase 1; they will be used in
+   * Phase 2 for contextual polyphone disambiguation.
+   *
+   * Directory may be next to espeak data / data_dir, or be data_dir/g2pw or
+   * data_dir itself.
    */
   const char *g2pw_model_dir;
 

@@ -68,14 +68,12 @@ auto piper_create_with_options(const piper_create_options *options)
   }
 
   // Resolve g2pw_model_dir via data_dir fallback (for later use)
+  // NOTE: Do NOT auto-set final_g2pw_model_dir to <data_dir>/g2pw here.
+  // Let effective_g2pw_dir logic below probe both <data_dir>/g2pw and
+  // <data_dir> based on dict existence (MONOPHONIC_CHARS.txt /
+  // char_bopomofo_dict.json). Setting it eagerly made root fallback unreachable.
   std::string resolved_g2pw_dir;
   const char *final_g2pw_model_dir = g2pw_model_dir_opt;
-  if (!final_g2pw_model_dir && data_dir_opt) {
-    std::string cand1 = std::string(data_dir_opt) + "/g2pw";
-    std::string cand2 = std::string(data_dir_opt);
-    resolved_g2pw_dir = cand1;
-    final_g2pw_model_dir = resolved_g2pw_dir.c_str();
-  }
 
   if (model_path == nullptr) {
     return nullptr;
@@ -184,13 +182,25 @@ auto piper_create_with_options(const piper_create_options *options)
     effective_g2pw_dir = final_g2pw_model_dir;
   }
   if (effective_g2pw_dir.empty() && data_dir_opt) {
+    // Phase 1: check for mono dicts, not g2pw.onnx (deferred to Phase 2)
+    // Try <data_dir>/g2pw first, then <data_dir> root as fallback (documented)
     std::filesystem::path cand1 = std::filesystem::path(data_dir_opt) / "g2pw";
-    if (std::filesystem::exists(cand1 / "g2pw.onnx")) {
+    std::filesystem::path cand2 = std::filesystem::path(data_dir_opt);
+    auto has_dicts = [](const std::filesystem::path &d) {
+      return std::filesystem::exists(d / "MONOPHONIC_CHARS.txt") ||
+             std::filesystem::exists(d / "char_bopomofo_dict.json") ||
+             std::filesystem::exists(d / "bopomofo_to_pinyin_wo_tune_dict.json");
+    };
+    if (has_dicts(cand1)) {
       effective_g2pw_dir = cand1.string();
-    } else if (std::filesystem::exists(std::filesystem::path(data_dir_opt) /
-                                       "g2pw.onnx")) {
-      effective_g2pw_dir = data_dir_opt;
+    } else if (has_dicts(cand2)) {
+      effective_g2pw_dir = cand2.string();
+    } else if (std::filesystem::exists(cand1)) {
+      // cand1 exists but without dicts - still prefer it for backward compat
+      effective_g2pw_dir = cand1.string();
     } else {
+      // default to <data_dir>/g2pw even if not existing yet - will be
+      // non-fatal and phonemizer will load what it can, keeping direct pinyin path working
       effective_g2pw_dir = cand1.string();
     }
   }

@@ -271,11 +271,18 @@ TEST_F(PiperTest, CreateWithOptionsDataDir) {
   opts.data_dir = data_dir.c_str();
 
   piper_synthesizer *synth = piper_create_with_options(&opts);
-  if (synth) {
-    piper_free(synth);
-  } else {
-    SUCCEED();
-  }
+  // Now that espeak data path resolution via data_dir is fixed, synth must be non-null
+  // (previously this test allowed nullptr and would hide fallback bugs)
+  ASSERT_NE(synth, nullptr)
+      << "piper_create_with_options should succeed via data_dir=" << data_dir;
+  // Verify g2pw dir resolution for Phase 1: data_dir/g2pw is tried first,
+  // then data_dir root. When data_dir contains espeak-ng-data but no g2pw dicts,
+  // effective_g2pw_dir defaults to <data_dir>/g2pw (non-fatal, direct pinyin still works)
+  EXPECT_FALSE(synth->g2pw_model_dir.empty());
+  // Should end with "g2pw" when using espeak_root data_dir (no dicts in root)
+  EXPECT_TRUE(synth->g2pw_model_dir.find("g2pw") != std::string::npos)
+      << "expected g2pw fallback in " << synth->g2pw_model_dir;
+  piper_free(synth);
 }
 
 TEST_F(PiperTest, CreateWithOptionsG2pwDirField) {
@@ -486,8 +493,11 @@ TEST_F(PinyinTest, HanziMonoFallback) {
   ASSERT_TRUE(synth->chinese_phonemizer->hasDicts())
       << "g2pw dicts not loaded from " << g2pw_dir;
 
-  // "你好" should be phonemized via char_bopomofo dict
-  int rc = piper_synthesize_start(synth, "你好", nullptr);
+  // Phase 1 mono-only: use truly monophonic phrase "你我" (ni3 wo3)
+  // Both characters have single reading in char_bopomofo_dict (unambiguous)
+  // "你好" contains 好 which is polyphonic (hao3/hao4) and is now correctly
+  // treated as unsupported in mono-only mode
+  int rc = piper_synthesize_start(synth, "你我", nullptr);
   ASSERT_EQ(rc, PIPER_OK);
   piper_audio_chunk chunk;
   rc = piper_synthesize_next(synth, &chunk);
@@ -539,35 +549,128 @@ TEST_F(PinyinTest, PolyphonicKnownLimitation) {
   ASSERT_NE(synth->chinese_phonemizer, nullptr);
   ASSERT_TRUE(synth->chinese_phonemizer->hasDicts());
 
-  // Phase 1 is monophonic fallback only: phonemize() picks
-  // char_bopomofo_dict[ch][0] These assertions document the current limitation
-  // flagged in review. After full g2pw BERT integration, these should become
-  // chong2, hang2, chang2.
+  // Phase 1 mono-only: ambiguous polyphonic characters must NOT be silently
+  // assigned first sense. They should be treated as unsupported.
+  // This verifies the fix for review: 重/行/长 are polyphonic and must not
+  // return zhong/xing/zhang as first-sense fallback.
+  auto seq_zhong = synth->chinese_phonemizer->phonemize("重");
+  EXPECT_TRUE(seq_zhong.empty())
+      << "Phase 1 mono-only: 重 is polyphonic, should be unsupported";
+
+  auto seq_xing = synth->chinese_phonemizer->phonemize("行");
+  EXPECT_TRUE(seq_xing.empty())
+      << "Phase 1 mono-only: 行 is polyphonic, should be unsupported";
+
+  auto seq_chang = synth->chinese_phonemizer->phonemize("长");
+  EXPECT_TRUE(seq_chang.empty())
+      << "Phase 1 mono-only: 长 is polyphonic, should be unsupported";
+
+  // Compounds containing poly char should also not silently assign first sense.
+  // Our phonemize returns empty on encountering poly char to avoid wrong reading.
   auto seq_cq = synth->chinese_phonemizer->phonemize("重庆");
-  ASSERT_FALSE(seq_cq.empty()) << "重庆 phonemize empty";
-  auto flat_cq = seq_cq[0];
-  bool has_zhong =
-      std::find(flat_cq.begin(), flat_cq.end(), "zhong") != flat_cq.end() ||
-      std::find(flat_cq.begin(), flat_cq.end(), "zh") != flat_cq.end();
-  // At least contains zhONG path (zhong4) – known limitation
-  EXPECT_TRUE(has_zhong) << "expected mono fallback zhong for 重庆, got "
-                         << flat_cq.size();
+  // Should be empty or at least not contain first-sense zhong – empty is cleanest
+  EXPECT_TRUE(seq_cq.empty())
+      << "重庆 contains 重 (poly), should be unsupported in mono-only Phase 1";
 
   auto seq_yh = synth->chinese_phonemizer->phonemize("银行");
-  ASSERT_FALSE(seq_yh.empty());
-  // yin2 xing2 is current mono fallback (should be hang2 after g2pw)
-  auto flat_yh = seq_yh[0];
-  bool has_yin =
-      std::find(flat_yh.begin(), flat_yh.end(), "yin") != flat_yh.end() ||
-      std::find(flat_yh.begin(), flat_yh.end(), "y") != flat_yh.end();
-  EXPECT_TRUE(has_yin);
+  EXPECT_TRUE(seq_yh.empty())
+      << "银行 contains 行 poly, should be unsupported";
 
-  // Also verify IDs - ensures not just sample>0 but actual phoneme IDs produced
+  auto seq_cj = synth->chinese_phonemizer->phonemize("长江");
+  EXPECT_TRUE(seq_cj.empty())
+      << "长江 contains 长 poly, should be unsupported";
+
+  // Positive: mono chars still work - "你我" are monophonic (single reading)
+  auto seq_nh = synth->chinese_phonemizer->phonemize("你我");
+  ASSERT_FALSE(seq_nh.empty()) << "你我 should succeed in mono-only mode";
+  auto flat_nh = seq_nh[0];
+  // Verify IDs path still works for mono
   auto ids = piper::ChinesePhonemizer::phonemes_to_ids_pinyin(
-      flat_cq, synth->pinyin_id_map);
-  EXPECT_GT(ids.size(), 2u); // BOS + something + EOS
+      flat_nh, synth->pinyin_id_map);
+  EXPECT_GT(ids.size(), 2u);
   EXPECT_EQ(ids.front(), 1); // BOS
   EXPECT_EQ(ids.back(), 2);  // EOS
+
+  piper_free(synth);
+}
+
+TEST_F(PinyinTest, DataDirG2pwSubdir) {
+  if (!std::filesystem::exists(assets->modelPath())) {
+    GTEST_SKIP();
+  }
+  if (g2pw_dir.empty() || !std::filesystem::exists(g2pw_dir)) {
+    GTEST_SKIP() << "g2pw dir not present: " << g2pw_dir;
+  }
+
+  // Layout: data_dir contains g2pw/ subdir with dicts
+  // Use parent of g2pw_dir as data_dir, so <data_dir>/g2pw == g2pw_dir
+  std::filesystem::path g2pw_path(g2pw_dir);
+  std::string data_dir = g2pw_path.parent_path().string();
+  if (data_dir.empty())
+    data_dir = ".";
+
+  piper_create_options opts;
+  piper_init_create_options(&opts);
+  std::string model = assets->modelPath().string();
+  std::string config = assets->configPath().string();
+  opts.model_path = model.c_str();
+  opts.config_path = config.c_str();
+  opts.data_dir = data_dir.c_str();
+  opts.g2pw_model_dir = nullptr; // rely on data_dir fallback
+
+  auto *synth = piper_create_with_options(&opts);
+  ASSERT_NE(synth, nullptr) << "data_dir subdir fallback should create synth";
+  EXPECT_FALSE(synth->g2pw_model_dir.empty());
+  // Should have resolved to <data_dir>/g2pw which contains dicts
+  EXPECT_TRUE(synth->chinese_phonemizer && synth->chinese_phonemizer->hasDicts())
+      << "expected dicts loaded via <data_dir>/g2pw, g2pw_model_dir="
+      << synth->g2pw_model_dir;
+
+  // Direct pinyin should synthesize successfully even via data_dir path
+  int rc = piper_synthesize_start(synth, "ni3 hao3", nullptr);
+  EXPECT_EQ(rc, PIPER_OK);
+  piper_audio_chunk chunk;
+  rc = piper_synthesize_next(synth, &chunk);
+  EXPECT_GT(chunk.num_samples, 0);
+
+  piper_free(synth);
+}
+
+TEST_F(PinyinTest, DataDirRootDicts) {
+  if (!std::filesystem::exists(assets->modelPath())) {
+    GTEST_SKIP();
+  }
+  if (g2pw_dir.empty() || !std::filesystem::exists(g2pw_dir)) {
+    GTEST_SKIP() << "g2pw dir not present";
+  }
+
+  // Layout: dicts directly in data_dir root (no g2pw subdir)
+  // Use g2pw_dir itself as data_dir – it contains char_bopomofo_dict.json directly
+  std::string data_dir = g2pw_dir;
+
+  piper_create_options opts;
+  piper_init_create_options(&opts);
+  std::string model = assets->modelPath().string();
+  std::string config = assets->configPath().string();
+  opts.model_path = model.c_str();
+  opts.config_path = config.c_str();
+  opts.data_dir = data_dir.c_str();
+  opts.g2pw_model_dir = nullptr;
+
+  auto *synth = piper_create_with_options(&opts);
+  ASSERT_NE(synth, nullptr)
+      << "data_dir root fallback should create synth when dicts in root";
+  EXPECT_FALSE(synth->g2pw_model_dir.empty());
+  EXPECT_TRUE(synth->chinese_phonemizer && synth->chinese_phonemizer->hasDicts())
+      << "expected dicts loaded via data_dir root, g2pw_model_dir="
+      << synth->g2pw_model_dir;
+
+  // Youhao mono should still work via root layout
+  int rc = piper_synthesize_start(synth, "你我", nullptr);
+  EXPECT_EQ(rc, PIPER_OK);
+  piper_audio_chunk chunk;
+  rc = piper_synthesize_next(synth, &chunk);
+  EXPECT_GT(chunk.num_samples, 0);
 
   piper_free(synth);
 }

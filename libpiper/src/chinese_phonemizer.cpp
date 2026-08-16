@@ -402,20 +402,30 @@ ChinesePhonemizer::phonemize(const std::string &text) {
       continue;
     }
 
-    // Simplified Chinese handling already converted? We don't have s2t mapping
-    // applied to char level Check mono dict first
+    // Phase 1 mono-only: accept only unambiguous one-reading entries.
+    // - mono_dict (MONOPHONIC_CHARS.txt) is authoritative mono table
+    // - otherwise allow char_bopomofo_dict only if it has exactly one reading
+    // - ambiguous (polyphonic) chars are treated as unsupported -> return empty
+    //   to avoid silently assigning first sense. This prevents 重庆/银行/长江
+    //   from being mis-assigned when only char_bopomofo_dict.json is present.
     std::string bopo;
     auto itm = mono_dict.find(ch_utf8);
     if (itm != mono_dict.end()) {
       bopo = itm->second;
     } else {
       auto itc = char_bopomofo_dict.find(ch_utf8);
-      if (itc != char_bopomofo_dict.end() && !itc->second.empty()) {
-        bopo = itc->second[0];
-      } else {
+      if (itc == char_bopomofo_dict.end() || itc->second.empty()) {
         // unknown char, skip
         continue;
       }
+      if (itc->second.size() != 1) {
+        // polyphonic char - unsupported in Phase 1 mono-only fallback
+        // Return empty to signal unsupported input rather than silently picking
+        // first pronunciation. Caller (PinyinTest) verifies 重/行/长 are not
+        // assigned.
+        return {};
+      }
+      bopo = itc->second[0];
     }
 
     std::string pinyin = bopomofo_to_pinyin(bopo);
