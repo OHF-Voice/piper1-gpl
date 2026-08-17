@@ -246,6 +246,15 @@ class VitsDataModule(L.LightningDataModule):
             def phonemize(text: str) -> list[list[str]]:
                 return japanese_phonemizer.phonemize(text)
 
+        elif self.phoneme_type == PhonemeType.THAI:
+            from piper.phonemize_thai import ThaiPhonemizer
+
+            # TLTK segmentation + G2P -> IPA + tone digits (default IPA id map)
+            thai_phonemizer = ThaiPhonemizer()
+
+            def phonemize(text: str) -> list[list[str]]:
+                return thai_phonemizer.phonemize(text)
+
         elif self.phoneme_type == PhonemeType.TEXT:
             # text = phonemes
 

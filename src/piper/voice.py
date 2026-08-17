@@ -245,6 +245,17 @@ class PiperVoice:
 
             return phonemizer.phonemize(text)
 
+        if self.config.phoneme_type == PhonemeType.THAI:
+            from .phonemize_thai import ThaiPhonemizer
+
+            # TLTK segmentation + G2P -> IPA + tone digits (default IPA id map)
+            phonemizer = getattr(self, "_thai_phonemizer", None)
+            if phonemizer is None:
+                phonemizer = ThaiPhonemizer()
+                setattr(self, "_thai_phonemizer", phonemizer)
+
+            return phonemizer.phonemize(text)
+
         if self.config.phoneme_type != PhonemeType.ESPEAK:
             raise ValueError(f"Unexpected phoneme type: {self.config.phoneme_type}")
 

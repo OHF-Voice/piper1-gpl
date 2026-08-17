@@ -109,6 +109,14 @@ setup(
         "ja": [
             "pyopenjtalk-plus>=0.4,<1",
         ],
+        "th": [
+            # Thai word segmentation + G2P. espeak-ng's Thai voice is a
+            # placeholder (see piper.phonemize_thai) and cannot be trained on.
+            "tltk>=1.6.8,<2",
+            # tltk imports pandas but does not declare it (as of 1.10).
+            "pandas>=2,<3",
+            "unicode-rbnf>=2.4.0,<3",
+        ],
     },
     packages=[
         "piper",

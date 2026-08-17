@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Add Thai phonemizer using TLTK in the new `th` extra
+    - `--data.phoneme_type thai` for training; `"phoneme_type": "thai"` in a voice config for synthesis
+    - espeak-ng's Thai voice is a placeholder: its `th_dict` holds no lexicon, so unspaced Thai is never segmented; the leading vowels เ แ โ ใ ไ are not reordered; and a tone mark deletes the syllable's vowel, collapsing ป่า/ป้า/ป๊า/ป๋า to the same phonemes
+    - TLTK does dictionary-based word segmentation and emits a tone digit (1-5) per syllable, in the same style `phonemize_chinese` uses for Mandarin tones
+    - The whole inventory already has ids in the default IPA map, so Thai voices stay compatible with the IPA-based (espeak) warmstart
+- Add `script/setup --th`, and install the `th` extra in CI so the Thai tests run
+
 ## 1.7.0
 
 - Add Japanese phonemizer using OpenJTalk (`pyopenjtalk-plus`) in the new `ja` extra
