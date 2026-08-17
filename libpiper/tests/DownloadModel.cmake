@@ -66,18 +66,50 @@ function(download_g2pw_data)
     foreach(F IN ITEMS
             "char_bopomofo_dict.json"
             "bopomofo_to_pinyin_wo_tune_dict.json")
+        # Clean up previous empty/corrupt artifact (CMake leaves 0-byte on HTTP error)
+        if(EXISTS "${G2PW_DIR}/${F}")
+            file(SIZE "${G2PW_DIR}/${F}" _existing_size)
+            if(_existing_size EQUAL 0)
+                file(REMOVE "${G2PW_DIR}/${F}")
+            endif()
+        endif()
         if(NOT EXISTS "${G2PW_DIR}/${F}")
             message(STATUS "Downloading g2pw ${F}")
-            file(DOWNLOAD
-                "${G2PW_BASE}/${F}"
-                "${G2PW_DIR}/${F}"
-                SHOW_PROGRESS
-                TLS_VERIFY ON
-                STATUS dl_status
-            )
-            list(GET dl_status 0 dl_code)
-            if(NOT dl_code EQUAL 0)
-                message(WARNING "Failed to download ${F} from ${G2PW_BASE}, trying local fallbacks")
+            set(_dl_ok FALSE)
+            foreach(_attempt RANGE 1 3)
+                file(DOWNLOAD
+                    "${G2PW_BASE}/${F}"
+                    "${G2PW_DIR}/${F}"
+                    SHOW_PROGRESS
+                    TLS_VERIFY ON
+                    STATUS dl_status
+                )
+                list(GET dl_status 0 dl_code)
+                if(dl_code EQUAL 0)
+                    # CMake may leave empty file on transient failure – verify size
+                    file(SIZE "${G2PW_DIR}/${F}" _fsize)
+                    if(_fsize GREATER 0)
+                        set(_dl_ok TRUE)
+                        break()
+                    else()
+                        file(REMOVE "${G2PW_DIR}/${F}")
+                        message(WARNING "Downloaded ${F} is empty (attempt ${_attempt}/3), retrying...")
+                        set(dl_code 1)
+                        set(dl_status "1;empty file")
+                    endif()
+                endif()
+                # Clean partial file before retry/fallback
+                file(REMOVE "${G2PW_DIR}/${F}")
+                if(_attempt LESS 3)
+                    message(STATUS "Retry ${_attempt}/3 for ${F} after failure (${dl_status})")
+                    execute_process(COMMAND ${CMAKE_COMMAND} -E sleep 2)
+                endif()
+            endforeach()
+
+            if(NOT _dl_ok)
+                message(WARNING "Failed to download ${F} from ${G2PW_BASE} after 3 attempts (${dl_status}), trying local fallbacks")
+                # Ensure no empty leftover
+                file(REMOVE "${G2PW_DIR}/${F}")
                 if(EXISTS "/usr/local/lib/python3.12/dist-packages/g2pw/${F}")
                     file(COPY "/usr/local/lib/python3.12/dist-packages/g2pw/${F}"
                          DESTINATION "${G2PW_DIR}")
@@ -86,10 +118,10 @@ function(download_g2pw_data)
                          DESTINATION "${G2PW_DIR}")
                 endif()
                 if(NOT EXISTS "${G2PW_DIR}/${F}")
-                    # Try second mirror? fail clearly so tests don't run blind
-                    message(FATAL_ERROR "Phase 1 required g2pw file ${F} missing in ${G2PW_DIR} after download attempt (${dl_status}). "
+                    message(FATAL_ERROR "Phase 1 required g2pw file ${F} missing in ${G2PW_DIR} after download attempts (${dl_status}). "
                         "Hanzi mono fallback needs char_bopomofo_dict.json + bopomofo_to_pinyin_wo_tune_dict.json. "
-                        "Check network or provide /tmp/g2pw_full/${F}")
+                        "Windows host often hits raw.githubusercontent.com transient 403/22 – fixed with retry+remove-empty logic; "
+                        "if still failing, check network or provide /tmp/g2pw_full/${F} as fallback.")
                 endif()
             endif()
         endif()
