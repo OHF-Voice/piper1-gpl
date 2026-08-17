@@ -59,10 +59,13 @@ function(download_g2pw_data)
     # Using raw github – TLS_VERIFY ON matches other downloads
     set(G2PW_BASE "https://raw.githubusercontent.com/GitYCC/g2pW/master/g2pw")
 
+    # Phase 1 required files – must exist or CMake fails clearly.
+    # Windows hosted runs previously only got char_bopomofo_dict.json and
+    # skipped after a warning, causing Hanzi tests to fail with generic
+    # PIPER_ERR. Now we require both source and bopomofo map.
     foreach(F IN ITEMS
-            "bert-base-chinese_s2t_dict.txt"
-            "bopomofo_to_pinyin_wo_tune_dict.json"
-            "char_bopomofo_dict.json")
+            "char_bopomofo_dict.json"
+            "bopomofo_to_pinyin_wo_tune_dict.json")
         if(NOT EXISTS "${G2PW_DIR}/${F}")
             message(STATUS "Downloading g2pw ${F}")
             file(DOWNLOAD
@@ -74,8 +77,7 @@ function(download_g2pw_data)
             )
             list(GET dl_status 0 dl_code)
             if(NOT dl_code EQUAL 0)
-                message(WARNING "Failed to download ${F}, will try local pip package fallback")
-                # fallback to pip-installed g2pw if available
+                message(WARNING "Failed to download ${F} from ${G2PW_BASE}, trying local fallbacks")
                 if(EXISTS "/usr/local/lib/python3.12/dist-packages/g2pw/${F}")
                     file(COPY "/usr/local/lib/python3.12/dist-packages/g2pw/${F}"
                          DESTINATION "${G2PW_DIR}")
@@ -83,13 +85,39 @@ function(download_g2pw_data)
                     file(COPY "/tmp/g2pw_full/${F}"
                          DESTINATION "${G2PW_DIR}")
                 endif()
+                if(NOT EXISTS "${G2PW_DIR}/${F}")
+                    # Try second mirror? fail clearly so tests don't run blind
+                    message(FATAL_ERROR "Phase 1 required g2pw file ${F} missing in ${G2PW_DIR} after download attempt (${dl_status}). "
+                        "Hanzi mono fallback needs char_bopomofo_dict.json + bopomofo_to_pinyin_wo_tune_dict.json. "
+                        "Check network or provide /tmp/g2pw_full/${F}")
+                endif()
             endif()
         endif()
     endforeach()
 
+    # Phase 2 file – not required for monophonic Phase 1, optional
+    set(F "bert-base-chinese_s2t_dict.txt")
+    if(NOT EXISTS "${G2PW_DIR}/${F}")
+        message(STATUS "Downloading g2pw ${F} (Phase 2 optional)")
+        file(DOWNLOAD
+            "${G2PW_BASE}/${F}"
+            "${G2PW_DIR}/${F}"
+            SHOW_PROGRESS
+            TLS_VERIFY ON
+            STATUS dl_status2
+        )
+        list(GET dl_status2 0 dl_code2)
+        if(NOT dl_code2 EQUAL 0)
+            message(STATUS "Optional ${F} download failed (${dl_status2}) – continuing, Phase 2 deferred")
+            if(EXISTS "/tmp/g2pw_full/${F}")
+                file(COPY "/tmp/g2pw_full/${F}" DESTINATION "${G2PW_DIR}")
+            endif()
+        endif()
+    endif()
+
     # MONOPHONIC/POLYPHONIC are not in g2pW repo – they live in model bundles.
     # Copy from /tmp/g2pw_full if we have it locally (built by us), otherwise
-    # leave out – hasDicts() will be true from char_bopomofo alone for "你好".
+    # leave out – hasDicts() will be true from char_bopomofo + b2p for mono.
     foreach(F IN ITEMS "MONOPHONIC_CHARS.txt" "POLYPHONIC_CHARS.txt" "vocab.txt")
         if(NOT EXISTS "${G2PW_DIR}/${F}" AND EXISTS "/tmp/g2pw_full/${F}")
             file(COPY "/tmp/g2pw_full/${F}" DESTINATION "${G2PW_DIR}")

@@ -71,7 +71,8 @@ auto piper_create_with_options(const piper_create_options *options)
   // NOTE: Do NOT auto-set final_g2pw_model_dir to <data_dir>/g2pw here.
   // Let effective_g2pw_dir logic below probe both <data_dir>/g2pw and
   // <data_dir> based on dict existence (MONOPHONIC_CHARS.txt /
-  // char_bopomofo_dict.json). Setting it eagerly made root fallback unreachable.
+  // char_bopomofo_dict.json). Setting it eagerly made root fallback
+  // unreachable.
   std::string resolved_g2pw_dir;
   const char *final_g2pw_model_dir = g2pw_model_dir_opt;
 
@@ -183,24 +184,36 @@ auto piper_create_with_options(const piper_create_options *options)
   }
   if (effective_g2pw_dir.empty() && data_dir_opt) {
     // Phase 1: check for mono dicts, not g2pw.onnx (deferred to Phase 2)
+    // Readiness requires a pronunciation source (MONOPHONIC_CHARS.txt or
+    // char_bopomofo_dict.json) AND bopomofo_to_pinyin_wo_tune_dict.json.
     // Try <data_dir>/g2pw first, then <data_dir> root as fallback (documented)
     std::filesystem::path cand1 = std::filesystem::path(data_dir_opt) / "g2pw";
     std::filesystem::path cand2 = std::filesystem::path(data_dir_opt);
     auto has_dicts = [](const std::filesystem::path &d) {
-      return std::filesystem::exists(d / "MONOPHONIC_CHARS.txt") ||
-             std::filesystem::exists(d / "char_bopomofo_dict.json") ||
-             std::filesystem::exists(d / "bopomofo_to_pinyin_wo_tune_dict.json");
+      bool has_source = std::filesystem::exists(d / "MONOPHONIC_CHARS.txt") ||
+                        std::filesystem::exists(d / "char_bopomofo_dict.json");
+      bool has_b2p =
+          std::filesystem::exists(d / "bopomofo_to_pinyin_wo_tune_dict.json");
+      return has_source && has_b2p;
     };
     if (has_dicts(cand1)) {
       effective_g2pw_dir = cand1.string();
     } else if (has_dicts(cand2)) {
       effective_g2pw_dir = cand2.string();
     } else if (std::filesystem::exists(cand1)) {
-      // cand1 exists but without dicts - still prefer it for backward compat
-      effective_g2pw_dir = cand1.string();
+      // cand1 exists but without complete dicts - still prefer it for
+      // backward compat if it at least has a source (load() will verify
+      // completeness and report failure)
+      if (std::filesystem::exists(cand1 / "MONOPHONIC_CHARS.txt") ||
+          std::filesystem::exists(cand1 / "char_bopomofo_dict.json")) {
+        effective_g2pw_dir = cand1.string();
+      } else {
+        effective_g2pw_dir = cand1.string();
+      }
     } else {
       // default to <data_dir>/g2pw even if not existing yet - will be
-      // non-fatal and phonemizer will load what it can, keeping direct pinyin path working
+      // non-fatal and phonemizer will load what it can, keeping direct pinyin
+      // path working
       effective_g2pw_dir = cand1.string();
     }
   }
@@ -214,8 +227,11 @@ auto piper_create_with_options(const piper_create_options *options)
         std::filesystem::path("local/g2pw"),
     };
     for (auto &p : fallbacks) {
-      if (std::filesystem::exists(p / "MONOPHONIC_CHARS.txt") ||
-          std::filesystem::exists(p / "char_bopomofo_dict.json")) {
+      bool has_source = std::filesystem::exists(p / "MONOPHONIC_CHARS.txt") ||
+                        std::filesystem::exists(p / "char_bopomofo_dict.json");
+      bool has_b2p =
+          std::filesystem::exists(p / "bopomofo_to_pinyin_wo_tune_dict.json");
+      if (has_source && has_b2p) {
         effective_g2pw_dir = p.string();
         break;
       }

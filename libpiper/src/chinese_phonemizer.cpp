@@ -231,8 +231,13 @@ bool ChinesePhonemizer::load(const std::string &g2pw_model_dir) {
     }
   }
 
-  has_dicts = !mono_dict.empty() || !char_bopomofo_dict.empty() ||
-              !bopomofo2pinyin.empty();
+  // Phase 1 readiness requires a pronunciation source (mono table or char
+  // dict) AND the bopomofo->pinyin map. bert-base-chinese_s2t_dict.txt is
+  // Phase 2 only and not checked here. This prevents silent success when
+  // only char_bopomofo_dict.json is present after a partial download.
+  bool has_source = !mono_dict.empty() || !char_bopomofo_dict.empty();
+  bool has_bopomofo_map = !bopomofo2pinyin.empty();
+  has_dicts = has_source && has_bopomofo_map;
   return has_dicts;
 }
 

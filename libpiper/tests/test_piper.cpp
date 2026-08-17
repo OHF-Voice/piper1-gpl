@@ -271,13 +271,15 @@ TEST_F(PiperTest, CreateWithOptionsDataDir) {
   opts.data_dir = data_dir.c_str();
 
   piper_synthesizer *synth = piper_create_with_options(&opts);
-  // Now that espeak data path resolution via data_dir is fixed, synth must be non-null
-  // (previously this test allowed nullptr and would hide fallback bugs)
+  // Now that espeak data path resolution via data_dir is fixed, synth must be
+  // non-null (previously this test allowed nullptr and would hide fallback
+  // bugs)
   ASSERT_NE(synth, nullptr)
       << "piper_create_with_options should succeed via data_dir=" << data_dir;
   // Verify g2pw dir resolution for Phase 1: data_dir/g2pw is tried first,
-  // then data_dir root. When data_dir contains espeak-ng-data but no g2pw dicts,
-  // effective_g2pw_dir defaults to <data_dir>/g2pw (non-fatal, direct pinyin still works)
+  // then data_dir root. When data_dir contains espeak-ng-data but no g2pw
+  // dicts, effective_g2pw_dir defaults to <data_dir>/g2pw (non-fatal, direct
+  // pinyin still works)
   EXPECT_FALSE(synth->g2pw_model_dir.empty());
   // Should end with "g2pw" when using espeak_root data_dir (no dicts in root)
   EXPECT_TRUE(synth->g2pw_model_dir.find("g2pw") != std::string::npos)
@@ -395,32 +397,51 @@ protected:
 
   static void SetUpTestSuite() {
     assets = PiperTestAssets::zhModel();
-    // Prefer CMake-downloaded g2pw dir
+
+    auto has_required = [](const std::filesystem::path &d) {
+      bool has_source = std::filesystem::exists(d / "MONOPHONIC_CHARS.txt") ||
+                        std::filesystem::exists(d / "char_bopomofo_dict.json");
+      bool has_b2p =
+          std::filesystem::exists(d / "bopomofo_to_pinyin_wo_tune_dict.json");
+      return has_source && has_b2p;
+    };
+
+    // Prefer CMake-downloaded g2pw dir – must be complete for Phase 1
     auto cmake_g2pw = PiperTestAssets::g2pwDataDir();
-    if (!cmake_g2pw.empty() && std::filesystem::exists(cmake_g2pw)) {
-      g2pw_dir = cmake_g2pw.string();
-    } else if (std::filesystem::exists("/tmp/g2pw_full/g2pw.onnx") ||
-               std::filesystem::exists(
-                   "/tmp/g2pw_full/char_bopomofo_dict.json")) {
-      g2pw_dir = "/tmp/g2pw_full";
-    } else if (std::filesystem::exists("build/g2pw")) {
-      g2pw_dir = "build/g2pw";
-    } else if (std::filesystem::exists("/tmp/g2pw")) {
-      g2pw_dir = "/tmp/g2pw";
-    } else if (std::filesystem::exists(cmake_g2pw /
-                                       "char_bopomofo_dict.json")) {
-      g2pw_dir = cmake_g2pw.string();
-    } else {
-      // Still set cmake dir even if files downloading – phonemizer will load
-      // what it can
-      if (!cmake_g2pw.empty())
-        g2pw_dir = cmake_g2pw.string();
-      else
-        g2pw_dir = "";
+    std::vector<std::filesystem::path> candidates = {
+        cmake_g2pw,
+        std::filesystem::path("/tmp/g2pw_full"),
+        std::filesystem::path("build/g2pw"),
+        std::filesystem::path("/tmp/g2pw"),
+    };
+
+    for (auto &cand : candidates) {
+      if (cand.empty())
+        continue;
+      if (std::filesystem::exists(cand) && has_required(cand)) {
+        g2pw_dir = cand.string();
+        break;
+      }
     }
 
-    // If zh model missing, skip all? assets creation still ok but synth
-    // creation will fail
+    // Fallback: if no complete dir but cmake dir exists partially, use it
+    // so load() fails clearly (hasDicts false) instead of silently using
+    // incomplete data later as PIPER_ERR_GENERIC
+    if (g2pw_dir.empty()) {
+      if (!cmake_g2pw.empty() && std::filesystem::exists(cmake_g2pw)) {
+        g2pw_dir = cmake_g2pw.string();
+      } else if (std::filesystem::exists("/tmp/g2pw_full")) {
+        g2pw_dir = "/tmp/g2pw_full";
+      } else if (std::filesystem::exists("build/g2pw")) {
+        g2pw_dir = "build/g2pw";
+      } else if (!cmake_g2pw.empty()) {
+        g2pw_dir = cmake_g2pw.string();
+      } else {
+        g2pw_dir = "";
+      }
+    }
+
+    // If zh model missing, creation will fail – tests will SKIP clearly
   }
 
   static void TearDownTestSuite() { assets.reset(); }
@@ -566,19 +587,19 @@ TEST_F(PinyinTest, PolyphonicKnownLimitation) {
       << "Phase 1 mono-only: 长 is polyphonic, should be unsupported";
 
   // Compounds containing poly char should also not silently assign first sense.
-  // Our phonemize returns empty on encountering poly char to avoid wrong reading.
+  // Our phonemize returns empty on encountering poly char to avoid wrong
+  // reading.
   auto seq_cq = synth->chinese_phonemizer->phonemize("重庆");
-  // Should be empty or at least not contain first-sense zhong – empty is cleanest
+  // Should be empty or at least not contain first-sense zhong – empty is
+  // cleanest
   EXPECT_TRUE(seq_cq.empty())
       << "重庆 contains 重 (poly), should be unsupported in mono-only Phase 1";
 
   auto seq_yh = synth->chinese_phonemizer->phonemize("银行");
-  EXPECT_TRUE(seq_yh.empty())
-      << "银行 contains 行 poly, should be unsupported";
+  EXPECT_TRUE(seq_yh.empty()) << "银行 contains 行 poly, should be unsupported";
 
   auto seq_cj = synth->chinese_phonemizer->phonemize("长江");
-  EXPECT_TRUE(seq_cj.empty())
-      << "长江 contains 长 poly, should be unsupported";
+  EXPECT_TRUE(seq_cj.empty()) << "长江 contains 长 poly, should be unsupported";
 
   // Positive: mono chars still work - "你我" are monophonic (single reading)
   auto seq_nh = synth->chinese_phonemizer->phonemize("你我");
@@ -622,7 +643,8 @@ TEST_F(PinyinTest, DataDirG2pwSubdir) {
   ASSERT_NE(synth, nullptr) << "data_dir subdir fallback should create synth";
   EXPECT_FALSE(synth->g2pw_model_dir.empty());
   // Should have resolved to <data_dir>/g2pw which contains dicts
-  EXPECT_TRUE(synth->chinese_phonemizer && synth->chinese_phonemizer->hasDicts())
+  EXPECT_TRUE(synth->chinese_phonemizer &&
+              synth->chinese_phonemizer->hasDicts())
       << "expected dicts loaded via <data_dir>/g2pw, g2pw_model_dir="
       << synth->g2pw_model_dir;
 
@@ -645,7 +667,8 @@ TEST_F(PinyinTest, DataDirRootDicts) {
   }
 
   // Layout: dicts directly in data_dir root (no g2pw subdir)
-  // Use g2pw_dir itself as data_dir – it contains char_bopomofo_dict.json directly
+  // Use g2pw_dir itself as data_dir – it contains char_bopomofo_dict.json
+  // directly
   std::string data_dir = g2pw_dir;
 
   piper_create_options opts;
@@ -661,7 +684,8 @@ TEST_F(PinyinTest, DataDirRootDicts) {
   ASSERT_NE(synth, nullptr)
       << "data_dir root fallback should create synth when dicts in root";
   EXPECT_FALSE(synth->g2pw_model_dir.empty());
-  EXPECT_TRUE(synth->chinese_phonemizer && synth->chinese_phonemizer->hasDicts())
+  EXPECT_TRUE(synth->chinese_phonemizer &&
+              synth->chinese_phonemizer->hasDicts())
       << "expected dicts loaded via data_dir root, g2pw_model_dir="
       << synth->g2pw_model_dir;
 
