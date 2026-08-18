@@ -422,7 +422,16 @@ auto piper_synthesize_next(struct piper_synthesizer *synth,
                                              "sid"};
 
   // Get all output names
-  std::vector<std::string> output_names_strs = synth->session->GetOutputNames();
+  std::vector<std::string> output_names_strs;
+  {
+    const auto count = synth->session->GetOutputCount();
+    output_names_strs.reserve(count);
+    Ort::AllocatorWithDefaultOptions allocator;
+    for (size_t i = 0; i < count; ++i) {
+      output_names_strs.emplace_back(synth->session->GetOutputNameAllocated(i, allocator).get());
+    }
+  }
+
   std::vector<const char *> output_names;
   output_names.reserve(output_names_strs.size());
   for (const auto &name : output_names_strs) {
