@@ -56,10 +56,12 @@ int main() {
                            &options /* NULL for defaults */);
 
     piper_audio_chunk chunk;
-    while (piper_synthesize_next(synth, &chunk) != PIPER_DONE) {
+    auto status = PIPER_OK;
+    do {
+        status = piper_synthesize_next(synth, &chunk);
         audio_stream.write(reinterpret_cast<const char *>(chunk.samples),
                            chunk.num_samples * sizeof(float));
-    }
+    } while (PIPER_OK == status);
 
     piper_free(synth);
 
