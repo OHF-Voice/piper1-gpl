@@ -27,8 +27,7 @@
 
 using json = nlohmann::json;
 
-auto piper_create_with_options(const piper_create_options* options)
-    -> struct piper_synthesizer*
+auto piper_create_with_options(const piper_create_options* options) -> struct piper_synthesizer*
 {
   // onnx
   static Ort::Env ort_env{ORT_LOGGING_LEVEL_WARNING, "piper"};
@@ -39,8 +38,7 @@ auto piper_create_with_options(const piper_create_options* options)
   }
 
   // Basic version check - allow forward compatible larger structs
-  if (options->struct_size < offsetof(piper_create_options, espeak_data_path) +
-                                 sizeof(options->espeak_data_path))
+  if (options->struct_size < offsetof(piper_create_options, espeak_data_path) + sizeof(options->espeak_data_path))
   {
     // Struct too small to contain required fields
     return nullptr;
@@ -53,13 +51,11 @@ auto piper_create_with_options(const piper_create_options* options)
   const char* data_dir_opt = nullptr;
 
   // Read newer fields if struct is large enough
-  if (options->struct_size >= offsetof(piper_create_options, g2pw_model_dir) +
-                                  sizeof(options->g2pw_model_dir))
+  if (options->struct_size >= offsetof(piper_create_options, g2pw_model_dir) + sizeof(options->g2pw_model_dir))
   {
     g2pw_model_dir_opt = options->g2pw_model_dir;
   }
-  if (options->struct_size >=
-      offsetof(piper_create_options, data_dir) + sizeof(options->data_dir))
+  if (options->struct_size >= offsetof(piper_create_options, data_dir) + sizeof(options->data_dir))
   {
     data_dir_opt = options->data_dir;
   }
@@ -108,8 +104,7 @@ auto piper_create_with_options(const piper_create_options* options)
   }
 
   if (phoneme_type == PhonemeType::Espeak &&
-      espeak_Initialize(AUDIO_OUTPUT_SYNCHRONOUS, 0, final_espeak_data_path,
-                        0) < 0)
+      espeak_Initialize(AUDIO_OUTPUT_SYNCHRONOUS, 0, final_espeak_data_path, 0) < 0)
   {
     return nullptr;
   }
@@ -227,10 +222,9 @@ auto piper_create_with_options(const piper_create_options* options)
     std::filesystem::path cand2 = std::filesystem::path(data_dir_opt);
     auto has_dicts = [](const std::filesystem::path& d)
     {
-      bool has_source = std::filesystem::exists(d / "MONOPHONIC_CHARS.txt") ||
-                        std::filesystem::exists(d / "char_bopomofo_dict.json");
-      bool has_b2p =
-          std::filesystem::exists(d / "bopomofo_to_pinyin_wo_tune_dict.json");
+      bool has_source =
+          std::filesystem::exists(d / "MONOPHONIC_CHARS.txt") || std::filesystem::exists(d / "char_bopomofo_dict.json");
+      bool has_b2p = std::filesystem::exists(d / "bopomofo_to_pinyin_wo_tune_dict.json");
       return has_source && has_b2p;
     };
     if (has_dicts(cand1))
@@ -276,10 +270,9 @@ auto piper_create_with_options(const piper_create_options* options)
     };
     for (auto& p : fallbacks)
     {
-      bool has_source = std::filesystem::exists(p / "MONOPHONIC_CHARS.txt") ||
-                        std::filesystem::exists(p / "char_bopomofo_dict.json");
-      bool has_b2p =
-          std::filesystem::exists(p / "bopomofo_to_pinyin_wo_tune_dict.json");
+      bool has_source =
+          std::filesystem::exists(p / "MONOPHONIC_CHARS.txt") || std::filesystem::exists(p / "char_bopomofo_dict.json");
+      bool has_b2p = std::filesystem::exists(p / "bopomofo_to_pinyin_wo_tune_dict.json");
       if (has_source && has_b2p)
       {
         effective_g2pw_dir = p.string();
@@ -324,8 +317,7 @@ auto piper_create_with_options(const piper_create_options* options)
   synth->session_options.DisableProfiling();
   synth->session_options.SetIntraOpNumThreads(1);
   synth->session_options.SetInterOpNumThreads(1);
-  synth->session_options.SetGraphOptimizationLevel(
-      GraphOptimizationLevel::ORT_ENABLE_BASIC);
+  synth->session_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_BASIC);
   synth->session_options.SetExecutionMode(ExecutionMode::ORT_SEQUENTIAL);
 
 #if !defined(WIN32)
@@ -336,14 +328,13 @@ auto piper_create_with_options(const piper_create_options* options)
   ::MultiByteToWideChar(CP_ACP, 0, model_path, -1, &model_path_wc[0], sz);
   auto model_path_ort = &model_path_wc[0];
 #endif
-  synth->session = std::make_unique<Ort::Session>(
-      Ort::Session(ort_env, model_path_ort, synth->session_options));
+  synth->session = std::make_unique<Ort::Session>(Ort::Session(ort_env, model_path_ort, synth->session_options));
 
   return synth;
 }
 
-auto piper_create(const char* model_path, const char* config_path,
-                  const char* espeak_data_path) -> struct piper_synthesizer*
+auto piper_create(const char* model_path, const char* config_path, const char* espeak_data_path)
+    -> struct piper_synthesizer*
 {
   piper_create_options opts;
   piper_init_create_options(&opts);
@@ -366,8 +357,7 @@ void piper_free(struct piper_synthesizer* synth)
   delete synth;
 }
 
-auto piper_default_synthesize_options(piper_synthesizer* synth)
-    -> piper_synthesize_options
+auto piper_default_synthesize_options(piper_synthesizer* synth) -> piper_synthesize_options
 {
   piper_synthesize_options options;
   options.speaker_id = 0;
@@ -386,9 +376,8 @@ auto piper_default_synthesize_options(piper_synthesizer* synth)
 }
 
 // helper for pinyin fake codepoints
-static Phoneme fake_cp_for_pinyin(
-    const std::string& s, std::unordered_map<std::string, Phoneme>& cache,
-    Phoneme& next_private)
+static Phoneme fake_cp_for_pinyin(const std::string& s, std::unordered_map<std::string, Phoneme>& cache,
+                                  Phoneme& next_private)
 {
   auto it = cache.find(s);
   if (it != cache.end()) return it->second;
@@ -418,16 +407,15 @@ static Phoneme fake_cp_for_pinyin(
   return cp;
 }
 
-auto piper_synthesize_start(struct piper_synthesizer* synth, const char* text,
-                            const piper_synthesize_options* options) -> int
+auto piper_synthesize_start(struct piper_synthesizer* synth, const char* text, const piper_synthesize_options* options)
+    -> int
 {
   if (synth == nullptr)
   {
     return PIPER_ERR_GENERIC;
   }
 
-  if (synth->phoneme_type == PhonemeType::Espeak &&
-      espeak_SetVoiceByName(synth->espeak_voice.c_str()) != EE_OK)
+  if (synth->phoneme_type == PhonemeType::Espeak && espeak_SetVoiceByName(synth->espeak_voice.c_str()) != EE_OK)
   {
     return PIPER_ERR_GENERIC;
   }
@@ -442,8 +430,7 @@ auto piper_synthesize_start(struct piper_synthesizer* synth, const char* text,
   std::unique_ptr<piper_synthesize_options> default_options;
   if (options == nullptr)
   {
-    default_options = std::make_unique<piper_synthesize_options>(
-        piper_default_synthesize_options(synth));
+    default_options = std::make_unique<piper_synthesize_options>(piper_default_synthesize_options(synth));
     options = default_options.get();
   }
 
@@ -542,8 +529,7 @@ auto piper_synthesize_start(struct piper_synthesizer* synth, const char* text,
           sent_ids.push_back(idv);
         }
         // Pad after GROUP_END phonemes
-        if (piper::GROUP_END_PHONEMES.find(ph) !=
-            piper::GROUP_END_PHONEMES.end())
+        if (piper::GROUP_END_PHONEMES.find(ph) != piper::GROUP_END_PHONEMES.end())
         {
           auto it_pad = synth->pinyin_id_map.find("_");
           if (it_pad != synth->pinyin_id_map.end())
@@ -585,8 +571,7 @@ auto piper_synthesize_start(struct piper_synthesizer* synth, const char* text,
 
       if (!sent_ids.empty())
       {
-        synth->phoneme_id_queue.emplace(std::move(sent_cps),
-                                        std::move(sent_ids));
+        synth->phoneme_id_queue.emplace(std::move(sent_cps), std::move(sent_ids));
       }
     }
 
@@ -601,8 +586,8 @@ auto piper_synthesize_start(struct piper_synthesizer* synth, const char* text,
       int terminator = 0;
       std::string terminator_str;
 
-      const char* phonemes = espeak_TextToPhonemesWithTerminator(
-          &text_ptr, espeakCHARS_AUTO, espeakPHONEMES_IPA, &terminator);
+      const char* phonemes =
+          espeak_TextToPhonemesWithTerminator(&text_ptr, espeakCHARS_AUTO, espeakPHONEMES_IPA, &terminator);
 
       if (phonemes != nullptr)
       {
@@ -724,16 +709,14 @@ auto piper_synthesize_start(struct piper_synthesizer* synth, const char* text,
     sentence_ids.push_back(ID_EOS);
     sentence_codepoints.push_back(PHONEME_SEPARATOR);
 
-    synth->phoneme_id_queue.emplace(
-        std::move(std::make_pair(sentence_codepoints, sentence_ids)));
+    synth->phoneme_id_queue.emplace(std::move(std::make_pair(sentence_codepoints, sentence_ids)));
     sentence_ids.clear();
   }
 
   return PIPER_OK;
 }
 
-auto piper_synthesize_next(struct piper_synthesizer* synth,
-                           struct piper_audio_chunk* chunk) -> int
+auto piper_synthesize_next(struct piper_synthesizer* synth, struct piper_audio_chunk* chunk) -> int
 {
   if (synth == nullptr)
   {
@@ -768,45 +751,35 @@ auto piper_synthesize_next(struct piper_synthesizer* synth,
   auto [next_phonemes, next_ids] = std::move(synth->phoneme_id_queue.front());
   synth->phoneme_id_queue.pop();
 
-  auto memoryInfo = Ort::MemoryInfo::CreateCpu(
-      OrtAllocatorType::OrtDeviceAllocator, OrtMemType::OrtMemTypeDefault);
+  auto memoryInfo = Ort::MemoryInfo::CreateCpu(OrtAllocatorType::OrtDeviceAllocator, OrtMemType::OrtMemTypeDefault);
 
-  std::vector<int64_t> phoneme_id_lengths{
-      static_cast<int64_t>(next_ids.size())};
-  std::vector<float> scales{synth->noise_scale, synth->length_scale,
-                            synth->noise_w_scale};
+  std::vector<int64_t> phoneme_id_lengths{static_cast<int64_t>(next_ids.size())};
+  std::vector<float> scales{synth->noise_scale, synth->length_scale, synth->noise_w_scale};
 
   std::vector<Ort::Value> input_tensors;
-  std::vector<int64_t> phoneme_ids_shape{1,
-                                         static_cast<int64_t>(next_ids.size())};
-  input_tensors.push_back(Ort::Value::CreateTensor<int64_t>(
-      memoryInfo, next_ids.data(), next_ids.size(), phoneme_ids_shape.data(),
-      phoneme_ids_shape.size()));
+  std::vector<int64_t> phoneme_ids_shape{1, static_cast<int64_t>(next_ids.size())};
+  input_tensors.push_back(Ort::Value::CreateTensor<int64_t>(memoryInfo, next_ids.data(), next_ids.size(),
+                                                            phoneme_ids_shape.data(), phoneme_ids_shape.size()));
 
-  std::vector<int64_t> phoneme_id_lengths_shape{
-      static_cast<int64_t>(phoneme_id_lengths.size())};
-  input_tensors.push_back(Ort::Value::CreateTensor<int64_t>(
-      memoryInfo, phoneme_id_lengths.data(), phoneme_id_lengths.size(),
-      phoneme_id_lengths_shape.data(), phoneme_id_lengths_shape.size()));
+  std::vector<int64_t> phoneme_id_lengths_shape{static_cast<int64_t>(phoneme_id_lengths.size())};
+  input_tensors.push_back(Ort::Value::CreateTensor<int64_t>(memoryInfo, phoneme_id_lengths.data(),
+                                                            phoneme_id_lengths.size(), phoneme_id_lengths_shape.data(),
+                                                            phoneme_id_lengths_shape.size()));
 
   std::vector<int64_t> scales_shape{static_cast<int64_t>(scales.size())};
-  input_tensors.push_back(Ort::Value::CreateTensor<float>(
-      memoryInfo, scales.data(), scales.size(), scales_shape.data(),
-      scales_shape.size()));
+  input_tensors.push_back(Ort::Value::CreateTensor<float>(memoryInfo, scales.data(), scales.size(), scales_shape.data(),
+                                                          scales_shape.size()));
 
   std::vector<int64_t> speaker_id{static_cast<int64_t>(synth->speaker_id)};
-  std::vector<int64_t> speaker_id_shape{
-      static_cast<int64_t>(speaker_id.size())};
+  std::vector<int64_t> speaker_id_shape{static_cast<int64_t>(speaker_id.size())};
 
   if (synth->num_speakers > 1)
   {
-    input_tensors.push_back(Ort::Value::CreateTensor<int64_t>(
-        memoryInfo, speaker_id.data(), speaker_id.size(),
-        speaker_id_shape.data(), speaker_id_shape.size()));
+    input_tensors.push_back(Ort::Value::CreateTensor<int64_t>(memoryInfo, speaker_id.data(), speaker_id.size(),
+                                                              speaker_id_shape.data(), speaker_id_shape.size()));
   }
 
-  std::array<const char*, 4> input_names = {"input", "input_lengths", "scales",
-                                            "sid"};
+  std::array<const char*, 4> input_names = {"input", "input_lengths", "scales", "sid"};
 
   std::vector<std::string> output_names_strs = synth->session->GetOutputNames();
   std::vector<const char*> output_names;
@@ -816,23 +789,20 @@ auto piper_synthesize_next(struct piper_synthesizer* synth,
     output_names.push_back(name.c_str());
   }
 
-  auto output_tensors = synth->session->Run(
-      Ort::RunOptions{nullptr}, input_names.data(), input_tensors.data(),
-      input_tensors.size(), output_names.data(), output_names.size());
+  auto output_tensors = synth->session->Run(Ort::RunOptions{nullptr}, input_names.data(), input_tensors.data(),
+                                            input_tensors.size(), output_names.data(), output_names.size());
 
   if ((output_tensors.empty()) || (!output_tensors.front().IsTensor()))
   {
     return PIPER_ERR_GENERIC;
   }
 
-  auto audio_shape =
-      output_tensors.front().GetTensorTypeAndShapeInfo().GetShape();
+  auto audio_shape = output_tensors.front().GetTensorTypeAndShapeInfo().GetShape();
   chunk->num_samples = audio_shape[audio_shape.size() - 1];
 
   const auto* audio_tensor_data = output_tensors.front().GetTensorData<float>();
   synth->chunk_samples.resize(chunk->num_samples);
-  std::copy(audio_tensor_data, audio_tensor_data + chunk->num_samples,
-            synth->chunk_samples.begin());
+  std::copy(audio_tensor_data, audio_tensor_data + chunk->num_samples, synth->chunk_samples.begin());
   chunk->samples = synth->chunk_samples.data();
 
   chunk->is_last = synth->phoneme_id_queue.empty();
@@ -843,8 +813,7 @@ auto piper_synthesize_next(struct piper_synthesizer* synth,
 
   for (auto phoneme_id : next_ids)
   {
-    if (phoneme_id < std::numeric_limits<int>::min() ||
-        phoneme_id > std::numeric_limits<int>::max())
+    if (phoneme_id < std::numeric_limits<int>::min() || phoneme_id > std::numeric_limits<int>::max())
     {
       continue;
     }
@@ -856,18 +825,15 @@ auto piper_synthesize_next(struct piper_synthesizer* synth,
 
   if (output_tensors.size() > 1)
   {
-    auto alignments_shape =
-        output_tensors[1].GetTensorTypeAndShapeInfo().GetShape();
+    auto alignments_shape = output_tensors[1].GetTensorTypeAndShapeInfo().GetShape();
 
     chunk->num_alignments = alignments_shape[alignments_shape.size() - 1];
-    const auto* alignments_tensor_data =
-        output_tensors[1].GetTensorData<float>();
+    const auto* alignments_tensor_data = output_tensors[1].GetTensorData<float>();
 
     synth->chunk_alignments.resize(chunk->num_alignments);
     for (std::size_t i = 0; i < chunk->num_alignments; i++)
     {
-      synth->chunk_alignments[i] =
-          static_cast<int>(alignments_tensor_data[i] * synth->hop_length);
+      synth->chunk_alignments[i] = static_cast<int>(alignments_tensor_data[i] * synth->hop_length);
     }
 
     chunk->alignments = synth->chunk_alignments.data();

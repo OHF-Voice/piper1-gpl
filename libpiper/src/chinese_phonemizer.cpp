@@ -14,17 +14,14 @@
 namespace piper
 {
 
-const std::vector<std::string> PINYIN_INITIALS = {
-    "zh", "ch", "sh", "b", "p", "m", "f", "d", "t", "n", "l", "g",
-    "k",  "h",  "j",  "q", "x", "r", "z", "c", "s", "y", "w"};
+const std::vector<std::string> PINYIN_INITIALS = {"zh", "ch", "sh", "b", "p", "m", "f", "d", "t", "n", "l", "g",
+                                                  "k",  "h",  "j",  "q", "x", "r", "z", "c", "s", "y", "w"};
 
-const std::set<std::string> GROUP_END_PHONEMES = {
-    "1", "2", "3",  "4",  "5",  "。", "？", "！", ".", "?", "!",
-    "—", "…", "、", "，", "：", "；", ",",  ":",  ";", " ", "\n"};
+const std::set<std::string> GROUP_END_PHONEMES = {"1", "2", "3",  "4",  "5",  "。", "？", "！", ".", "?", "!",
+                                                  "—", "…", "、", "，", "：", "；", ",",  ":",  ";", " ", "\n"};
 
-const std::set<std::string> PINYIN_PUNCTUATIONS = {
-    ".",  "?",  "!",  ",",  ":",  ";", "，", "。",
-    "？", "！", "、", "：", "；", "—", "…",  " "};
+const std::set<std::string> PINYIN_PUNCTUATIONS = {".",  "?",  "!",  ",",  ":",  ";", "，", "。",
+                                                   "？", "！", "、", "：", "；", "—", "…",  " "};
 
 std::string normalize_g2pw_syllable(const std::string& syl)
 {
@@ -75,8 +72,7 @@ std::string normalize_g2pw_syllable(const std::string& syl)
   return t + std::string(1, last);
 }
 
-std::tuple<std::string, std::string, std::string> split_initial_final_tone(
-    const std::string& syl)
+std::tuple<std::string, std::string, std::string> split_initial_final_tone(const std::string& syl)
 {
   if (syl.empty()) return {"", "", ""};
   // pattern ^([a-zvü]+)([1-5])$
@@ -126,9 +122,8 @@ std::optional<char32_t> get_codepoint_str(const std::string& s)
   return cp;
 }
 
-std::vector<int64_t> phonemes_to_ids(
-    const std::vector<std::string>& phonemes,
-    const std::map<std::string, std::vector<int64_t>>& id_map)
+std::vector<int64_t> phonemes_to_ids(const std::vector<std::string>& phonemes,
+                                     const std::map<std::string, std::vector<int64_t>>& id_map)
 {
   std::vector<int64_t> ids;
   auto it_bos = id_map.find("^");
@@ -241,8 +236,7 @@ bool ChinesePhonemizer::load(const std::string& g2pw_model_dir)
       b2p >> j;
       for (auto& el : j.items())
       {
-        if (el.value().is_string())
-          bopomofo2pinyin[el.key()] = el.value().get<std::string>();
+        if (el.value().is_string()) bopomofo2pinyin[el.key()] = el.value().get<std::string>();
       }
     }
     catch (...)
@@ -260,8 +254,7 @@ bool ChinesePhonemizer::load(const std::string& g2pw_model_dir)
   return has_dicts;
 }
 
-std::string ChinesePhonemizer::bopomofo_to_pinyin(
-    const std::string& bopomofo) const
+std::string ChinesePhonemizer::bopomofo_to_pinyin(const std::string& bopomofo) const
 {
   if (bopomofo.empty()) return "";
   char last = bopomofo.back();
@@ -287,8 +280,7 @@ std::string ChinesePhonemizer::bopomofo_to_pinyin(
   return normalize_g2pw_syllable(it->second + tone);
 }
 
-std::vector<std::vector<std::string>> ChinesePhonemizer::phonemize_pinyin_text(
-    const std::string& text)
+std::vector<std::vector<std::string>> ChinesePhonemizer::phonemize_pinyin_text(const std::string& text)
 {
   // Lowercase
   std::string lower = text;
@@ -309,8 +301,8 @@ std::vector<std::vector<std::string>> ChinesePhonemizer::phonemize_pinyin_text(
     while (!core.empty())
     {
       std::string last_char(1, core.back());
-      if (last_char == "." || last_char == "?" || last_char == "!" ||
-          last_char == "," || last_char == ":" || last_char == ";")
+      if (last_char == "." || last_char == "?" || last_char == "!" || last_char == "," || last_char == ":" ||
+          last_char == ";")
       {
         trail_punct = last_char + trail_punct;
         core.pop_back();
@@ -327,8 +319,7 @@ std::vector<std::vector<std::string>> ChinesePhonemizer::phonemize_pinyin_text(
       for (char c : trail_punct)
       {
         std::string p(1, c);
-        if (PINYIN_PUNCTUATIONS.find(p) != PINYIN_PUNCTUATIONS.end())
-          phonemes.push_back(p);
+        if (PINYIN_PUNCTUATIONS.find(p) != PINYIN_PUNCTUATIONS.end()) phonemes.push_back(p);
       }
       continue;
     }
@@ -374,8 +365,7 @@ std::vector<std::vector<std::string>> ChinesePhonemizer::phonemize_pinyin_text(
   return {phonemes};
 }
 
-std::vector<std::vector<std::string>> ChinesePhonemizer::phonemize(
-    const std::string& text)
+std::vector<std::vector<std::string>> ChinesePhonemizer::phonemize(const std::string& text)
 {
   std::vector<std::string> cur;
   std::vector<std::vector<std::string>> sentences;
@@ -412,8 +402,7 @@ std::vector<std::vector<std::string>> ChinesePhonemizer::phonemize(
     }
 
     // handle sentence boundary punctuation that triggers new sentence
-    if (ch_utf8 == "。" || ch_utf8 == "？" || ch_utf8 == "！" ||
-        ch_utf8 == "." || ch_utf8 == "?" || ch_utf8 == "!")
+    if (ch_utf8 == "。" || ch_utf8 == "？" || ch_utf8 == "！" || ch_utf8 == "." || ch_utf8 == "?" || ch_utf8 == "!")
     {
       if (!cur.empty())
       {
@@ -434,8 +423,7 @@ std::vector<std::vector<std::string>> ChinesePhonemizer::phonemize(
     if (ch_utf8 == "：") ch_utf8 = ":";
     if (ch_utf8 == "；") ch_utf8 = ";";
 
-    if (ch_utf8 == "," || ch_utf8 == ":" || ch_utf8 == ";" || ch_utf8 == " " ||
-        ch_utf8 == "\n")
+    if (ch_utf8 == "," || ch_utf8 == ":" || ch_utf8 == ";" || ch_utf8 == " " || ch_utf8 == "\n")
     {
       if (ch_utf8 == " " || ch_utf8 == "\n")
       {
@@ -501,8 +489,7 @@ std::vector<std::vector<std::string>> ChinesePhonemizer::phonemize(
 }
 
 std::vector<int64_t> ChinesePhonemizer::phonemes_to_ids_pinyin(
-    const std::vector<std::string>& phonemes,
-    const std::map<std::string, std::vector<int64_t>>& id_map)
+    const std::vector<std::string>& phonemes, const std::map<std::string, std::vector<int64_t>>& id_map)
 {
   return phonemes_to_ids(phonemes, id_map);
 }

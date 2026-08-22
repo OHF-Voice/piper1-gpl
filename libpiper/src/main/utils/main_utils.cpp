@@ -18,10 +18,8 @@ void printUsage(char* argv[])
   std::cerr << "usage: " << argv[0] << " [options]" << '\n';
   std::cerr << '\n';
   std::cerr << "options:" << '\n';
-  std::cerr << "   -h        --help              show this message and exit"
-            << '\n';
-  std::cerr << "   -m  FILE  --model       FILE  path to onnx model file"
-            << '\n';
+  std::cerr << "   -h        --help              show this message and exit" << '\n';
+  std::cerr << "   -m  FILE  --model       FILE  path to onnx model file" << '\n';
   std::cerr << "   -c  FILE  --config      FILE  path to model config file "
                "(default: model path + .json)"
             << '\n';
@@ -31,19 +29,11 @@ void printUsage(char* argv[])
   std::cerr << "   -d  DIR   --output_dir  DIR   path to output directory "
                "(default: cwd)"
             << '\n';
-  std::cerr << "   -s  NUM   --speaker     NUM   id of speaker (default: 0)"
-            << '\n';
-  std::cerr
-      << "   --noise_scale           NUM   generator noise (default: 0.667)"
-      << '\n';
-  std::cerr << "   --length_scale          NUM   phoneme length (default: 1.0)"
-            << '\n';
-  std::cerr
-      << "   --noise_w               NUM   phoneme width noise (default: 0.8)"
-      << '\n';
-  std::cerr
-      << "   --espeak_data           DIR   path to espeak-ng data directory"
-      << '\n';
+  std::cerr << "   -s  NUM   --speaker     NUM   id of speaker (default: 0)" << '\n';
+  std::cerr << "   --noise_scale           NUM   generator noise (default: 0.667)" << '\n';
+  std::cerr << "   --length_scale          NUM   phoneme length (default: 1.0)" << '\n';
+  std::cerr << "   --noise_w               NUM   phoneme width noise (default: 0.8)" << '\n';
+  std::cerr << "   --espeak_data           DIR   path to espeak-ng data directory" << '\n';
   std::cerr << "   --data_dir            DIR   base data dir (looks for "
                "espeak-ng-data and g2pw subdirs)"
             << '\n';
@@ -136,8 +126,7 @@ void parseArgsLogic(int argc, char* argv[], RunConfig& runConfig)
       ensureArg(argc, argv, i);
       runConfig.dataDir = std::filesystem::path(argv[++i]);
     }
-    else if (arg == "--g2pw_dir" || arg == "--g2pw-dir" ||
-             arg == "--g2pw_model_dir" || arg == "--g2pw-model-dir")
+    else if (arg == "--g2pw_dir" || arg == "--g2pw-dir" || arg == "--g2pw_model_dir" || arg == "--g2pw-model-dir")
     {
       ensureArg(argc, argv, i);
       runConfig.g2pwModelDir = std::filesystem::path(argv[++i]);
@@ -167,8 +156,7 @@ void parseArgsLogic(int argc, char* argv[], RunConfig& runConfig)
 
   if (!modelConfigPath)
   {
-    runConfig.modelConfigPath =
-        std::filesystem::path(runConfig.modelPath.string() + ".json");
+    runConfig.modelConfigPath = std::filesystem::path(runConfig.modelPath.string() + ".json");
   }
   else
   {
