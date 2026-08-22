@@ -1,8 +1,4 @@
 #include "chinese_phonemizer.h"
-#include "piper_impl.hpp"
-
-#include "json.hpp"
-#include "uni_algo.h"
 
 #include <algorithm>
 #include <cctype>
@@ -11,7 +7,12 @@
 #include <regex>
 #include <sstream>
 
-namespace piper {
+#include "json.hpp"
+#include "piper_impl.hpp"
+#include "uni_algo.h"
+
+namespace piper
+{
 
 const std::vector<std::string> PINYIN_INITIALS = {
     "zh", "ch", "sh", "b", "p", "m", "f", "d", "t", "n", "l", "g",
@@ -25,42 +26,47 @@ const std::set<std::string> PINYIN_PUNCTUATIONS = {
     ".",  "?",  "!",  ",",  ":",  ";", "，", "。",
     "？", "！", "、", "：", "；", "—", "…",  " "};
 
-std::string normalize_g2pw_syllable(const std::string &syl) {
-  if (syl.empty())
-    return syl;
+std::string normalize_g2pw_syllable(const std::string& syl)
+{
+  if (syl.empty()) return syl;
   char last = syl.back();
-  if (last < '1' || last > '5')
-    return syl;
+  if (last < '1' || last > '5') return syl;
   std::string base = syl.substr(0, syl.size() - 1);
-  if (base.empty())
-    return syl;
+  if (base.empty()) return syl;
 
   // Replace u: -> v
   std::string t = base;
   // replace "u:"
   size_t pos = 0;
-  while ((pos = t.find("u:", pos)) != std::string::npos) {
+  while ((pos = t.find("u:", pos)) != std::string::npos)
+  {
     t.replace(pos, 2, "v");
     pos += 1;
   }
   // replace ü (utf8 C3 BC)
-  const std::string uv = "ü"; // utf8 literal
+  const std::string uv = "ü";  // utf8 literal
   pos = 0;
-  while ((pos = t.find(uv, pos)) != std::string::npos) {
+  while ((pos = t.find(uv, pos)) != std::string::npos)
+  {
     t.replace(pos, uv.size(), "v");
     pos += 1;
   }
 
   // validate remaining consists of a-z and v only (after replacement)
-  for (size_t i = 0; i < t.size();) {
+  for (size_t i = 0; i < t.size();)
+  {
     unsigned char c = static_cast<unsigned char>(t[i]);
-    if (c < 128) {
-      if ((c >= 'a' && c <= 'z') || c == 'v') {
+    if (c < 128)
+    {
+      if ((c >= 'a' && c <= 'z') || c == 'v')
+      {
         ++i;
         continue;
       }
-      return syl; // contains invalid char
-    } else {
+      return syl;  // contains invalid char
+    }
+    else
+    {
       // multibyte char not allowed after replacement
       return syl;
     }
@@ -69,36 +75,36 @@ std::string normalize_g2pw_syllable(const std::string &syl) {
   return t + std::string(1, last);
 }
 
-std::tuple<std::string, std::string, std::string>
-split_initial_final_tone(const std::string &syl) {
-  if (syl.empty())
-    return {"", "", ""};
+std::tuple<std::string, std::string, std::string> split_initial_final_tone(
+    const std::string& syl)
+{
+  if (syl.empty()) return {"", "", ""};
   // pattern ^([a-zvü]+)([1-5])$
   // Since after normalize we have no ü or :, we allow a-z and v
   char tone_c = syl.back();
-  if (tone_c < '1' || tone_c > '5')
-    return {"", "", ""};
+  if (tone_c < '1' || tone_c > '5') return {"", "", ""};
   std::string base = syl.substr(0, syl.size() - 1);
   std::string tone(1, tone_c);
 
   // base must be non-empty and only a-zv
-  if (base.empty())
-    return {"", "", ""};
-  for (char ch : base) {
-    if (!((ch >= 'a' && ch <= 'z') || ch == 'v')) {
+  if (base.empty()) return {"", "", ""};
+  for (char ch : base)
+  {
+    if (!((ch >= 'a' && ch <= 'z') || ch == 'v'))
+    {
       // allow also ü? but after normalize shouldn't appear
-      if (static_cast<unsigned char>(ch) >= 128)
-        return {"", "", ""};
+      if (static_cast<unsigned char>(ch) >= 128) return {"", "", ""};
       // if char not allowed, fail
-      if (ch < 'a' || ch > 'z')
-        return {"", "", ""};
+      if (ch < 'a' || ch > 'z') return {"", "", ""};
     }
   }
 
   std::string ini;
   std::string left = base;
-  for (const auto &cand : PINYIN_INITIALS) {
-    if (left.rfind(cand, 0) == 0) { // starts_with
+  for (const auto& cand : PINYIN_INITIALS)
+  {
+    if (left.rfind(cand, 0) == 0)
+    {  // starts_with
       ini = cand;
       left = left.substr(cand.size());
       break;
@@ -108,23 +114,22 @@ split_initial_final_tone(const std::string &syl) {
   return {ini, fin, tone};
 }
 
-std::optional<char32_t> get_codepoint_str(const std::string &s) {
-  if (s.empty())
-    return std::nullopt;
+std::optional<char32_t> get_codepoint_str(const std::string& s)
+{
+  if (s.empty()) return std::nullopt;
   auto view = una::views::utf8(s);
   auto it = view.begin();
-  if (it == view.end())
-    return std::nullopt;
+  if (it == view.end()) return std::nullopt;
   char32_t cp = *it;
   ++it;
-  if (it != view.end())
-    return std::nullopt; // more than one codepoint
+  if (it != view.end()) return std::nullopt;  // more than one codepoint
   return cp;
 }
 
-std::vector<int64_t>
-phonemes_to_ids(const std::vector<std::string> &phonemes,
-                const std::map<std::string, std::vector<int64_t>> &id_map) {
+std::vector<int64_t> phonemes_to_ids(
+    const std::vector<std::string>& phonemes,
+    const std::map<std::string, std::vector<int64_t>>& id_map)
+{
   std::vector<int64_t> ids;
   auto it_bos = id_map.find("^");
   if (it_bos != id_map.end())
@@ -146,17 +151,21 @@ phonemes_to_ids(const std::vector<std::string> &phonemes,
   else
     eos_ids = {ID_EOS};
 
-  for (const auto &ph : phonemes) {
+  for (const auto& ph : phonemes)
+  {
     auto it = id_map.find(ph);
-    if (it == id_map.end()) {
+    if (it == id_map.end())
+    {
       // unknown phoneme, skip with warning if not whitespace
-      if (ph != " " && ph != "\n" && !ph.empty()) {
+      if (ph != " " && ph != "\n" && !ph.empty())
+      {
         // std::cerr << "Missing id for phoneme " << ph << "\n";
       }
       continue;
     }
     ids.insert(ids.end(), it->second.begin(), it->second.end());
-    if (GROUP_END_PHONEMES.find(ph) != GROUP_END_PHONEMES.end()) {
+    if (GROUP_END_PHONEMES.find(ph) != GROUP_END_PHONEMES.end())
+    {
       ids.insert(ids.end(), pad_ids.begin(), pad_ids.end());
     }
   }
@@ -164,26 +173,27 @@ phonemes_to_ids(const std::vector<std::string> &phonemes,
   return ids;
 }
 
-bool ChinesePhonemizer::load(const std::string &g2pw_model_dir) {
+bool ChinesePhonemizer::load(const std::string& g2pw_model_dir)
+{
   using json = nlohmann::json;
   std::string base = g2pw_model_dir;
-  if (!base.empty() && base.back() == '/')
-    base.pop_back();
+  if (!base.empty() && base.back() == '/') base.pop_back();
 
   // MONOPHONIC
   std::string mono_path = base + "/MONOPHONIC_CHARS.txt";
   std::ifstream mf(mono_path);
-  if (mf) {
+  if (mf)
+  {
     std::string line;
-    while (std::getline(mf, line)) {
-      if (line.empty())
-        continue;
+    while (std::getline(mf, line))
+    {
+      if (line.empty()) continue;
       size_t tab = line.find('\t');
-      if (tab == std::string::npos) {
+      if (tab == std::string::npos)
+      {
         // fallback split on space
         tab = line.find(' ');
-        if (tab == std::string::npos)
-          continue;
+        if (tab == std::string::npos) continue;
       }
       std::string ch = line.substr(0, tab);
       std::string bopo = line.substr(tab + 1);
@@ -192,42 +202,51 @@ bool ChinesePhonemizer::load(const std::string &g2pw_model_dir) {
       bopo.erase(bopo.find_last_not_of(" \t\r\n") + 1);
       ch.erase(0, ch.find_first_not_of(" \t\r\n"));
       ch.erase(ch.find_last_not_of(" \t\r\n") + 1);
-      if (!ch.empty() && !bopo.empty())
-        mono_dict[ch] = bopo;
+      if (!ch.empty() && !bopo.empty()) mono_dict[ch] = bopo;
     }
   }
 
   std::string char_bopo_path = base + "/char_bopomofo_dict.json";
   std::ifstream cbf(char_bopo_path);
-  if (cbf) {
-    try {
+  if (cbf)
+  {
+    try
+    {
       json j;
       cbf >> j;
-      for (auto &el : j.items()) {
+      for (auto& el : j.items())
+      {
         std::string key = el.key();
-        if (el.value().is_array()) {
+        if (el.value().is_array())
+        {
           std::vector<std::string> arr;
-          for (auto &x : el.value())
-            if (x.is_string())
-              arr.push_back(x.get<std::string>());
+          for (auto& x : el.value())
+            if (x.is_string()) arr.push_back(x.get<std::string>());
           char_bopomofo_dict[key] = arr;
         }
       }
-    } catch (...) {
+    }
+    catch (...)
+    {
     }
   }
 
   std::string b2p_path = base + "/bopomofo_to_pinyin_wo_tune_dict.json";
   std::ifstream b2p(b2p_path);
-  if (b2p) {
-    try {
+  if (b2p)
+  {
+    try
+    {
       json j;
       b2p >> j;
-      for (auto &el : j.items()) {
+      for (auto& el : j.items())
+      {
         if (el.value().is_string())
           bopomofo2pinyin[el.key()] = el.value().get<std::string>();
       }
-    } catch (...) {
+    }
+    catch (...)
+    {
     }
   }
 
@@ -241,32 +260,36 @@ bool ChinesePhonemizer::load(const std::string &g2pw_model_dir) {
   return has_dicts;
 }
 
-std::string
-ChinesePhonemizer::bopomofo_to_pinyin(const std::string &bopomofo) const {
-  if (bopomofo.empty())
-    return "";
+std::string ChinesePhonemizer::bopomofo_to_pinyin(
+    const std::string& bopomofo) const
+{
+  if (bopomofo.empty()) return "";
   char last = bopomofo.back();
   std::string base = bopomofo;
   std::string tone;
-  if (last >= '1' && last <= '5') {
+  if (last >= '1' && last <= '5')
+  {
     base = bopomofo.substr(0, bopomofo.size() - 1);
     tone = std::string(1, last);
-  } else {
-    tone = "5"; // neutral?
+  }
+  else
+  {
+    tone = "5";  // neutral?
   }
   auto it = bopomofo2pinyin.find(base);
-  if (it == bopomofo2pinyin.end()) {
+  if (it == bopomofo2pinyin.end())
+  {
     // try with full
     it = bopomofo2pinyin.find(bopomofo);
-    if (it == bopomofo2pinyin.end())
-      return "";
+    if (it == bopomofo2pinyin.end()) return "";
     return normalize_g2pw_syllable(it->second + tone);
   }
   return normalize_g2pw_syllable(it->second + tone);
 }
 
-std::vector<std::vector<std::string>>
-ChinesePhonemizer::phonemize_pinyin_text(const std::string &text) {
+std::vector<std::vector<std::string>> ChinesePhonemizer::phonemize_pinyin_text(
+    const std::string& text)
+{
   // Lowercase
   std::string lower = text;
   std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
@@ -277,26 +300,32 @@ ChinesePhonemizer::phonemize_pinyin_text(const std::string &text) {
   std::istringstream iss(lower);
   std::string token;
   bool first_syl = true;
-  while (iss >> token) {
-    if (token.empty())
-      continue;
+  while (iss >> token)
+  {
+    if (token.empty()) continue;
     // separate trailing punctuation
     std::string core = token;
     std::string trail_punct;
-    while (!core.empty()) {
+    while (!core.empty())
+    {
       std::string last_char(1, core.back());
       if (last_char == "." || last_char == "?" || last_char == "!" ||
-          last_char == "," || last_char == ":" || last_char == ";") {
+          last_char == "," || last_char == ":" || last_char == ";")
+      {
         trail_punct = last_char + trail_punct;
         core.pop_back();
-      } else {
+      }
+      else
+      {
         break;
       }
     }
 
-    if (core.empty()) {
+    if (core.empty())
+    {
       // only punct
-      for (char c : trail_punct) {
+      for (char c : trail_punct)
+      {
         std::string p(1, c);
         if (PINYIN_PUNCTUATIONS.find(p) != PINYIN_PUNCTUATIONS.end())
           phonemes.push_back(p);
@@ -307,10 +336,12 @@ ChinesePhonemizer::phonemize_pinyin_text(const std::string &text) {
     // core is expected pinyin like ni3
     auto norm = normalize_g2pw_syllable(core);
     auto [ini, fin, tone] = split_initial_final_tone(norm);
-    if (fin.empty() && ini.empty()) {
+    if (fin.empty() && ini.empty())
+    {
       // try original core without normalize? Maybe direct split
       auto [ini2, fin2, tone2] = split_initial_final_tone(core);
-      if (fin2.empty() && ini2.empty()) {
+      if (fin2.empty() && ini2.empty())
+      {
         // skip unknown token
         continue;
       }
@@ -319,32 +350,33 @@ ChinesePhonemizer::phonemize_pinyin_text(const std::string &text) {
       tone = tone2;
     }
 
-    if (!first_syl) {
+    if (!first_syl)
+    {
       // optional short pause between syllables
       phonemes.push_back(" ");
     }
     first_syl = false;
 
-    if (ini.empty())
-      ini = "Ø";
+    if (ini.empty()) ini = "Ø";
     phonemes.push_back(ini);
     phonemes.push_back(fin);
     phonemes.push_back(tone);
 
-    for (char c : trail_punct) {
+    for (char c : trail_punct)
+    {
       std::string p(1, c);
       phonemes.push_back(p);
     }
   }
 
-  if (phonemes.empty())
-    return {};
+  if (phonemes.empty()) return {};
 
   return {phonemes};
 }
 
-std::vector<std::vector<std::string>>
-ChinesePhonemizer::phonemize(const std::string &text) {
+std::vector<std::vector<std::string>> ChinesePhonemizer::phonemize(
+    const std::string& text)
+{
   std::vector<std::string> cur;
   std::vector<std::vector<std::string>> sentences;
 
@@ -352,21 +384,27 @@ ChinesePhonemizer::phonemize(const std::string &text) {
   auto view = una::views::utf8(text);
   std::string cur_utf8_char;
   // We need to iterate and build per character utf8 string
-  for (auto it = view.begin(); it != view.end(); ++it) {
+  for (auto it = view.begin(); it != view.end(); ++it)
+  {
     char32_t cp = *it;
     // Convert cp back to utf8 string
     std::string ch_utf8;
     // encode
     if (cp < 0x80)
       ch_utf8.push_back(static_cast<char>(cp));
-    else if (cp < 0x800) {
+    else if (cp < 0x800)
+    {
       ch_utf8.push_back(static_cast<char>(0xC0 | (cp >> 6)));
       ch_utf8.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
-    } else if (cp < 0x10000) {
+    }
+    else if (cp < 0x10000)
+    {
       ch_utf8.push_back(static_cast<char>(0xE0 | (cp >> 12)));
       ch_utf8.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
       ch_utf8.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
-    } else {
+    }
+    else
+    {
       ch_utf8.push_back(static_cast<char>(0xF0 | (cp >> 18)));
       ch_utf8.push_back(static_cast<char>(0x80 | ((cp >> 12) & 0x3F)));
       ch_utf8.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
@@ -375,30 +413,32 @@ ChinesePhonemizer::phonemize(const std::string &text) {
 
     // handle sentence boundary punctuation that triggers new sentence
     if (ch_utf8 == "。" || ch_utf8 == "？" || ch_utf8 == "！" ||
-        ch_utf8 == "." || ch_utf8 == "?" || ch_utf8 == "!") {
-      if (!cur.empty()) {
+        ch_utf8 == "." || ch_utf8 == "?" || ch_utf8 == "!")
+    {
+      if (!cur.empty())
+      {
         // include punctuation as phoneme before closing sentence
         cur.push_back(ch_utf8);
         sentences.push_back(cur);
         cur.clear();
-      } else {
+      }
+      else
+      {
         // empty sentence with only punctuation still push?
         sentences.push_back({ch_utf8});
       }
       continue;
     }
-    if (ch_utf8 == "，")
-      ch_utf8 = ",";
-    if (ch_utf8 == "、")
-      ch_utf8 = ",";
-    if (ch_utf8 == "：")
-      ch_utf8 = ":";
-    if (ch_utf8 == "；")
-      ch_utf8 = ";";
+    if (ch_utf8 == "，") ch_utf8 = ",";
+    if (ch_utf8 == "、") ch_utf8 = ",";
+    if (ch_utf8 == "：") ch_utf8 = ":";
+    if (ch_utf8 == "；") ch_utf8 = ";";
 
     if (ch_utf8 == "," || ch_utf8 == ":" || ch_utf8 == ";" || ch_utf8 == " " ||
-        ch_utf8 == "\n") {
-      if (ch_utf8 == " " || ch_utf8 == "\n") {
+        ch_utf8 == "\n")
+    {
+      if (ch_utf8 == " " || ch_utf8 == "\n")
+      {
         // skip spaces for Hanzi? keep as short pause?
         // include space as phoneme if desired; skip for now
         continue;
@@ -415,15 +455,20 @@ ChinesePhonemizer::phonemize(const std::string &text) {
     //   from being mis-assigned when only char_bopomofo_dict.json is present.
     std::string bopo;
     auto itm = mono_dict.find(ch_utf8);
-    if (itm != mono_dict.end()) {
+    if (itm != mono_dict.end())
+    {
       bopo = itm->second;
-    } else {
+    }
+    else
+    {
       auto itc = char_bopomofo_dict.find(ch_utf8);
-      if (itc == char_bopomofo_dict.end() || itc->second.empty()) {
+      if (itc == char_bopomofo_dict.end() || itc->second.empty())
+      {
         // unknown char, skip
         continue;
       }
-      if (itc->second.size() != 1) {
+      if (itc->second.size() != 1)
+      {
         // polyphonic char - unsupported in Phase 1 mono-only fallback
         // Return empty to signal unsupported input rather than silently picking
         // first pronunciation. Caller (PinyinTest) verifies 重/行/长 are not
@@ -434,35 +479,32 @@ ChinesePhonemizer::phonemize(const std::string &text) {
     }
 
     std::string pinyin = bopomofo_to_pinyin(bopo);
-    if (pinyin.empty())
-      continue;
+    if (pinyin.empty()) continue;
     auto [ini, fin, tone] = split_initial_final_tone(pinyin);
-    if (fin.empty() && tone.empty())
-      continue;
-    if (ini.empty())
-      ini = "Ø";
+    if (fin.empty() && tone.empty()) continue;
+    if (ini.empty()) ini = "Ø";
     cur.push_back(ini);
     cur.push_back(fin);
     cur.push_back(tone);
   }
 
-  if (!cur.empty())
-    sentences.push_back(cur);
+  if (!cur.empty()) sentences.push_back(cur);
 
-  if (sentences.empty() && !text.empty()) {
+  if (sentences.empty() && !text.empty())
+  {
     // fallback try pinyin direct
     auto alt = phonemize_pinyin_text(text);
-    if (!alt.empty())
-      return alt;
+    if (!alt.empty()) return alt;
   }
 
   return sentences;
 }
 
 std::vector<int64_t> ChinesePhonemizer::phonemes_to_ids_pinyin(
-    const std::vector<std::string> &phonemes,
-    const std::map<std::string, std::vector<int64_t>> &id_map) {
+    const std::vector<std::string>& phonemes,
+    const std::map<std::string, std::vector<int64_t>>& id_map)
+{
   return phonemes_to_ids(phonemes, id_map);
 }
 
-} // namespace piper
+}  // namespace piper

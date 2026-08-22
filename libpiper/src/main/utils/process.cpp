@@ -1,6 +1,4 @@
 #include "process.hpp"
-#include "json.hpp"
-#include "wavfile.hpp"
 
 #include <chrono>
 #include <filesystem>
@@ -9,15 +7,20 @@
 #include <sstream>
 #include <stdexcept>
 
+#include "json.hpp"
+#include "wavfile.hpp"
+
 using json = nlohmann::json;
 
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
-void processInputStream(piper::RunConfig &runConfig, piper_synthesizer *piper,
-                        piper_synthesize_options *options) {
-
+void processInputStream(piper::RunConfig& runConfig, piper_synthesizer* piper,
+                        piper_synthesize_options* options)
+{
   std::string line;
-  while (getline(std::cin, line)) {
-    if (line.empty()) {
+  while (getline(std::cin, line))
+  {
+    if (line.empty())
+    {
       continue;
     }
 
@@ -25,21 +28,24 @@ void processInputStream(piper::RunConfig &runConfig, piper_synthesizer *piper,
     auto outputType = runConfig.outputType;
     std::optional<std::filesystem::path> maybeOutputPath = runConfig.outputPath;
 
-    if (runConfig.jsonInput) {
+    if (runConfig.jsonInput)
+    {
       // Each line is a JSON object
       json lineRoot = json::parse(line);
 
       // Text is required
       line = lineRoot["text"].get<std::string>();
 
-      if (lineRoot.contains("output_file")) {
+      if (lineRoot.contains("output_file"))
+      {
         // Override output WAV file path
         outputType = piper::OUTPUT_FILE;
         maybeOutputPath =
             std::filesystem::path(lineRoot["output_file"].get<std::string>());
       }
 
-      if (lineRoot.contains("speaker_id")) {
+      if (lineRoot.contains("speaker_id"))
+      {
         // Override speaker id
         local_options.speaker_id = lineRoot["speaker_id"].get<int>();
       }
@@ -50,7 +56,8 @@ void processInputStream(piper::RunConfig &runConfig, piper_synthesizer *piper,
     const auto timestamp = std::chrono::duration_cast<std::chrono::nanoseconds>(
                                now.time_since_epoch())
                                .count();
-    if (outputType == piper::OUTPUT_DIRECTORY) {
+    if (outputType == piper::OUTPUT_DIRECTORY)
+    {
       // Generate path using timestamp
       std::stringstream outputName;
       outputName << timestamp << ".wav";
@@ -61,20 +68,25 @@ void processInputStream(piper::RunConfig &runConfig, piper_synthesizer *piper,
         // Output audio to automatically-named WAV file in a directory
         std::ofstream audioFile(outputPath.string(), std::ios::binary);
         textToWavFile(piper, &local_options, line.c_str(), audioFile);
-      } // audioFile is closed
+      }  // audioFile is closed
       std::cout << outputPath.string() << '\n';
-    } else if (outputType == piper::OUTPUT_FILE) {
-      if (!maybeOutputPath || maybeOutputPath->empty()) {
+    }
+    else if (outputType == piper::OUTPUT_FILE)
+    {
+      if (!maybeOutputPath || maybeOutputPath->empty())
+      {
         throw std::runtime_error("No output path provided");
       }
-      const std::filesystem::path &outputPath = maybeOutputPath.value();
+      const std::filesystem::path& outputPath = maybeOutputPath.value();
 
-      if (!runConfig.jsonInput) {
+      if (!runConfig.jsonInput)
+      {
         // Read all of standard input before synthesizing.
         // Otherwise, we would overwrite the output file for each line.
         std::stringstream text;
         text << line;
-        while (getline(std::cin, line)) {
+        while (getline(std::cin, line))
+        {
           text << " " << line;
         }
 
@@ -84,11 +96,13 @@ void processInputStream(piper::RunConfig &runConfig, piper_synthesizer *piper,
         // Output audio to WAV file
         std::ofstream audioFile(outputPath.string(), std::ios::binary);
         textToWavFile(piper, &local_options, line.c_str(), audioFile);
-      } // audioFile is closed
+      }  // audioFile is closed
       std::cout << outputPath.string() << '\n';
-    } else if (outputType == piper::OUTPUT_STDOUT) {
+    }
+    else if (outputType == piper::OUTPUT_STDOUT)
+    {
       // Output WAV to stdout
       textToWavFile(piper, &local_options, line.c_str(), std::cout);
     }
-  } // for each line
+  }  // for each line
 }
