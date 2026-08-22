@@ -1,6 +1,7 @@
+#include <gtest/gtest.h>
+
 #include <filesystem>
 #include <fstream>
-#include <gtest/gtest.h>
 #include <iostream>
 #include <memory>
 #include <sstream>
@@ -9,49 +10,56 @@
 #include "utils/piper_test_assets.h"
 #include "utils/process.hpp"
 
-namespace {
+namespace
+{
 // RAII class to redirect stdin for tests
-class StdinRedirect {
-public:
-  StdinRedirect(const std::string &input) : old_cin(std::cin.rdbuf()) {
+class StdinRedirect
+{
+ public:
+  StdinRedirect(const std::string& input) : old_cin(std::cin.rdbuf())
+  {
     input_buffer << input;
     std::cin.rdbuf(input_buffer.rdbuf());
   }
 
-  ~StdinRedirect() {
+  ~StdinRedirect()
+  {
     // Restore stdin and clean up
     std::cin.rdbuf(old_cin);
   }
 
-private:
-  std::streambuf *old_cin;
+ private:
+  std::streambuf* old_cin;
   std::stringstream input_buffer;
 };
-} // namespace
+}  // namespace
 
-class ProcessTest : public ::testing::Test {
-protected:
+class ProcessTest : public ::testing::Test
+{
+ protected:
   static std::unique_ptr<PiperTestAssets> assets;
-  static piper_synthesizer *synth;
+  static piper_synthesizer* synth;
 
-  static void SetUpTestSuite() {
+  static void SetUpTestSuite()
+  {
     assets = PiperTestAssets::enModel();
-    synth = piper_create(assets->modelPath().string().c_str(),
-                         assets->configPath().string().c_str(),
+    synth = piper_create(assets->modelPath().string().c_str(), assets->configPath().string().c_str(),
                          PiperTestAssets::espeakDataPath().string().c_str());
     ASSERT_NE(synth, nullptr);
   }
 
-  static void TearDownTestSuite() {
+  static void TearDownTestSuite()
+  {
     piper_free(synth);
     assets.reset();
   }
 };
 
 std::unique_ptr<PiperTestAssets> ProcessTest::assets = nullptr;
-piper_synthesizer *ProcessTest::synth = nullptr;
+piper_synthesizer* ProcessTest::synth = nullptr;
 
-TEST_F(ProcessTest, ProcessInputStreamText) {
+TEST_F(ProcessTest, ProcessInputStreamText)
+{
   piper::RunConfig runConfig;
   runConfig.outputType = piper::OUTPUT_STDOUT;
 
@@ -62,11 +70,11 @@ TEST_F(ProcessTest, ProcessInputStreamText) {
 
   // Redirect cout to check output
   std::stringstream cout_buffer;
-  std::streambuf *old_cout = std::cout.rdbuf(cout_buffer.rdbuf());
+  std::streambuf* old_cout = std::cout.rdbuf(cout_buffer.rdbuf());
 
   processInputStream(runConfig, synth, &options);
 
-  std::cout.rdbuf(old_cout); // Restore cout
+  std::cout.rdbuf(old_cout);  // Restore cout
 
   std::string audio_data = cout_buffer.str();
   // Should have a 44-byte header plus some audio data
@@ -74,7 +82,8 @@ TEST_F(ProcessTest, ProcessInputStreamText) {
   ASSERT_EQ(audio_data.substr(0, 4), "RIFF");
 }
 
-TEST_F(ProcessTest, ProcessInputStreamFileOutput) {
+TEST_F(ProcessTest, ProcessInputStreamFileOutput)
+{
   piper::RunConfig runConfig;
   auto outputPath = std::filesystem::temp_directory_path() / "test.wav";
   runConfig.outputPath = outputPath;
@@ -87,11 +96,11 @@ TEST_F(ProcessTest, ProcessInputStreamFileOutput) {
 
   // Redirect cout to capture the output path
   std::stringstream cout_buffer;
-  std::streambuf *old_cout = std::cout.rdbuf(cout_buffer.rdbuf());
+  std::streambuf* old_cout = std::cout.rdbuf(cout_buffer.rdbuf());
 
   processInputStream(runConfig, synth, &options);
 
-  std::cout.rdbuf(old_cout); // Restore cout
+  std::cout.rdbuf(old_cout);  // Restore cout
 
   // Verify the output file was created and has content
   ASSERT_TRUE(std::filesystem::exists(outputPath));
@@ -99,13 +108,14 @@ TEST_F(ProcessTest, ProcessInputStreamFileOutput) {
     std::ifstream audio_file(outputPath, std::ios::binary | std::ios::ate);
     ASSERT_TRUE(audio_file.is_open());
     std::streamsize size = audio_file.tellg();
-    ASSERT_GT(size, 44); // Should have a 44-byte header plus some audio data
+    ASSERT_GT(size, 44);  // Should have a 44-byte header plus some audio data
   }
   // Clean up the created file
   std::filesystem::remove(outputPath);
 }
 
-TEST_F(ProcessTest, ProcessInputStreamDirectoryOutput) {
+TEST_F(ProcessTest, ProcessInputStreamDirectoryOutput)
+{
   piper::RunConfig runConfig;
   auto outputDir = std::filesystem::temp_directory_path() / "piper_test_output";
   std::filesystem::create_directory(outputDir);
@@ -118,7 +128,7 @@ TEST_F(ProcessTest, ProcessInputStreamDirectoryOutput) {
   StdinRedirect redirect("This is a test for directory output.");
 
   std::stringstream cout_buffer;
-  std::streambuf *old_cout = std::cout.rdbuf(cout_buffer.rdbuf());
+  std::streambuf* old_cout = std::cout.rdbuf(cout_buffer.rdbuf());
 
   processInputStream(runConfig, synth, &options);
 
@@ -131,7 +141,8 @@ TEST_F(ProcessTest, ProcessInputStreamDirectoryOutput) {
   std::filesystem::remove_all(outputDir);
 }
 
-TEST_F(ProcessTest, ProcessInputStreamJson) {
+TEST_F(ProcessTest, ProcessInputStreamJson)
+{
   piper::RunConfig runConfig;
   runConfig.outputType = piper::OUTPUT_STDOUT;
   runConfig.jsonInput = true;
@@ -142,7 +153,7 @@ TEST_F(ProcessTest, ProcessInputStreamJson) {
   StdinRedirect redirect(R"({"text": "This is a JSON test."})");
 
   std::stringstream cout_buffer;
-  std::streambuf *old_cout = std::cout.rdbuf(cout_buffer.rdbuf());
+  std::streambuf* old_cout = std::cout.rdbuf(cout_buffer.rdbuf());
 
   processInputStream(runConfig, synth, &options);
 

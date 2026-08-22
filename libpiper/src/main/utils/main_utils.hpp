@@ -5,11 +5,18 @@
 #include <optional>
 #include <stdexcept>
 
-namespace piper {
+namespace piper
+{
 
-enum OutputType { OUTPUT_FILE, OUTPUT_DIRECTORY, OUTPUT_STDOUT };
+enum OutputType
+{
+  OUTPUT_FILE,
+  OUTPUT_DIRECTORY,
+  OUTPUT_STDOUT
+};
 
-struct RunConfig {
+struct RunConfig
+{
   // Path to .onnx voice file
   std::filesystem::path modelPath;
 
@@ -34,14 +41,15 @@ struct RunConfig {
   bool jsonInput = false;
 };
 
-struct ArgError : public std::runtime_error {
+struct ArgError : public std::runtime_error
+{
   using std::runtime_error::runtime_error;
 };
 
-void printUsage(char *argv[]);
-void ensureArg(int argc, char *argv[], int argi);
-void parseArgsLogic(int argc, char *argv[], RunConfig &runConfig);
-void parseArgs(int argc, char *argv[], RunConfig &runConfig);
+void printUsage(char* argv[]);
+void ensureArg(int argc, char* argv[], int argi);
+void parseArgsLogic(int argc, char* argv[], RunConfig& runConfig);
+void parseArgs(int argc, char* argv[], RunConfig& runConfig);
 
-} // namespace piper
-#endif // PIPER_MAIN_UTILS_HPP
+}  // namespace piper
+#endif  // PIPER_MAIN_UTILS_HPP
