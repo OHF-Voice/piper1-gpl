@@ -143,6 +143,7 @@ include(ClangTidy.cmake)
 
 add_library(piper SHARED
     ${CMAKE_CURRENT_SOURCE_DIR}/src/piper.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/chinese_phonemizer.cpp
 )
 enable_clang_tidy(piper)
 
@@ -171,6 +172,10 @@ if(PIPER_VERSION)
 else()
   message(WARNING "Could not parse version from setup.py")
 endif()
+
+# Windows DLL export for Chinese phonemizer symbols (fixes LNK2019)
+target_compile_definitions(piper PRIVATE BUILDING_LIBPIPER)
+
 
 # ---- install ---
 
