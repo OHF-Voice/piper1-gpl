@@ -1,6 +1,9 @@
 # Changelog
 ## Unreleased
 
+- HTTP server: stream audio while synthesizing (`/synthesize`, `/stream`) instead of waiting for the whole text
+- HTTP server: add `/stop` plus channel/group preemption and client-disconnect detection so speech can be interrupted immediately
+- HTTP server: split text into small chunks before synthesis (`--chunk-*`) and warm the model up at startup
 - Add `piper.chunking`: configurable text chunking on word/punctuation/sentence boundaries
 
 ## 1.8.0

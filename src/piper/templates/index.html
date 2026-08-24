@@ -518,7 +518,9 @@
               const response = await fetch("synthesize", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ text: text }),
+                  // stream: false -> buffered WAV with a complete header, which
+                  // is what <audio> needs. Command-line clients stream instead.
+                  body: JSON.stringify({ text: text, stream: false }),
               });
 
               if (!response.ok) {
