@@ -13,6 +13,7 @@ pip install piper-tts
 * 🗣️ [Voices][voices]
 * 🖥️ [Command-line interface][cli]
 * 🌐 [Web server][api-http]
+* 🗣️ [Screen readers (Speech Dispatcher)][speechd]
 * 🐍 [Python API][api-python]
 * 🔧 [C/C++ API][libpiper]
 * 🏋️ [Training new voices][training]
@@ -53,6 +54,7 @@ Bindings to use Piper in programming languages other than Python and C/C++:
 [espeak-ng]: https://github.com/espeak-ng/espeak-ng
 [cli]: https://github.com/OHF-Voice/piper1-gpl/blob/main/docs/CLI.md
 [api-http]: https://github.com/OHF-Voice/piper1-gpl/blob/main/docs/API_HTTP.md
+[speechd]: https://github.com/OHF-Voice/piper1-gpl/blob/main/docs/SPEECHD.md
 [api-python]: https://github.com/OHF-Voice/piper1-gpl/blob/main/docs/API_PYTHON.md
 [training]: https://github.com/OHF-Voice/piper1-gpl/blob/main/docs/TRAINING.md
 [building]: https://github.com/OHF-Voice/piper1-gpl/blob/main/docs/BUILDING.md
