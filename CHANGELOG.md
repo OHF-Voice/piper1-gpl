@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Add `piper.chunking`: configurable text chunking on word/punctuation/sentence boundaries
+
 ## 1.8.0
 
 - Add Thai phonemizer using TLTK in the new `th` extra
