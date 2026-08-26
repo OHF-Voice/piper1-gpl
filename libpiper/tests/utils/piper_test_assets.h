@@ -17,6 +17,8 @@ public:
 
   static auto espeakDataPath() -> std::filesystem::path;
 
+  static auto g2pwDataDir() -> std::filesystem::path;
+
   /**
    * @brief Static factory method to get the default English model assets.
    */
@@ -26,6 +28,8 @@ public:
    * @brief Static factory method to get the model with Text phonemes assets.
    */
   static auto textModel() -> std::unique_ptr<PiperTestAssets>;
+
+  static auto zhModel() -> std::unique_ptr<PiperTestAssets>;
 
 private:
   std::filesystem::path modelDir;

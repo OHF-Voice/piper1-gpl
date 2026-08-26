@@ -23,3 +23,15 @@ auto PiperTestAssets::enModel() -> std::unique_ptr<PiperTestAssets> {
 auto PiperTestAssets::textModel() -> std::unique_ptr<PiperTestAssets> {
   return std::make_unique<PiperTestAssets>(TEXT_TEST_MODEL_DIR);
 }
+
+auto PiperTestAssets::zhModel() -> std::unique_ptr<PiperTestAssets> {
+  return std::make_unique<PiperTestAssets>(ZH_TEST_MODEL_DIR);
+}
+
+auto PiperTestAssets::g2pwDataDir() -> std::filesystem::path {
+#ifdef G2PW_TEST_DATA_DIR
+  return {G2PW_TEST_DATA_DIR};
+#else
+  return {};
+#endif
+}

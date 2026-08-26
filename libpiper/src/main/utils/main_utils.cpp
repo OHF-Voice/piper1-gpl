@@ -42,6 +42,12 @@ void printUsage(char *argv[]) { // NOLINT(modernize-avoid-c-arrays)
   std::cerr
       << "   --espeak_data           DIR   path to espeak-ng data directory"
       << '\n';
+  std::cerr << "   --data_dir            DIR   base data dir (looks for "
+               "espeak-ng-data and g2pw subdirs)"
+            << '\n';
+  std::cerr << "   --g2pw_dir            DIR   path to Chinese dict directory "
+               "(MONOPHONIC_CHARS.txt, char_bopomofo_dict.json etc)"
+            << '\n';
   std::cerr << "   --json-input                  stdin input is lines of JSON "
                "instead of plain text"
             << '\n';
@@ -99,6 +105,13 @@ void parseArgsLogic(int argc, char *argv[], RunConfig &runConfig) {
     } else if (arg == "--espeak_data" || arg == "--espeak-data") {
       ensureArg(argc, argv, i);
       runConfig.eSpeakDataPath = std::filesystem::path(argv[++i]);
+    } else if (arg == "--data_dir" || arg == "--data-dir") {
+      ensureArg(argc, argv, i);
+      runConfig.dataDir = std::filesystem::path(argv[++i]);
+    } else if (arg == "--g2pw_dir" || arg == "--g2pw-dir" ||
+               arg == "--g2pw_model_dir" || arg == "--g2pw-model-dir") {
+      ensureArg(argc, argv, i);
+      runConfig.g2pwModelDir = std::filesystem::path(argv[++i]);
     } else if (arg == "--json_input" || arg == "--json-input") {
       runConfig.jsonInput = true;
     } else if (arg == "--version") {
