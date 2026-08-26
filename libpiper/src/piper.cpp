@@ -678,7 +678,8 @@ auto piper_synthesize_next(struct piper_synthesizer *synth,
     output_names_strs.reserve(count);
     Ort::AllocatorWithDefaultOptions allocator;
     for (size_t i = 0; i < count; ++i) {
-      output_names_strs.emplace_back(synth->session->GetOutputNameAllocated(i, allocator).get());
+      output_names_strs.emplace_back(
+          synth->session->GetOutputNameAllocated(i, allocator).get());
     }
   }
   std::vector<const char *> output_names;
