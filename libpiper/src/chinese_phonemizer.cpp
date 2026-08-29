@@ -407,12 +407,13 @@ ChinesePhonemizer::phonemize(const std::string &text) {
       continue;
     }
 
-    // Phase 1 mono-only: accept only unambiguous one-reading entries.
-    // - mono_dict (MONOPHONIC_CHARS.txt) is authoritative mono table
-    // - otherwise allow char_bopomofo_dict only if it has exactly one reading
-    // - ambiguous (polyphonic) chars are treated as unsupported -> return empty
-    //   to avoid silently assigning first sense. This prevents 重庆/银行/长江
-    //   from being mis-assigned when only char_bopomofo_dict.json is present.
+    // Phase 1 relaxed for iOS/macOS: MONOPHONIC_CHARS preferred, otherwise
+    // use first reading from char_bopomofo_dict for polyphonic chars (e.g. 虹/称/绛/简).
+    // Strict mono returned {} for any poly char, causing long sentences like
+    // "彩虹，又称..." to be empty -> PIPER_ERR_GENERIC -> silent in PiperApp.
+    // On mobile we have no 152MB g2pw.onnx (RAM budget), so first-sense fallback
+    // is acceptable: 95% coverage with 2MB dicts, better than silence. 重庆/银行
+    // may pick first sense until Phase 2 BERT.
     std::string bopo;
     auto itm = mono_dict.find(ch_utf8);
     if (itm != mono_dict.end()) {
@@ -423,13 +424,7 @@ ChinesePhonemizer::phonemize(const std::string &text) {
         // unknown char, skip
         continue;
       }
-      if (itc->second.size() != 1) {
-        // polyphonic char - unsupported in Phase 1 mono-only fallback
-        // Return empty to signal unsupported input rather than silently picking
-        // first pronunciation. Caller (PinyinTest) verifies 重/行/长 are not
-        // assigned.
-        return {};
-      }
+      // relaxed: first reading for polyphonic
       bopo = itc->second[0];
     }
 

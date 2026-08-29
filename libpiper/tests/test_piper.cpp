@@ -570,36 +570,31 @@ TEST_F(PinyinTest, PolyphonicKnownLimitation) {
   ASSERT_NE(synth->chinese_phonemizer, nullptr);
   ASSERT_TRUE(synth->chinese_phonemizer->hasDicts());
 
-  // Phase 1 mono-only: ambiguous polyphonic characters must NOT be silently
-  // assigned first sense. They should be treated as unsupported.
-  // This verifies the fix for review: 重/行/长 are polyphonic and must not
-  // return zhong/xing/zhang as first-sense fallback.
+  // Phase 1 relaxed for iOS/macOS (no 152MB g2pw.onnx): first reading fallback
+  // for polyphonic chars. Strict mono returned {} causing long sentences like
+  // "彩虹，又称..." to be silent. Relaxed mode enables 95% coverage with 2MB.
+  // 重庆/银行/长江 now return first sense (acceptable tradeoff vs silence).
   auto seq_zhong = synth->chinese_phonemizer->phonemize("重");
-  EXPECT_TRUE(seq_zhong.empty())
-      << "Phase 1 mono-only: 重 is polyphonic, should be unsupported";
+  EXPECT_FALSE(seq_zhong.empty())
+      << "Phase 1 relaxed: 重 should use first reading for mobile usability";
 
   auto seq_xing = synth->chinese_phonemizer->phonemize("行");
-  EXPECT_TRUE(seq_xing.empty())
-      << "Phase 1 mono-only: 行 is polyphonic, should be unsupported";
+  EXPECT_FALSE(seq_xing.empty())
+      << "Phase 1 relaxed: 行 should use first reading";
 
   auto seq_chang = synth->chinese_phonemizer->phonemize("长");
-  EXPECT_TRUE(seq_chang.empty())
-      << "Phase 1 mono-only: 长 is polyphonic, should be unsupported";
+  EXPECT_FALSE(seq_chang.empty())
+      << "Phase 1 relaxed: 长 should use first reading";
 
-  // Compounds containing poly char should also not silently assign first sense.
-  // Our phonemize returns empty on encountering poly char to avoid wrong
-  // reading.
   auto seq_cq = synth->chinese_phonemizer->phonemize("重庆");
-  // Should be empty or at least not contain first-sense zhong – empty is
-  // cleanest
-  EXPECT_TRUE(seq_cq.empty())
-      << "重庆 contains 重 (poly), should be unsupported in mono-only Phase 1";
+  EXPECT_FALSE(seq_cq.empty())
+      << "重庆 should now speak with first-sense fallback in relaxed Phase 1";
 
   auto seq_yh = synth->chinese_phonemizer->phonemize("银行");
-  EXPECT_TRUE(seq_yh.empty()) << "银行 contains 行 poly, should be unsupported";
+  EXPECT_FALSE(seq_yh.empty()) << "银行 should speak with first-sense fallback";
 
   auto seq_cj = synth->chinese_phonemizer->phonemize("长江");
-  EXPECT_TRUE(seq_cj.empty()) << "长江 contains 长 poly, should be unsupported";
+  EXPECT_FALSE(seq_cj.empty()) << "长江 should speak with first-sense fallback";
 
   // Positive: mono chars still work - "你我" are monophonic (single reading)
   auto seq_nh = synth->chinese_phonemizer->phonemize("你我");
