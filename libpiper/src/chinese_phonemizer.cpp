@@ -413,6 +413,7 @@ ChinesePhonemizer::phonemize(const std::string &text) {
     // - ambiguous (polyphonic) chars are treated as unsupported -> return empty
     //   to avoid silently assigning first sense. This prevents 重庆/银行/长江
     //   from being mis-assigned when only char_bopomofo_dict.json is present.
+    // Relaxed: use first reading for poly to avoid empty -> silence.
     std::string bopo;
     auto itm = mono_dict.find(ch_utf8);
     if (itm != mono_dict.end()) {
@@ -423,13 +424,7 @@ ChinesePhonemizer::phonemize(const std::string &text) {
         // unknown char, skip
         continue;
       }
-      if (itc->second.size() != 1) {
-        // polyphonic char - unsupported in Phase 1 mono-only fallback
-        // Return empty to signal unsupported input rather than silently picking
-        // first pronunciation. Caller (PinyinTest) verifies 重/行/长 are not
-        // assigned.
-        return {};
-      }
+      // relaxed: first reading for polyphonic
       bopo = itc->second[0];
     }
 
