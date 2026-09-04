@@ -68,7 +68,8 @@ setup(
     ],
     extras_require={
         "train": [
-            "torch>=2,<3",
+            # 2.5 added the dynamo argument to torch.onnx.export
+            "torch>=2.5,<3",
             "lightning>=2,<3",
             "tensorboard>=2,<3",
             "tensorboardX>=2,<3",
