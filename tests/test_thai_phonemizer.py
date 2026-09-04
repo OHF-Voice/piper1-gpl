@@ -7,7 +7,15 @@ from piper.config import PhonemeType
 from piper.phoneme_ids import DEFAULT_PHONEME_ID_MAP, phonemes_to_ids
 from piper.phonemize_thai import TONES, ThaiPhonemizer
 
-pytest.importorskip("tltk", reason="tltk is not installed")
+# Not pytest.importorskip: that only catches ImportError, and importing tltk
+# pulls in nltk -> scikit-learn, which raises ValueError ("numpy.dtype size
+# changed") when its compiled extensions disagree with the installed numpy. An
+# uncaught error here is a *collection* error, which aborts the entire test
+# session rather than just skipping this module.
+try:
+    import tltk  # noqa: F401
+except Exception as exc:  # pylint: disable=broad-except
+    pytest.skip(f"tltk is unavailable: {exc}", allow_module_level=True)
 
 
 @pytest.fixture(name="phonemizer", scope="module")
