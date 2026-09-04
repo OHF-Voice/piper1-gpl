@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.8.0
 
 - Add Thai phonemizer using TLTK in the new `th` extra
     - `--data.phoneme_type thai` for training; `"phoneme_type": "thai"` in a voice config for synthesis
