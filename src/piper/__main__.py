@@ -146,7 +146,13 @@ def main() -> None:
 
     # Load voice
     _LOGGER.debug("Loading voice: '%s'", model_path)
-    voice = PiperVoice.load(model_path, use_cuda=args.cuda)
+    voice = PiperVoice.load(
+        model_path,
+        use_cuda=args.cuda,
+        # The model's own directory comes first: data that ships with a voice
+        # sits beside it, while --data-dir may point somewhere else entirely.
+        data_dirs=[model_path.parent, *args.data_dir],
+    )
     syn_config = SynthesisConfig(
         speaker_id=args.speaker,
         length_scale=args.length_scale,
