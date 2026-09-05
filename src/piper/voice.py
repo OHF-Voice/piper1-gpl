@@ -4,6 +4,7 @@ import itertools
 import json
 import logging
 import re
+import os
 import threading
 import unicodedata
 import wave
@@ -187,12 +188,15 @@ class PiperVoice:
             except ValueError as error:
                 # Tensor not found or model already patched: use it as-is.
                 _LOGGER.debug("Not patching model for alignments: %s", error)
+        available_cores = len(os.sched_getaffinity(0)) 
 
+        session_options = onnxruntime.SessionOptions()
+        session_options.intra_op_num_threads = available_cores
         return PiperVoice(
             config=PiperConfig.from_dict(config_dict),
             session=onnxruntime.InferenceSession(
                 model_or_path,
-                sess_options=onnxruntime.SessionOptions(),
+                sess_options=session_options,
                 providers=providers,
             ),
             espeak_data_dir=Path(espeak_data_dir),
