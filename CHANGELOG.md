@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Add `piper.chunking`: configurable text chunking on word/punctuation/sentence boundaries
+- Add `piper.client` and the `piper-client` command: streaming HTTP client with chunking, prefetching, instant interruption and audio playback
+- Add `piper.speechd_module` and the `sd_piper` command: Speech Dispatcher output module for screen readers
+- Speech Dispatcher module: start the server on demand (systemd user unit, transient unit or detached process) without delaying module load, and `sd_piper --print-service` to install it as a user service
+- Client and Speech Dispatcher module: play audio at the sample rate of the requested voice instead of the server's default voice (voices mixing 22.05 kHz and 44.1 kHz were slowed down or sped up)
+- Add example Speech Dispatcher configurations in `etc/speech-dispatcher/` and `docs/SPEECHD.md`
+
 ## 1.8.0
 
 - Add Thai phonemizer using TLTK in the new `th` extra

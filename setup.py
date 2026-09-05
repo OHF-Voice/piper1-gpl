@@ -149,6 +149,12 @@ setup(
     entry_points={
         "console_scripts": [
             "piper = piper.__main__:main",
+            # Streaming HTTP client, also usable from a speech-dispatcher
+            # generic module
+            "piper-client = piper.client:main",
+            # Speech Dispatcher output module (symlink into
+            # ~/.local/libexec/speech-dispatcher-modules/sd_piper)
+            "sd_piper = piper.speechd_module:main",
         ]
     },
 )
