@@ -36,26 +36,22 @@ std::unique_ptr<PiperTestAssets> PiperTest::assets = nullptr;
 TEST_F(PiperTest, CreateNullModelPath)
 {
   piper_synthesizer* synth =
-      piper_create(nullptr, assets->configPath().string().c_str(),
-                   PiperTestAssets::espeakDataPath().string().c_str());
+      piper_create(nullptr, assets->configPath().string().c_str(), PiperTestAssets::espeakDataPath().string().c_str());
   ASSERT_EQ(synth, nullptr);
 }
 
 TEST_F(PiperTest, CreateNullConfigPath)
 {
   piper_synthesizer* synth =
-      piper_create(assets->modelPath().string().c_str(), nullptr,
-                   PiperTestAssets::espeakDataPath().string().c_str());
+      piper_create(assets->modelPath().string().c_str(), nullptr, PiperTestAssets::espeakDataPath().string().c_str());
   ASSERT_NE(synth, nullptr);
   piper_free(synth);
 }
 
 TEST_F(PiperTest, PiperSynthesis)
 {
-  piper_synthesizer* synth =
-      piper_create(assets->modelPath().string().c_str(),
-                   assets->configPath().string().c_str(),
-                   PiperTestAssets::espeakDataPath().string().c_str());
+  piper_synthesizer* synth = piper_create(assets->modelPath().string().c_str(), assets->configPath().string().c_str(),
+                                          PiperTestAssets::espeakDataPath().string().c_str());
   ASSERT_NE(synth, nullptr);
 
   // Start synthesis
@@ -78,8 +74,7 @@ TEST_F(PiperTest, PiperSynthesisText)
 {
   auto textAssets = PiperTestAssets::textModel();
   piper_synthesizer* synth =
-      piper_create(textAssets->modelPath().string().c_str(),
-                   textAssets->configPath().string().c_str(), nullptr);
+      piper_create(textAssets->modelPath().string().c_str(), textAssets->configPath().string().c_str(), nullptr);
   ASSERT_NE(synth, nullptr);
   ASSERT_EQ(synth->phoneme_type, PhonemeType::Text);
 
@@ -101,10 +96,8 @@ TEST_F(PiperTest, PiperSynthesisText)
 
 TEST_F(PiperTest, DeterministicSynthesis)
 {
-  piper_synthesizer* synth =
-      piper_create(assets->modelPath().string().c_str(),
-                   assets->configPath().string().c_str(),
-                   PiperTestAssets::espeakDataPath().string().c_str());
+  piper_synthesizer* synth = piper_create(assets->modelPath().string().c_str(), assets->configPath().string().c_str(),
+                                          PiperTestAssets::espeakDataPath().string().c_str());
   ASSERT_NE(synth, nullptr);
 
   piper_synthesize_options options = piper_default_synthesize_options(synth);
@@ -135,10 +128,8 @@ TEST_F(PiperTest, DeterministicSynthesis)
 
 TEST_F(PiperTest, DefaultSynthesizeOptions)
 {
-  piper_synthesizer* synth =
-      piper_create(assets->modelPath().string().c_str(),
-                   assets->configPath().string().c_str(),
-                   PiperTestAssets::espeakDataPath().string().c_str());
+  piper_synthesizer* synth = piper_create(assets->modelPath().string().c_str(), assets->configPath().string().c_str(),
+                                          PiperTestAssets::espeakDataPath().string().c_str());
   ASSERT_NE(synth, nullptr);
 
   piper_synthesize_options options = piper_default_synthesize_options(synth);
@@ -160,10 +151,8 @@ TEST_F(PiperTest, DefaultSynthesizeOptions)
 
 TEST_F(PiperTest, CustomSynthesizeOptions)
 {
-  piper_synthesizer* synth =
-      piper_create(assets->modelPath().string().c_str(),
-                   assets->configPath().string().c_str(),
-                   PiperTestAssets::espeakDataPath().string().c_str());
+  piper_synthesizer* synth = piper_create(assets->modelPath().string().c_str(), assets->configPath().string().c_str(),
+                                          PiperTestAssets::espeakDataPath().string().c_str());
   ASSERT_NE(synth, nullptr);
 
   piper_synthesize_options options = piper_default_synthesize_options(synth);
@@ -184,14 +173,11 @@ TEST_F(PiperTest, CustomSynthesizeOptions)
 
 TEST_F(PiperTest, MultiSentence)
 {
-  piper_synthesizer* synth =
-      piper_create(assets->modelPath().string().c_str(),
-                   assets->configPath().string().c_str(),
-                   PiperTestAssets::espeakDataPath().string().c_str());
+  piper_synthesizer* synth = piper_create(assets->modelPath().string().c_str(), assets->configPath().string().c_str(),
+                                          PiperTestAssets::espeakDataPath().string().c_str());
   ASSERT_NE(synth, nullptr);
 
-  int result = piper_synthesize_start(
-      synth, "This is a test. This is another test.", nullptr);
+  int result = piper_synthesize_start(synth, "This is a test. This is another test.", nullptr);
   ASSERT_EQ(result, PIPER_OK);
 
   std::vector<piper_audio_chunk> chunks;
@@ -211,10 +197,8 @@ TEST_F(PiperTest, MultiSentence)
 
 TEST_F(PiperTest, EmptyText)
 {
-  piper_synthesizer* synth =
-      piper_create(assets->modelPath().string().c_str(),
-                   assets->configPath().string().c_str(),
-                   PiperTestAssets::espeakDataPath().string().c_str());
+  piper_synthesizer* synth = piper_create(assets->modelPath().string().c_str(), assets->configPath().string().c_str(),
+                                          PiperTestAssets::espeakDataPath().string().c_str());
   ASSERT_NE(synth, nullptr);
 
   int result = piper_synthesize_start(synth, "", nullptr);
@@ -274,8 +258,7 @@ TEST_F(PiperTest, CreateWithOptionsSmallStruct)
   piper_init_create_options(&opts);
   opts.model_path = model_path.c_str();
   // Simulate old header with smaller struct_size (only up to espeak_data_path)
-  opts.struct_size = offsetof(piper_create_options, espeak_data_path) +
-                     sizeof(opts.espeak_data_path);
+  opts.struct_size = offsetof(piper_create_options, espeak_data_path) + sizeof(opts.espeak_data_path);
   opts.espeak_data_path = espeak_path.c_str();
 
   piper_synthesizer* synth = piper_create_with_options(&opts);
@@ -301,8 +284,7 @@ TEST_F(PiperTest, CreateWithOptionsDataDir)
   // Now that espeak data path resolution via data_dir is fixed, synth must be
   // non-null (previously this test allowed nullptr and would hide fallback
   // bugs)
-  ASSERT_NE(synth, nullptr)
-      << "piper_create_with_options should succeed via data_dir=" << data_dir;
+  ASSERT_NE(synth, nullptr) << "piper_create_with_options should succeed via data_dir=" << data_dir;
   // Verify g2pw dir resolution for Phase 1: data_dir/g2pw is tried first,
   // then data_dir root. When data_dir contains espeak-ng-data but no g2pw
   // dicts, effective_g2pw_dir defaults to <data_dir>/g2pw (non-fatal, direct
@@ -338,8 +320,7 @@ TEST_F(PiperTest, CreateLegacyVsOptionsParity)
   std::string model_path = assets->modelPath().string();
   std::string config_path = assets->configPath().string();
   std::string espeak_path = PiperTestAssets::espeakDataPath().string();
-  auto* synth_legacy = piper_create(model_path.c_str(), config_path.c_str(),
-                                    espeak_path.c_str());
+  auto* synth_legacy = piper_create(model_path.c_str(), config_path.c_str(), espeak_path.c_str());
   ASSERT_NE(synth_legacy, nullptr);
 
   piper_create_options opts;
@@ -410,9 +391,9 @@ TEST(ChinesePhonemizerUnit, PhonemizePinyinText)
 
 TEST(ChinesePhonemizerUnit, PhonemesToIds)
 {
-  std::map<std::string, std::vector<int64_t>> id_map = {
-      {"^", {1}},  {"_", {0}},  {"$", {2}},   {"n", {10}}, {"i", {27}},
-      {"3", {66}}, {"h", {14}}, {"ao", {32}}, {" ", {72}}};
+  std::map<std::string, std::vector<int64_t>> id_map = {{"^", {1}},  {"_", {0}},   {"$", {2}},
+                                                        {"n", {10}}, {"i", {27}},  {"3", {66}},
+                                                        {"h", {14}}, {"ao", {32}}, {" ", {72}}};
   std::vector<std::string> ph = {"n", "i", "3", "h", "ao", "3"};
   auto ids = piper::phonemes_to_ids(ph, id_map);
   // BOS 1, n10,i27,3+pad, h,ao,3+pad, EOS
@@ -435,10 +416,9 @@ class PinyinTest : public ::testing::Test
 
     auto has_required = [](const std::filesystem::path& d)
     {
-      bool has_source = std::filesystem::exists(d / "MONOPHONIC_CHARS.txt") ||
-                        std::filesystem::exists(d / "char_bopomofo_dict.json");
-      bool has_b2p =
-          std::filesystem::exists(d / "bopomofo_to_pinyin_wo_tune_dict.json");
+      bool has_source =
+          std::filesystem::exists(d / "MONOPHONIC_CHARS.txt") || std::filesystem::exists(d / "char_bopomofo_dict.json");
+      bool has_b2p = std::filesystem::exists(d / "bopomofo_to_pinyin_wo_tune_dict.json");
       return has_source && has_b2p;
     };
 
@@ -565,10 +545,8 @@ TEST_F(PinyinTest, HanziMonoFallback)
 
   // Require dicts – they are now downloaded via CMake (G2PW_TEST_DATA_DIR)
   // No skipping – if dicts missing, this fails so CI catches it
-  ASSERT_NE(synth->chinese_phonemizer, nullptr)
-      << "chinese_phonemizer not created, g2pw_dir=" << g2pw_dir;
-  ASSERT_TRUE(synth->chinese_phonemizer->hasDicts())
-      << "g2pw dicts not loaded from " << g2pw_dir;
+  ASSERT_NE(synth->chinese_phonemizer, nullptr) << "chinese_phonemizer not created, g2pw_dir=" << g2pw_dir;
+  ASSERT_TRUE(synth->chinese_phonemizer->hasDicts()) << "g2pw dicts not loaded from " << g2pw_dir;
 
   // Phase 1 mono-only: use truly monophonic phrase "你我" (ni3 wo3)
   // Both characters have single reading in char_bopomofo_dict (unambiguous)
@@ -634,20 +612,16 @@ TEST_F(PinyinTest, PolyphonicKnownLimitation)
   // "彩虹，又称..." to be silent. Relaxed mode enables 95% coverage with 2MB.
   // 重庆/银行/长江 now return first sense (acceptable tradeoff vs silence).
   auto seq_zhong = synth->chinese_phonemizer->phonemize("重");
-  EXPECT_FALSE(seq_zhong.empty())
-      << "Phase 1 relaxed: 重 should use first reading for mobile usability";
+  EXPECT_FALSE(seq_zhong.empty()) << "Phase 1 relaxed: 重 should use first reading for mobile usability";
 
   auto seq_xing = synth->chinese_phonemizer->phonemize("行");
-  EXPECT_FALSE(seq_xing.empty())
-      << "Phase 1 relaxed: 行 should use first reading";
+  EXPECT_FALSE(seq_xing.empty()) << "Phase 1 relaxed: 行 should use first reading";
 
   auto seq_chang = synth->chinese_phonemizer->phonemize("长");
-  EXPECT_FALSE(seq_chang.empty())
-      << "Phase 1 relaxed: 长 should use first reading";
+  EXPECT_FALSE(seq_chang.empty()) << "Phase 1 relaxed: 长 should use first reading";
 
   auto seq_cq = synth->chinese_phonemizer->phonemize("重庆");
-  EXPECT_FALSE(seq_cq.empty())
-      << "重庆 should now speak with first-sense fallback in relaxed Phase 1";
+  EXPECT_FALSE(seq_cq.empty()) << "重庆 should now speak with first-sense fallback in relaxed Phase 1";
 
   auto seq_yh = synth->chinese_phonemizer->phonemize("银行");
   EXPECT_FALSE(seq_yh.empty()) << "银行 should speak with first-sense fallback";
@@ -660,8 +634,7 @@ TEST_F(PinyinTest, PolyphonicKnownLimitation)
   ASSERT_FALSE(seq_nh.empty()) << "你我 should succeed in mono-only mode";
   auto flat_nh = seq_nh[0];
   // Verify IDs path still works for mono
-  auto ids = piper::ChinesePhonemizer::phonemes_to_ids_pinyin(
-      flat_nh, synth->pinyin_id_map);
+  auto ids = piper::ChinesePhonemizer::phonemes_to_ids_pinyin(flat_nh, synth->pinyin_id_map);
   EXPECT_GT(ids.size(), 2u);
   EXPECT_EQ(ids.front(), 1);  // BOS
   EXPECT_EQ(ids.back(), 2);   // EOS
@@ -699,10 +672,8 @@ TEST_F(PinyinTest, DataDirG2pwSubdir)
   ASSERT_NE(synth, nullptr) << "data_dir subdir fallback should create synth";
   EXPECT_FALSE(synth->g2pw_model_dir.empty());
   // Should have resolved to <data_dir>/g2pw which contains dicts
-  EXPECT_TRUE(synth->chinese_phonemizer &&
-              synth->chinese_phonemizer->hasDicts())
-      << "expected dicts loaded via <data_dir>/g2pw, g2pw_model_dir="
-      << synth->g2pw_model_dir;
+  EXPECT_TRUE(synth->chinese_phonemizer && synth->chinese_phonemizer->hasDicts())
+      << "expected dicts loaded via <data_dir>/g2pw, g2pw_model_dir=" << synth->g2pw_model_dir;
 
   // Direct pinyin should synthesize successfully even via data_dir path
   int rc = piper_synthesize_start(synth, "ni3 hao3", nullptr);
@@ -740,13 +711,10 @@ TEST_F(PinyinTest, DataDirRootDicts)
   opts.g2pw_model_dir = nullptr;
 
   auto* synth = piper_create_with_options(&opts);
-  ASSERT_NE(synth, nullptr)
-      << "data_dir root fallback should create synth when dicts in root";
+  ASSERT_NE(synth, nullptr) << "data_dir root fallback should create synth when dicts in root";
   EXPECT_FALSE(synth->g2pw_model_dir.empty());
-  EXPECT_TRUE(synth->chinese_phonemizer &&
-              synth->chinese_phonemizer->hasDicts())
-      << "expected dicts loaded via data_dir root, g2pw_model_dir="
-      << synth->g2pw_model_dir;
+  EXPECT_TRUE(synth->chinese_phonemizer && synth->chinese_phonemizer->hasDicts())
+      << "expected dicts loaded via data_dir root, g2pw_model_dir=" << synth->g2pw_model_dir;
 
   // Youhao mono should still work via root layout
   int rc = piper_synthesize_start(synth, "你我", nullptr);

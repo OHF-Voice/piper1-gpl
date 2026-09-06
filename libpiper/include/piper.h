@@ -256,8 +256,7 @@ extern "C"
    * failure.
    */
   EXPORT_SYMBOL
-  piper_synthesizer* piper_create_with_options(
-      const piper_create_options* options);
+  piper_synthesizer* piper_create_with_options(const piper_create_options* options);
 
   /**
    * \brief Create a Piper text-to-speech synthesizer from a voice model.
@@ -273,9 +272,7 @@ extern "C"
    * \return a Piper text-to-speech synthesizer for the voice model.
    */
   EXPORT_SYMBOL
-  piper_synthesizer* piper_create(const char* model_path,
-                                  const char* config_path,
-                                  const char* espeak_data_path);
+  piper_synthesizer* piper_create(const char* model_path, const char* config_path, const char* espeak_data_path);
 
   /**
    * \brief Free resources for Piper synthesizer.
@@ -293,8 +290,7 @@ extern "C"
    * \return synthesis options from voice config.
    */
   EXPORT_SYMBOL
-  piper_synthesize_options piper_default_synthesize_options(
-      piper_synthesizer* synth);
+  piper_synthesize_options piper_default_synthesize_options(piper_synthesizer* synth);
 
   /**
    * \brief Start text-to-speech synthesis.
@@ -310,8 +306,7 @@ extern "C"
    * \return PIPER_OK or error code.
    */
   EXPORT_SYMBOL
-  int piper_synthesize_start(piper_synthesizer* synth, const char* text,
-                             const piper_synthesize_options* options);
+  int piper_synthesize_start(piper_synthesizer* synth, const char* text, const piper_synthesize_options* options);
 
   /**
    * \brief Synthesize next chunk of audio.

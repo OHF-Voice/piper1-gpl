@@ -2,8 +2,7 @@
 
 #include <gtest/gtest.h>
 
-PiperTestAssets::PiperTestAssets(std::filesystem::path modelDir)
-    : modelDir(std::move(modelDir))
+PiperTestAssets::PiperTestAssets(std::filesystem::path modelDir) : modelDir(std::move(modelDir))
 {
 }
 

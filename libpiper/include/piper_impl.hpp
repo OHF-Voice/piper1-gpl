@@ -48,8 +48,7 @@ const int DEFAULT_HOP_LENGTH = 256;
 #define CLAUSE_PERIOD (40 | CLAUSE_INTONATION_FULL_STOP | CLAUSE_TYPE_SENTENCE)
 #define CLAUSE_COMMA (20 | CLAUSE_INTONATION_COMMA | CLAUSE_TYPE_CLAUSE)
 #define CLAUSE_QUESTION (40 | CLAUSE_INTONATION_QUESTION | CLAUSE_TYPE_SENTENCE)
-#define CLAUSE_EXCLAMATION \
-  (45 | CLAUSE_INTONATION_EXCLAMATION | CLAUSE_TYPE_SENTENCE)
+#define CLAUSE_EXCLAMATION (45 | CLAUSE_INTONATION_EXCLAMATION | CLAUSE_TYPE_SENTENCE)
 #define CLAUSE_COLON (30 | CLAUSE_INTONATION_FULL_STOP | CLAUSE_TYPE_CLAUSE)
 #define CLAUSE_SEMICOLON (30 | CLAUSE_INTONATION_COMMA | CLAUSE_TYPE_CLAUSE)
 
@@ -96,8 +95,7 @@ struct piper_synthesizer
   std::unique_ptr<piper::ChinesePhonemizer> chinese_phonemizer;
 
   // synthesize state
-  std::queue<std::pair<std::vector<Phoneme>, std::vector<PhonemeId>>>
-      phoneme_id_queue;
+  std::queue<std::pair<std::vector<Phoneme>, std::vector<PhonemeId>>> phoneme_id_queue;
   std::vector<float> chunk_samples;
   std::vector<int> chunk_phoneme_ids;
   std::vector<Phoneme> chunk_phonemes;
