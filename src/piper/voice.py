@@ -114,6 +114,10 @@ class PiperVoice:
     download_dir: Path = Path.cwd()
     """Path to download resources."""
 
+    data_dirs: Tuple[Path, ...] = ()
+    """Directories to search for voice data files (defaults to the model's own
+    directory). Used by phonemizers whose data ships with the voice."""
+
     # For Arabic text only
     use_tashkeel: bool = True
     tashkeel_diacritizier: Optional[TashkeelDiacritizer] = None
@@ -127,6 +131,7 @@ class PiperVoice:
         espeak_data_dir: Union[str, Path] = ESPEAK_DATA_DIR,
         download_dir: Optional[Union[str, Path]] = None,
         include_alignments: bool = False,
+        data_dirs: Optional[Iterable[Union[str, Path]]] = None,
     ) -> "PiperVoice":
         """
         Load an ONNX model and config.
@@ -139,6 +144,9 @@ class PiperVoice:
         :param include_alignments: If True, patch the model in memory (requires the
             onnx package) so phoneme/audio alignments are available even if the model
             file has not been patched with piper.patch_voice_with_alignment.
+        :param data_dirs: Directories to search for voice data files, for
+            phonemizers whose data ships with the voice (defaults to the
+            directory the model was loaded from).
         :return: Voice object.
         """
         if config_path is None:
@@ -197,6 +205,11 @@ class PiperVoice:
             ),
             espeak_data_dir=Path(espeak_data_dir),
             download_dir=Path(download_dir),
+            data_dirs=(
+                tuple(Path(d) for d in data_dirs)
+                if data_dirs
+                else (Path(model_path).parent,)
+            ),
         )
 
     def phonemize(self, text: str) -> list[list[str]]:
@@ -253,6 +266,19 @@ class PiperVoice:
             if phonemizer is None:
                 phonemizer = ThaiPhonemizer()
                 setattr(self, "_thai_phonemizer", phonemizer)
+
+            return phonemizer.phonemize(text)
+
+        if self.config.phoneme_type == PhonemeType.LITHUANIAN:
+            from .phonemize_lithuanian import LithuanianPhonemizer
+
+            # espeak-ng IPA + pitch accent from a stress dictionary
+            phonemizer = getattr(self, "_lithuanian_phonemizer", None)
+            if phonemizer is None:
+                phonemizer = LithuanianPhonemizer(
+                    self.data_dirs, espeak_data_dir=self.espeak_data_dir
+                )
+                setattr(self, "_lithuanian_phonemizer", phonemizer)
 
             return phonemizer.phonemize(text)
 
