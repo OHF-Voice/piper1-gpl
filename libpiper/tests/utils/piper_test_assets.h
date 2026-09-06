@@ -3,8 +3,9 @@
 #include <filesystem>
 #include <memory>
 
-class PiperTestAssets {
-public:
+class PiperTestAssets
+{
+ public:
   /** @brief Constructor that takes the directory of the test model. */
   explicit PiperTestAssets(std::filesystem::path modelDir);
 
@@ -31,6 +32,6 @@ public:
 
   static auto zhModel() -> std::unique_ptr<PiperTestAssets>;
 
-private:
+ private:
   std::filesystem::path modelDir;
 };
