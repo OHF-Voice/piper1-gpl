@@ -150,6 +150,7 @@ class PiperVoice:
             config_dict = json.load(config_file)
 
         providers: list[Union[str, tuple[str, dict[str, Any]]]]
+        session_options = onnxruntime.SessionOptions()
         if use_cuda:
             providers = [
                 (
@@ -160,6 +161,9 @@ class PiperVoice:
             _LOGGER.debug("Using CUDA")
         else:
             providers = ["CPUExecutionProvider"]
+            available_cores = len(os.sched_getaffinity(0))
+            session_options.intra_op_num_threads = available_cores
+
 
         if download_dir is None:
             download_dir = Path.cwd()
@@ -188,10 +192,7 @@ class PiperVoice:
             except ValueError as error:
                 # Tensor not found or model already patched: use it as-is.
                 _LOGGER.debug("Not patching model for alignments: %s", error)
-        available_cores = len(os.sched_getaffinity(0)) 
 
-        session_options = onnxruntime.SessionOptions()
-        session_options.intra_op_num_threads = available_cores
         return PiperVoice(
             config=PiperConfig.from_dict(config_dict),
             session=onnxruntime.InferenceSession(
