@@ -11,7 +11,9 @@
 !src/piper/tashkeel/*.json
 !src/piper/tashkeel/model.onnx
 !src/piper/train/__init__.py
-
+!src/piper/train/vits/__init__.py
+!src/piper/train/vits/monotonic_align/__init__.py
+!src/piper/hebrew/*.py
 !script/setup
 !script/dev_build
 !script/package

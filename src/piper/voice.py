@@ -4,6 +4,7 @@ import itertools
 import json
 import logging
 import re
+import os
 import threading
 import unicodedata
 import wave
@@ -149,6 +150,7 @@ class PiperVoice:
             config_dict = json.load(config_file)
 
         providers: list[Union[str, tuple[str, dict[str, Any]]]]
+        session_options = onnxruntime.SessionOptions()
         if use_cuda:
             providers = [
                 (
@@ -159,6 +161,9 @@ class PiperVoice:
             _LOGGER.debug("Using CUDA")
         else:
             providers = ["CPUExecutionProvider"]
+            available_cores = len(os.sched_getaffinity(0))
+            session_options.intra_op_num_threads = available_cores
+
 
         if download_dir is None:
             download_dir = Path.cwd()
@@ -192,7 +197,7 @@ class PiperVoice:
             config=PiperConfig.from_dict(config_dict),
             session=onnxruntime.InferenceSession(
                 model_or_path,
-                sess_options=onnxruntime.SessionOptions(),
+                sess_options=session_options,
                 providers=providers,
             ),
             espeak_data_dir=Path(espeak_data_dir),
