@@ -1,7 +1,5 @@
 FROM python:3.12 AS builder
 
-ARG lang=
-
 RUN apt-get update && \
     apt-get install --yes --no-install-recommends \
       build-essential cmake ninja-build git
@@ -26,7 +24,8 @@ ENV PIP_BREAK_SYSTEM_PACKAGES=1
 WORKDIR /app
 COPY --from=builder /app/dist/piper_tts-*linux*.whl ./dist/
 RUN WHEEL=$(ls ./dist/piper_tts-*linux*.whl) && \
-    pip3 install "$WHEEL[$(echo "${lang}" | tr -d ' ')]" 'flask>=3,<4'
+    if [ -n "${lang}" ]; then EXTRAS="http,${lang}"; else EXTRAS="http"; fi && \
+    pip3 install "$WHEEL[$EXTRAS]"
 
 COPY docker/entrypoint.sh /
 
