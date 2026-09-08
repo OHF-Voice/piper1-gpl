@@ -13,7 +13,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest]
+        os: [ubuntu-latest, windows-latest]
 
     steps:
       - uses: actions/checkout@v4
@@ -26,6 +26,8 @@ jobs:
         run: |
           script/setup --dev --train --zh --ja --th --torch-cpu
           script/dev_build
+        shell: bash
 
       - name: Run tests
         run: script/test
+        shell: bash 

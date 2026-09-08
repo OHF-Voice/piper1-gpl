@@ -163,7 +163,7 @@ class PiperVoice:
             providers = ["CPUExecutionProvider"]
             try:
                 session_options.intra_op_num_threads = len(os.sched_getaffinity(0))
-            except AttributeError:
+            except (AttributeError, OSError):
                 # sched_getaffinity only available on Linux
                 pass
 
