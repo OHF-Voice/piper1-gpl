@@ -36,7 +36,7 @@ import unicodedata
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple, Union
 
-from .phonemize_espeak import ESPEAK_DATA_DIR, EspeakPhonemizer
+from .phonemize_espeak import ESPEAK_DATA_DIR, ESPEAK_LOCK, EspeakPhonemizer
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -196,7 +196,10 @@ class LithuanianPhonemizer:
     def _espeak_word(self, word: str) -> str:
         ipa = self._cache.get(word)
         if ipa is None:
-            sentences = self.espeak.phonemize(ESPEAK_VOICE, word)
+            # set_voice() is process-global: take the same lock PiperVoice
+            # takes, so a Lithuanian voice served beside another cannot race.
+            with ESPEAK_LOCK:
+                sentences = self.espeak.phonemize(ESPEAK_VOICE, word)
             ipa = "".join("".join(s) for s in sentences).strip()
             ipa = ipa.replace("ʂ", "s")   # Lithuanian has no retroflex s
             self._cache[word] = ipa

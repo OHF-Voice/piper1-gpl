@@ -127,6 +127,14 @@ def test_no_retroflex_consonants(phonemizer: LithuanianPhonemizer) -> None:
         assert "ʂ" not in phonemizer.phonemize_word(word)
 
 
+def test_espeak_calls_share_the_process_lock() -> None:
+    """espeakbridge.set_voice() is process-global, so this phonemizer must take
+    the same lock PiperVoice takes around its own espeak calls."""
+    from piper import phonemize_espeak, voice
+
+    assert voice._ESPEAK_PHONEMIZER_LOCK is phonemize_espeak.ESPEAK_LOCK
+
+
 def test_letter_l_is_not_read_as_a_word() -> None:
     """espeak expands "el" to "elektroninis", which broke every abbreviation
     containing L (LRT, MTL)."""
