@@ -100,7 +100,9 @@ def test_letter_names_ship_with_piper() -> None:
     assert letters["i"] == ("ˈiː", ())
 
 
-def test_a_voice_can_bring_its_own_letters(dictionary_path: Path, tmp_path: Path) -> None:
+def test_a_voice_can_bring_its_own_letters(
+    dictionary_path: Path, tmp_path: Path
+) -> None:
     path = tmp_path / "lt_raides.tsv"
     path.write_text("# own file\nel\tˈeːl\n", encoding="utf-8")
     phonemizer = LithuanianPhonemizer(dictionary_path, letters_path=path)
@@ -180,7 +182,7 @@ def test_letter_l_is_not_read_as_a_word() -> None:
 
 
 def test_the_abbreviation_keeps_its_expansion() -> None:
-    """"el. paštas" (e-mail) is a real abbreviation, not the letter L."""
+    """ "el. paštas" (e-mail) is a real abbreviation, not the letter L."""
     assert letter_ipa("el", "paštas") is None
 
 

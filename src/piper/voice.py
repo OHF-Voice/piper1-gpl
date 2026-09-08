@@ -4,7 +4,6 @@ import itertools
 import json
 import logging
 import re
-import threading
 import unicodedata
 import wave
 from dataclasses import dataclass

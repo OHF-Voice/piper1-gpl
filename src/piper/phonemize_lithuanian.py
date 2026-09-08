@@ -66,9 +66,9 @@ load_letters(). Both files are data a voice may replace: pass its own paths to
 LithuanianPhonemizer instead of patching piper."""
 
 # Pitch accent marks.
-ACUTE = "ˈ"        # tvirtapradė (falling), U+02C8 - espeak primary stress
-CIRCUMFLEX = "ˌ"   # tvirtagalė (rising), U+02CC - espeak secondary stress
-GRAVE = "ˋ"        # trumpinė (short), U+02CB
+ACUTE = "ˈ"  # tvirtapradė (falling), U+02C8 - espeak primary stress
+CIRCUMFLEX = "ˌ"  # tvirtagalė (rising), U+02CC - espeak secondary stress
+GRAVE = "ˋ"  # trumpinė (short), U+02CB
 STRESS_MARKS = ACUTE + CIRCUMFLEX + GRAVE
 
 PHONEME_ID_MAP_NOTE = """
@@ -127,12 +127,16 @@ def load_letters(path: Union[str, Path]) -> Letters:
             parts = line.rstrip("\n").split("\t")
             if len(parts) < 2 or not parts[1]:
                 continue
-            prefixes = tuple(p for p in parts[2].split(",") if p) if len(parts) > 2 else ()
+            prefixes = (
+                tuple(p for p in parts[2].split(",") if p) if len(parts) > 2 else ()
+            )
             letters[parts[0].lower()] = (parts[1], prefixes)
     return letters
 
 
-def letter_ipa(word: str, next_word: str = "", letters: Optional[Letters] = None) -> Optional[str]:
+def letter_ipa(
+    word: str, next_word: str = "", letters: Optional[Letters] = None
+) -> Optional[str]:
     """IPA for a letter name, or None when it is a genuine abbreviation."""
     global _DEFAULT_LETTERS
     if letters is None:
@@ -155,7 +159,9 @@ def ipa_vowel_groups(ipa: str) -> List[int]:
     while i < len(ipa):
         if ipa[i] in IPA_VOWELS:
             start = i
-            while i + 1 < len(ipa) and (ipa[i + 1] in IPA_VOWELS or ipa[i + 1] == LENGTH):
+            while i + 1 < len(ipa) and (
+                ipa[i + 1] in IPA_VOWELS or ipa[i + 1] == LENGTH
+            ):
                 i += 1
             groups.append(start)
         i += 1
@@ -175,12 +181,12 @@ def place_accent(ipa: str, group_index: Optional[int], mark: str) -> str:
     while i >= 0 and clean[i] in CONSONANT_MODIFIERS:
         i -= 1
     if i >= 0 and clean[i] not in IPA_VOWELS and clean[i] not in " " + LENGTH:
-        i -= 1                                   # one consonant
+        i -= 1  # one consonant
     boundary = i + 1
     j = i
     while j >= 0 and clean[j] not in IPA_VOWELS and clean[j] != " ":
         j -= 1
-    if j < 0 or clean[j] == " ":                 # word start
+    if j < 0 or clean[j] == " ":  # word start
         boundary = j + 1
     return clean[:boundary] + mark + clean[boundary:]
 
@@ -236,7 +242,9 @@ class LithuanianPhonemizer:
         """
         self.dictionary = load_dictionary(dictionary_path)
         _LOGGER.debug(
-            "Loaded %s dictionary entries from %s", len(self.dictionary), dictionary_path
+            "Loaded %s dictionary entries from %s",
+            len(self.dictionary),
+            dictionary_path,
         )
         self.letters = load_letters(letters_path)
         self.espeak = EspeakPhonemizer(espeak_data_dir)
