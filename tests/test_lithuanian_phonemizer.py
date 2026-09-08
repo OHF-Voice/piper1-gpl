@@ -225,3 +225,19 @@ def test_two_accents_reuse_default_stress_marks() -> None:
     assert ACUTE in DEFAULT_PHONEME_ID_MAP
     assert CIRCUMFLEX in DEFAULT_PHONEME_ID_MAP
     assert GRAVE not in DEFAULT_PHONEME_ID_MAP
+
+
+def test_id_166_stays_free_for_the_grave_accent() -> None:
+    """Every Lithuanian voice config is the default map plus {ˋ: [166]}, so
+    the default map must keep ending at 165."""
+    ids = [i for v in DEFAULT_PHONEME_ID_MAP.values() for i in v]
+    assert max(ids) == 165
+    assert 166 not in ids
+
+
+def test_espeak_cache_is_bounded(dictionary_path: Path) -> None:
+    phonemizer = LithuanianPhonemizer(dictionary_path)
+    phonemizer.cache_limit = 2
+    for word in ["dabar", "diena", "maistas", "kalbėdamas"]:
+        phonemizer.phonemize_word(word)
+    assert len(phonemizer._cache) <= 2

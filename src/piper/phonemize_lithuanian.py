@@ -26,6 +26,10 @@ separately, so the output is deterministic per word) and then:
    ˋ (trumpinė, grave; U+02CB, the one symbol added to the default phoneme
    id map - see PHONEME_ID_MAP_NOTE below).
 
+Phoneme id 166 is reserved for ˋ: the default map has 166 entries with ids
+0-165, and every Lithuanian voice config is that map plus {"ˋ": [166]}. Any
+future change to the default map must keep 166 free for this symbol.
+
 Words missing from the dictionary keep espeak-ng's own stress placement.
 
 Scope (Phase 1): dictionary lookup only, no sentence context. Lithuanian
@@ -82,8 +86,26 @@ CONSONANT_MODIFIERS = "ʲʷʰ̩"
 
 _LT_LETTERS = "a-zA-ZąčęėįšųūžĄČĘĖĮŠŲŪŽ"
 _WORD_CLEAN = re.compile(f"[^{_LT_LETTERS}0-9]")
+
+# Words are phonemized one at a time (dictionary lookup and the per-word cache
+# need that), so espeak-ng never sees a clause and its own punctuation handling
+# does not apply. This reproduces the convention of phonemize_espeak.py
+# instead: the punctuation a word carries is kept and appended to its
+# phonemes; ", : ;" are followed by a space because words are joined with one;
+# ". ! ?" end the sentence, so they close the sentence list the same way
+# espeak's end_of_sentence does. Other characters (quotes, dashes, brackets)
+# are dropped, as espeak drops them.
 _KEEP_PUNCT = ".,!?:;"
+
+# Sentence boundaries by regex, like phonemize_thai.py. sentence_stream is an
+# optional dependency of the "zh" extra only (it ships with Chinese, not with
+# piper), and the Lithuanian voice must work from a plain "pip install piper".
 _SENTENCE_SPLIT = re.compile(r"(?<=[.!?…])\s+")
+
+# espeak-ng is called once per distinct word, and the result is cached for the
+# life of the voice. The bound is comfortably above the whole dictionary
+# (189k words, a few MB); once reached the cache is simply dropped.
+CACHE_LIMIT = 250_000
 
 # letter -> (IPA, word prefixes after which it is an abbreviation instead)
 Letters = Dict[str, Tuple[str, Tuple[str, ...]]]
@@ -220,10 +242,13 @@ class LithuanianPhonemizer:
         self.espeak = EspeakPhonemizer(espeak_data_dir)
         self.expand_text = expand_text
         self._cache: Dict[str, str] = {}
+        self.cache_limit = CACHE_LIMIT
 
     def _espeak_word(self, word: str) -> str:
         ipa = self._cache.get(word)
         if ipa is None:
+            if len(self._cache) >= self.cache_limit:
+                self._cache.clear()
             # set_voice() is process-global: take the same lock PiperVoice
             # takes, so a Lithuanian voice served beside another cannot race.
             with ESPEAK_LOCK:
