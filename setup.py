@@ -30,6 +30,15 @@ HEBREW_DATA_FILES = [
         "SOURCE",
     )
 ]
+LITHUANIAN_DATA_DIR = MODULE_DIR / "lithuanian"
+LITHUANIAN_DATA_FILES = [
+    (LITHUANIAN_DATA_DIR / f_name).relative_to(MODULE_DIR)
+    for f_name in (
+        "lt_kirciai.tsv",
+        "LICENSE",
+        "SOURCE",
+    )
+]
 # Web page and images for the HTTP server
 HTTP_DATA_FILES = [
     f.relative_to(MODULE_DIR)
@@ -141,6 +150,7 @@ setup(
                 ESPEAK_NG_DATA_FILES,
                 TASHKEEL_DATA_FILES,
                 HEBREW_DATA_FILES,
+                LITHUANIAN_DATA_FILES,
                 HTTP_DATA_FILES,
             )
         ],

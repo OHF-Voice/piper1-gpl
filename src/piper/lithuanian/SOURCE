@@ -1,0 +1,7 @@
+lt_kirciai.tsv - Lithuanian stress dictionary (word, vowel group index, pitch accent mark).
+
+Built from two CC-BY-4.0 sources:
+  https://huggingface.co/datasets/meldynamics/liepa-tts   LIEPA corpus annotation (Vilnius University)
+  https://github.com/svogunas/g2p-lt-lexicon               pronunciation lexicon (Arunas Smaliukas)
+
+Build script and manual corrections: https://github.com/RobertasTa/reginute (sudaryk_zodyna.py)

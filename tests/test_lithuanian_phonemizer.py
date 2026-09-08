@@ -10,10 +10,9 @@ from piper.phoneme_ids import DEFAULT_PHONEME_ID_MAP
 from piper.phonemize_lithuanian import (
     ACUTE,
     CIRCUMFLEX,
-    DICTIONARY_NAME,
+    DEFAULT_DICTIONARY_PATH,
     GRAVE,
     LithuanianPhonemizer,
-    find_dictionary,
     ipa_vowel_groups,
     letter_ipa,
     load_dictionary,
@@ -31,45 +30,46 @@ _DICTIONARY = "\n".join(
 )
 
 
-@pytest.fixture(name="data_dir", scope="module")
-def data_dir_fixture(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    """A voice directory with the dictionary in <data_dir>/lithuanian/."""
-    data_dir = tmp_path_factory.mktemp("lt_voice")
-    lithuanian_dir = data_dir / "lithuanian"
-    lithuanian_dir.mkdir()
-    (lithuanian_dir / DICTIONARY_NAME).write_text(_DICTIONARY, encoding="utf-8")
-    return data_dir
+@pytest.fixture(name="dictionary_path", scope="module")
+def dictionary_path_fixture(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """A small dictionary of known entries, so accent placement is tested
+    against expected values rather than against the shipped 189k-word file."""
+    path = tmp_path_factory.mktemp("lt") / "lt_kirciai.tsv"
+    path.write_text(_DICTIONARY, encoding="utf-8")
+    return path
 
 
 @pytest.fixture(name="phonemizer", scope="module")
-def phonemizer_fixture(data_dir: Path) -> LithuanianPhonemizer:
-    return LithuanianPhonemizer(data_dir)
+def phonemizer_fixture(dictionary_path: Path) -> LithuanianPhonemizer:
+    return LithuanianPhonemizer(dictionary_path)
 
 
 # -----------------------------------------------------------------------------
-# Dictionary lookup
+# Dictionary
 # -----------------------------------------------------------------------------
 
 
-def test_dictionary_found_in_subdirectory(data_dir: Path) -> None:
-    assert find_dictionary([data_dir]) == data_dir / "lithuanian" / DICTIONARY_NAME
+def test_dictionary_ships_with_piper() -> None:
+    """Package data, like the Hebrew model: pip install, download the voice,
+    it works."""
+    assert DEFAULT_DICTIONARY_PATH.is_file()
+    assert len(load_dictionary(DEFAULT_DICTIONARY_PATH)) > 100_000
 
 
-def test_dictionary_found_in_data_dir_root(tmp_path: Path) -> None:
-    """<data_dir>/<name> is the fallback, as with g2pW data."""
-    (tmp_path / DICTIONARY_NAME).write_text(_DICTIONARY, encoding="utf-8")
-    assert find_dictionary([tmp_path]) == tmp_path / DICTIONARY_NAME
+def test_default_phonemizer_needs_no_arguments() -> None:
+    """The training path and PiperVoice both construct it without a path."""
+    ipa = LithuanianPhonemizer().phonemize_word("dabar")
+    assert sum(ipa.count(m) for m in (ACUTE, CIRCUMFLEX, GRAVE)) == 1
 
 
-def test_missing_dictionary_says_where_it_looked(tmp_path: Path) -> None:
-    with pytest.raises(FileNotFoundError) as err:
-        find_dictionary([tmp_path])
-    assert DICTIONARY_NAME in str(err.value)
-    assert str(tmp_path) in str(err.value)
+def test_missing_dictionary_names_the_path(tmp_path: Path) -> None:
+    missing = tmp_path / "nera.tsv"
+    with pytest.raises(FileNotFoundError, match="nera.tsv"):
+        LithuanianPhonemizer(missing)
 
 
 def test_malformed_lines_are_skipped(tmp_path: Path) -> None:
-    path = tmp_path / DICTIONARY_NAME
+    path = tmp_path / "lt_kirciai.tsv"
     path.write_text(
         "geras\t0\t" + ACUTE + "\nbroken line\nzodis\t0\tX\n", encoding="utf-8"
     )
@@ -163,9 +163,9 @@ def test_punctuation_is_kept(phonemizer: LithuanianPhonemizer) -> None:
     assert "?" in "".join(phonemizer.phonemize("Dabar?")[0])
 
 
-def test_expand_text_hook_runs_before_phonemization(data_dir: Path) -> None:
+def test_expand_text_hook_runs_before_phonemization(dictionary_path: Path) -> None:
     """Number/abbreviation expansion ships with the voice, not with piper."""
-    phonemizer = LithuanianPhonemizer(data_dir, expand_text=lambda t: "dabar")
+    phonemizer = LithuanianPhonemizer(dictionary_path, expand_text=lambda t: "dabar")
     assert phonemizer.phonemize("123") == phonemizer.phonemize("dabar")
 
 

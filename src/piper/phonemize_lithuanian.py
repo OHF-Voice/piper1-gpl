@@ -34,7 +34,7 @@ import logging
 import re
 import unicodedata
 from pathlib import Path
-from typing import Callable, Dict, Iterable, List, Optional, Tuple, Union
+from typing import Callable, Dict, List, Optional, Tuple, Union
 
 from .phonemize_espeak import ESPEAK_DATA_DIR, EspeakPhonemizer
 
@@ -42,11 +42,12 @@ _LOGGER = logging.getLogger(__name__)
 
 ESPEAK_VOICE = "lt"
 
-DICTIONARY_NAME = "lt_kirciai.tsv"
-"""Stress dictionary file name, looked up inside the data directories."""
-
-DATA_SUBDIR = "lithuanian"
-"""Sub-directory checked first inside each data directory."""
+LITHUANIAN_DIR = Path(__file__).parent / "lithuanian"
+DEFAULT_DICTIONARY_PATH = LITHUANIAN_DIR / "lt_kirciai.tsv"
+"""Stress dictionary shipped with piper as package data, the way the Hebrew
+Nakdimon model is: word <TAB> vowel group index <TAB> pitch accent mark. Built
+from the liepa-tts corpus annotation and svogunas/g2p-lt-lexicon, both
+CC-BY-4.0; see LICENSE and SOURCE in that directory."""
 
 # Pitch accent marks.
 ACUTE = "ˈ"        # tvirtapradė (falling), U+02C8 - espeak primary stress
@@ -164,36 +165,19 @@ def load_dictionary(path: Union[str, Path]) -> Dict[str, Tuple[int, str]]:
     return entries
 
 
-def find_dictionary(data_dirs: Iterable[Union[str, Path]]) -> Path:
-    """Locate the stress dictionary, the same way g2pW data is resolved:
-    <data_dir>/lithuanian/<name> first, then <data_dir>/<name>."""
-    checked: List[Path] = []
-    for data_dir in data_dirs:
-        for candidate in (Path(data_dir) / DATA_SUBDIR / DICTIONARY_NAME,
-                          Path(data_dir) / DICTIONARY_NAME):
-            _LOGGER.debug("Checking '%s'", candidate)
-            checked.append(candidate)
-            if candidate.exists():
-                return candidate
-    raise FileNotFoundError(
-        f"Lithuanian stress dictionary '{DICTIONARY_NAME}' not found. It is "
-        f"distributed with the voice. Checked: "
-        + ", ".join(str(p) for p in checked)
-    )
-
-
 class LithuanianPhonemizer:
     """Phonemize Lithuanian text using espeak-ng IPA and a stress dictionary."""
 
     def __init__(
         self,
-        data_dirs: Union[str, Path, Iterable[Union[str, Path]]],
+        dictionary_path: Union[str, Path] = DEFAULT_DICTIONARY_PATH,
         espeak_data_dir: Union[str, Path] = ESPEAK_DATA_DIR,
         expand_text: Optional[Callable[[str], str]] = None,
     ) -> None:
         """
-        :param data_dirs: Directory (or directories) to search for the stress
-            dictionary, checked as <data_dir>/lithuanian/ then <data_dir>/.
+        :param dictionary_path: Stress dictionary (word, vowel group index,
+            accent mark). Defaults to the one shipped with piper, so a voice
+            needs no extra files; pass another path to override it.
         :param espeak_data_dir: Path to espeak-ng data dir.
         :param expand_text: Optional text normalizer applied before
             phonemization. Lithuanian number and abbreviation expansion is
@@ -201,9 +185,10 @@ class LithuanianPhonemizer:
             orthographic rather than phonemic; without it, digits are read by
             espeak-ng with the wrong case endings.
         """
-        if isinstance(data_dirs, (str, Path)):
-            data_dirs = [data_dirs]
-        self.dictionary = load_dictionary(find_dictionary(data_dirs))
+        self.dictionary = load_dictionary(dictionary_path)
+        _LOGGER.debug(
+            "Loaded %s dictionary entries from %s", len(self.dictionary), dictionary_path
+        )
         self.espeak = EspeakPhonemizer(espeak_data_dir)
         self.expand_text = expand_text
         self._cache: Dict[str, str] = {}
