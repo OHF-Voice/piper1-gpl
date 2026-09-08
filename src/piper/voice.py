@@ -161,9 +161,11 @@ class PiperVoice:
             _LOGGER.debug("Using CUDA")
         else:
             providers = ["CPUExecutionProvider"]
-            available_cores = len(os.sched_getaffinity(0))
-            session_options.intra_op_num_threads = available_cores
-
+            try:
+                session_options.intra_op_num_threads = len(os.sched_getaffinity(0))
+            except AttributeError:
+                # sched_getaffinity only available on Linux
+                pass
 
         if download_dir is None:
             download_dir = Path.cwd()
