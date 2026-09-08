@@ -10,8 +10,14 @@ both meaning and pronunciation in Lithuanian (kártas "a time" vs kar̃tas
 This phonemizer keeps espeak-ng as the phoneme source (each word is phonemized
 separately, so the output is deterministic per word) and then:
 
-1. replaces the retroflex ʂ that espeak-ng emits for plain "s" in some
-   contexts (Lithuanian has no retroflex consonants) with s;
+1. replaces the ʂ that espeak-ng emits for plain "s" in some contexts
+   (visi -> vʲɪʂi) with s. The other retroflex symbol, ɭ, is deliberately
+   kept: it is espeak-ng's soft (palatalized) l, the only l it produces
+   before front vowels (žalias -> ʒaɭes, valdyba -> vaɭdʲiːba), against the
+   syllabic l̩ it uses for the hard l (labas -> l̩abas). In the LIEPA training
+   data ɭ appears 3117 times and ʂ never, so a voice trained on it expects
+   ɭ and has never seen ʂ; replacing ɭ would merge the two l's the voice
+   learned to tell apart;
 2. looks the word up in a stress dictionary (word -> vowel group index and
    pitch accent mark) built from the liepa-tts annotated corpus and the
    svogunas/g2p-lt-lexicon pronunciation lexicon, both CC-BY-4.0;
@@ -201,7 +207,9 @@ class LithuanianPhonemizer:
             with ESPEAK_LOCK:
                 sentences = self.espeak.phonemize(ESPEAK_VOICE, word)
             ipa = "".join("".join(s) for s in sentences).strip()
-            ipa = ipa.replace("ʂ", "s")   # Lithuanian has no retroflex s
+            # ʂ never occurs in the training data; ɭ (espeak's soft l) is
+            # kept on purpose - see the module docstring.
+            ipa = ipa.replace("ʂ", "s")
             self._cache[word] = ipa
         return ipa
 

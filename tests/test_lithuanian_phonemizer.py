@@ -121,10 +121,17 @@ def test_unknown_word_keeps_espeak_stress(phonemizer: LithuanianPhonemizer) -> N
 # -----------------------------------------------------------------------------
 
 
-def test_no_retroflex_consonants(phonemizer: LithuanianPhonemizer) -> None:
-    """espeak emits ʂ for plain "s" in some contexts; Lithuanian has none."""
+def test_espeak_s_is_never_retroflex(phonemizer: LithuanianPhonemizer) -> None:
+    """espeak emits ʂ for plain "s" in some contexts; the training data has none."""
     for word in ["visi", "senatvės", "rasti", "asmenines"]:
         assert "ʂ" not in phonemizer.phonemize_word(word)
+
+
+def test_soft_l_is_kept(phonemizer: LithuanianPhonemizer) -> None:
+    """ɭ is espeak's soft l, and the trained voice expects it (3117 times in
+    the LIEPA data); it must not be swept away together with ʂ."""
+    assert "ɭ" in phonemizer.phonemize_word("valdyba")
+    assert "ɭ" in phonemizer.phonemize_word("žalias")
 
 
 def test_espeak_calls_share_the_process_lock() -> None:
