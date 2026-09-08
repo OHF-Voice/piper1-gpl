@@ -51,9 +51,15 @@ ESPEAK_VOICE = "lt"
 LITHUANIAN_DIR = Path(__file__).parent / "lithuanian"
 DEFAULT_DICTIONARY_PATH = LITHUANIAN_DIR / "lt_kirciai.tsv"
 """Stress dictionary shipped with piper as package data, the way the Hebrew
-Nakdimon model is: word <TAB> vowel group index <TAB> pitch accent mark. Built
-from the liepa-tts corpus annotation and svogunas/g2p-lt-lexicon, both
-CC-BY-4.0; see LICENSE and SOURCE in that directory."""
+Nakdimon model is: word <TAB> vowel group index <TAB> pitch accent mark
+[<TAB> IPA vowel group index]. Built from the liepa-tts corpus annotation and
+svogunas/g2p-lt-lexicon, both CC-BY-4.0; see LICENSE and SOURCE in that
+directory. The format is documented on load_dictionary()."""
+
+DEFAULT_LETTERS_PATH = LITHUANIAN_DIR / "lt_raides.tsv"
+"""Letter names espeak-ng gets wrong when a word is spelled out; see
+load_letters(). Both files are data a voice may replace: pass its own paths to
+LithuanianPhonemizer instead of patching piper."""
 
 # Pitch accent marks.
 ACUTE = "ˈ"        # tvirtapradė (falling), U+02C8 - espeak primary stress
@@ -74,50 +80,48 @@ LENGTH = "ː"
 # Symbols that attach to the preceding consonant (palatalization, syllabic l̩).
 CONSONANT_MODIFIERS = "ʲʷʰ̩"
 
-# espeak-ng splits some Lithuanian diphthongs into three sounds
-# ("vaikai" -> vaːjɪkai, "asociacijos" -> asoːtsʲijatsʲɪjoːs), so the vowel
-# group index from the dictionary (counted on letters) points one group too
-# early. A pattern fix is unsafe (the same shape is legitimate in
-# "apdorojimo", "atnaujintas"), so these are the measured exceptions:
-# word -> IPA vowel group index that actually carries the accent.
-IPA_GROUP_OVERRIDES: Dict[str, int] = {
-    "vaikai": 2, "vaikų": 2, "taika": 2, "taikos": 2, "paieška": 2,
-    "palaikai": 3, "palaikų": 3,
-    "asociacijos": 2, "asociacijų": 2, "oficialų": 2, "potencialu": 4,
-}
-
-# espeak-ng's Lithuanian dictionary expands "el" to "elektroninis", because
-# "el." is the common abbreviation for "el. paštas" (e-mail). That is correct
-# for the abbreviation but wrong for the letter name of L, which appears in
-# every spelled-out abbreviation containing it (LRT, MTL, LT). The letter form
-# below matches the corpus' own phoneme inventory: espeak renders a final
-# Lithuanian "l" as the syllabic l̩ used throughout the training data.
-# A trailing period is not enough to tell the two apart: at the end of a
-# sentence ("skambinkite į MTL.") the letter also carries one, so the
-# abbreviation is recognized by the word that follows it instead.
-#
-# "i" is lengthened for the same reason a listener asked for it: as the last
-# letter of a spelled-out abbreviation ("VMI") a short i is simply not heard.
-# In the corpus the letter name appears mid-sentence, where it is short.
-LETTER_IPA: Dict[str, str] = {
-    "el": "ˈel̩",
-    "i": "ˈiː",
-}
-ABBREVIATION_FOLLOWERS: Dict[str, Tuple[str, ...]] = {"el": ("pašt",)}
-
 _LT_LETTERS = "a-zA-ZąčęėįšųūžĄČĘĖĮŠŲŪŽ"
 _WORD_CLEAN = re.compile(f"[^{_LT_LETTERS}0-9]")
 _KEEP_PUNCT = ".,!?:;"
 _SENTENCE_SPLIT = re.compile(r"(?<=[.!?…])\s+")
 
+# letter -> (IPA, word prefixes after which it is an abbreviation instead)
+Letters = Dict[str, Tuple[str, Tuple[str, ...]]]
+_DEFAULT_LETTERS: Optional[Letters] = None
 
-def letter_ipa(word: str, next_word: str = "") -> Optional[str]:
+
+def load_letters(path: Union[str, Path]) -> Letters:
+    """letter<TAB>IPA[<TAB>prefix,prefix]  ->  {letter: (IPA, prefixes)}
+
+    Letter names espeak-ng gets wrong when a word is spelled out ("el" is
+    expanded to "elektroninis"), and the words after which the same token is a
+    real abbreviation rather than a letter ("el. paštas"). Lines starting with
+    # are comments; the shipped file explains each entry."""
+    letters: Letters = {}
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            if line.startswith("#"):
+                continue
+            parts = line.rstrip("\n").split("\t")
+            if len(parts) < 2 or not parts[1]:
+                continue
+            prefixes = tuple(p for p in parts[2].split(",") if p) if len(parts) > 2 else ()
+            letters[parts[0].lower()] = (parts[1], prefixes)
+    return letters
+
+
+def letter_ipa(word: str, next_word: str = "", letters: Optional[Letters] = None) -> Optional[str]:
     """IPA for a letter name, or None when it is a genuine abbreviation."""
-    w = word.lower()
-    ipa = LETTER_IPA.get(w)
-    if ipa is None:
+    global _DEFAULT_LETTERS
+    if letters is None:
+        if _DEFAULT_LETTERS is None:
+            _DEFAULT_LETTERS = load_letters(DEFAULT_LETTERS_PATH)
+        letters = _DEFAULT_LETTERS
+    entry = letters.get(word.lower())
+    if entry is None:
         return None
-    for prefix in ABBREVIATION_FOLLOWERS.get(w, ()):
+    ipa, prefixes = entry
+    for prefix in prefixes:
         if next_word.lower().startswith(prefix):
             return None
     return ipa
@@ -160,14 +164,28 @@ def place_accent(ipa: str, group_index: Optional[int], mark: str) -> str:
 
 
 def load_dictionary(path: Union[str, Path]) -> Dict[str, Tuple[int, str]]:
-    """word<TAB>vowel group index<TAB>mark  ->  {word: (index, mark)}"""
+    """word<TAB>vowel group index<TAB>mark[<TAB>IPA group index]
+    ->  {word: (group index to accent, mark)}
+
+    The second column counts vowel groups on the letters of the word. That is
+    also the vowel group count of espeak-ng's IPA for nearly every word, but
+    espeak splits some diphthongs into three sounds ("vaikai" -> vaːjɪkai,
+    "asociacijos" -> asoːtsʲijatsʲɪjoːs), and there the letter count points
+    one group too early. A pattern fix is unsafe (the same IPA shape is
+    legitimate in "apdorojimo", "atnaujintas"), so such words carry an
+    optional fourth column with the IPA vowel group index that actually
+    holds the accent; when present it is the index returned. Lines starting
+    with # and lines that do not fit are skipped."""
     entries: Dict[str, Tuple[int, str]] = {}
     with open(path, "r", encoding="utf-8") as f:
         for line in f:
-            parts = line.rstrip("\n").split("\t")
-            if len(parts) != 3 or parts[2] not in STRESS_MARKS:
+            if line.startswith("#"):
                 continue
-            entries[parts[0]] = (int(parts[1]), parts[2])
+            parts = line.rstrip("\n").split("\t")
+            if len(parts) not in (3, 4) or parts[2] not in STRESS_MARKS:
+                continue
+            group = parts[3] if len(parts) == 4 else parts[1]
+            entries[parts[0]] = (int(group), parts[2])
     return entries
 
 
@@ -179,12 +197,15 @@ class LithuanianPhonemizer:
         dictionary_path: Union[str, Path] = DEFAULT_DICTIONARY_PATH,
         espeak_data_dir: Union[str, Path] = ESPEAK_DATA_DIR,
         expand_text: Optional[Callable[[str], str]] = None,
+        letters_path: Union[str, Path] = DEFAULT_LETTERS_PATH,
     ) -> None:
         """
         :param dictionary_path: Stress dictionary (word, vowel group index,
             accent mark). Defaults to the one shipped with piper, so a voice
             needs no extra files; pass another path to override it.
         :param espeak_data_dir: Path to espeak-ng data dir.
+        :param letters_path: Letter-name corrections (see load_letters).
+            Defaults to the shipped file; a voice may pass its own.
         :param expand_text: Optional text normalizer applied before
             phonemization. Lithuanian number and abbreviation expansion is
             distributed with the voice rather than here, because it is
@@ -195,6 +216,7 @@ class LithuanianPhonemizer:
         _LOGGER.debug(
             "Loaded %s dictionary entries from %s", len(self.dictionary), dictionary_path
         )
+        self.letters = load_letters(letters_path)
         self.espeak = EspeakPhonemizer(espeak_data_dir)
         self.expand_text = expand_text
         self._cache: Dict[str, str] = {}
@@ -228,7 +250,6 @@ class LithuanianPhonemizer:
                     ipa = ipa[:p] + ACUTE + ipa[p:]
             return ipa
         group_index, mark = entry
-        group_index = IPA_GROUP_OVERRIDES.get(word.lower(), group_index)
         return place_accent(ipa, group_index, mark)
 
     def phonemize_sentence(self, sentence: str) -> str:
@@ -242,7 +263,9 @@ class LithuanianPhonemizer:
                 if punct and pieces:
                     pieces[-1] += punct
                 continue
-            override = letter_ipa(word, words[i + 1] if i + 1 < len(words) else "")
+            override = letter_ipa(
+                word, words[i + 1] if i + 1 < len(words) else "", self.letters
+            )
             pieces.append((override or self.phonemize_word(word)) + punct)
         return " ".join(pieces)
 

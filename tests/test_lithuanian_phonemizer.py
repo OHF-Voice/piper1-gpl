@@ -11,11 +11,13 @@ from piper.phonemize_lithuanian import (
     ACUTE,
     CIRCUMFLEX,
     DEFAULT_DICTIONARY_PATH,
+    DEFAULT_LETTERS_PATH,
     GRAVE,
     LithuanianPhonemizer,
     ipa_vowel_groups,
     letter_ipa,
     load_dictionary,
+    load_letters,
     place_accent,
 )
 
@@ -71,10 +73,39 @@ def test_missing_dictionary_names_the_path(tmp_path: Path) -> None:
 def test_malformed_lines_are_skipped(tmp_path: Path) -> None:
     path = tmp_path / "lt_kirciai.tsv"
     path.write_text(
-        "geras\t0\t" + ACUTE + "\nbroken line\nzodis\t0\tX\n", encoding="utf-8"
+        "# comment\ngeras\t0\t" + ACUTE + "\nbroken line\nzodis\t0\tX\n",
+        encoding="utf-8",
     )
     entries = load_dictionary(path)
     assert entries == {"geras": (0, ACUTE)}
+
+
+def test_fourth_column_overrides_the_group_index(tmp_path: Path) -> None:
+    """Where espeak splits a diphthong the dictionary names the IPA group."""
+    path = tmp_path / "lt_kirciai.tsv"
+    path.write_text("vaikai\t1\t" + CIRCUMFLEX + "\t2\n", encoding="utf-8")
+    assert load_dictionary(path) == {"vaikai": (2, CIRCUMFLEX)}
+
+
+def test_shipped_dictionary_carries_the_diphthong_overrides() -> None:
+    """The exception table that used to live in code (11 measured words)."""
+    entries = load_dictionary(DEFAULT_DICTIONARY_PATH)
+    assert entries["vaikai"] == (2, CIRCUMFLEX)
+    assert entries["potencialu"][0] == 4
+
+
+def test_letter_names_ship_with_piper() -> None:
+    letters = load_letters(DEFAULT_LETTERS_PATH)
+    assert letters["el"] == ("ˈel̩", ("pašt",))
+    assert letters["i"] == ("ˈiː", ())
+
+
+def test_a_voice_can_bring_its_own_letters(dictionary_path: Path, tmp_path: Path) -> None:
+    path = tmp_path / "lt_raides.tsv"
+    path.write_text("# own file\nel\tˈeːl\n", encoding="utf-8")
+    phonemizer = LithuanianPhonemizer(dictionary_path, letters_path=path)
+    assert "".join(phonemizer.phonemize("el")[0]) == "ˈeːl"
+    assert letter_ipa("i", letters=phonemizer.letters) is None
 
 
 # -----------------------------------------------------------------------------

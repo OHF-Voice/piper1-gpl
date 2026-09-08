@@ -1,4 +1,7 @@
-lt_kirciai.tsv - Lithuanian stress dictionary (word, vowel group index, pitch accent mark).
+lt_kirciai.tsv - Lithuanian stress dictionary (word, vowel group index, pitch accent mark,
+                 optional IPA vowel group index where espeak-ng splits a diphthong).
+lt_raides.tsv  - letter names espeak-ng gets wrong when a word is spelled out
+                 (own work, GPL-3.0 like the rest of piper1-gpl).
 
 Built from two CC-BY-4.0 sources:
   https://huggingface.co/datasets/meldynamics/liepa-tts   LIEPA corpus annotation (Vilnius University)

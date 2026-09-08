@@ -35,6 +35,7 @@ LITHUANIAN_DATA_FILES = [
     (LITHUANIAN_DATA_DIR / f_name).relative_to(MODULE_DIR)
     for f_name in (
         "lt_kirciai.tsv",
+        "lt_raides.tsv",
         "LICENSE",
         "SOURCE",
     )

@@ -1,0 +1,18 @@
+# Lithuanian letter names that espeak-ng gets wrong when a word is spelled out.
+#
+# letter <TAB> IPA <TAB> word prefixes after which it is an abbreviation, not a
+# letter (comma-separated, optional). Lines starting with # are ignored.
+#
+# el: espeak-ng's Lithuanian dictionary expands "el" to "elektroninis", because
+#     "el." is the common abbreviation for "el. paštas" (e-mail). Right for the
+#     abbreviation, wrong for the letter name of L, which appears in every
+#     spelled-out abbreviation containing it (LRT, MTL, LT). A trailing period
+#     cannot tell the two apart (at the end of a sentence the letter carries
+#     one too), so the abbreviation is recognized by the word that follows.
+#     The IPA matches the corpus' own inventory: espeak renders a final
+#     Lithuanian "l" as the syllabic l̩ used throughout the training data.
+# i:  lengthened because as the last letter of a spelled-out abbreviation
+#     ("VMI") a short i is simply not heard; in the corpus the letter name
+#     appears mid-sentence, where it is short.
+el	ˈel̩	pašt
+i	ˈiː
