@@ -118,8 +118,11 @@ setup(
             # with "numpy.dtype size changed" on import. 1.10 leaves
             # scikit-learn unpinned. Lift the cap once tltk relaxes it.
             "tltk>=1.6.8,<1.11",
-            # tltk imports pandas but does not declare it (as of 1.10).
+            # tltk imports pandas and requests but declares neither (as of
+            # 1.10). requests is pulled in by tltk/__init__.py -> tltk.corpus,
+            # which runs even though we only use tltk.nlp.
             "pandas>=2,<3",
+            "requests>=2,<3",
             "unicode-rbnf>=2.4.0,<3",
         ],
     },
