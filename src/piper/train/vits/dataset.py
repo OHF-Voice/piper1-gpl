@@ -255,6 +255,16 @@ class VitsDataModule(L.LightningDataModule):
             def phonemize(text: str) -> list[list[str]]:
                 return thai_phonemizer.phonemize(text)
 
+        elif self.phoneme_type == PhonemeType.LITHUANIAN:
+            from piper.phonemize_lithuanian import LithuanianPhonemizer
+
+            # espeak-ng IPA + pitch accent dictionary (default IPA id map plus
+            # one symbol); the dictionary ships with piper as package data.
+            lithuanian_phonemizer = LithuanianPhonemizer()
+
+            def phonemize(text: str) -> list[list[str]]:
+                return lithuanian_phonemizer.phonemize(text)
+
         elif self.phoneme_type == PhonemeType.TEXT:
             # text = phonemes
 

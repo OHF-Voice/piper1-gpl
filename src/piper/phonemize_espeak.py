@@ -1,6 +1,7 @@
 """Phonemization with espeak-ng."""
 
 import re
+import threading
 import unicodedata
 from collections.abc import Sequence
 from pathlib import Path
@@ -8,6 +9,14 @@ from typing import List, Optional, Set, Tuple, Union
 
 _DIR = Path(__file__).parent
 ESPEAK_DATA_DIR = _DIR / "espeak-ng-data"
+
+ESPEAK_LOCK = threading.Lock()
+"""Held around every call into espeakbridge.
+
+espeakbridge.set_voice() is process-global: two voices phonemizing at the same
+time (http_server serving Lithuanian beside another language, say) would race
+on the current voice. PiperVoice takes this lock for its own espeak calls, and
+any other phonemizer that talks to espeak-ng must take the same one."""
 
 
 class EspeakPhonemizer:

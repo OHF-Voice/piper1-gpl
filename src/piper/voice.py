@@ -4,7 +4,6 @@ import itertools
 import json
 import logging
 import re
-import threading
 import unicodedata
 import wave
 from dataclasses import dataclass
@@ -17,11 +16,12 @@ import onnxruntime
 from .config import PhonemeType, PiperConfig, SynthesisConfig
 from .const import BOS, EOS, PAD
 from .phoneme_ids import phonemes_to_ids
-from .phonemize_espeak import ESPEAK_DATA_DIR, EspeakPhonemizer
+from .phonemize_espeak import ESPEAK_DATA_DIR, ESPEAK_LOCK, EspeakPhonemizer
 from .tashkeel import TashkeelDiacritizer
 
 _ESPEAK_PHONEMIZER: Optional[EspeakPhonemizer] = None
-_ESPEAK_PHONEMIZER_LOCK = threading.Lock()
+# One lock for every espeak-ng caller in the process (see phonemize_espeak).
+_ESPEAK_PHONEMIZER_LOCK = ESPEAK_LOCK
 
 _DEFAULT_SYNTHESIS_CONFIG = SynthesisConfig()
 _MAX_WAV_VALUE = 32767.0
@@ -253,6 +253,17 @@ class PiperVoice:
             if phonemizer is None:
                 phonemizer = ThaiPhonemizer()
                 setattr(self, "_thai_phonemizer", phonemizer)
+
+            return phonemizer.phonemize(text)
+
+        if self.config.phoneme_type == PhonemeType.LITHUANIAN:
+            from .phonemize_lithuanian import LithuanianPhonemizer
+
+            # espeak-ng IPA + pitch accent from a stress dictionary
+            phonemizer = getattr(self, "_lithuanian_phonemizer", None)
+            if phonemizer is None:
+                phonemizer = LithuanianPhonemizer(espeak_data_dir=self.espeak_data_dir)
+                setattr(self, "_lithuanian_phonemizer", phonemizer)
 
             return phonemizer.phonemize(text)
 
