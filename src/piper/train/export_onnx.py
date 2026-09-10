@@ -24,7 +24,12 @@ def main() -> None:
     parser.add_argument(
         "--output-file", required=True, help="Path to output file (.onnx)"
     )
-
+    parser.add_argument(
+        "--dynamo",
+        required=False,
+        default=True,
+        help="Old piper model require dynamo set as False to save properly"
+        )
     parser.add_argument(
         "--debug", action="store_true", help="Print DEBUG messages to the console"
     )
@@ -88,12 +93,15 @@ def main() -> None:
     scales = torch.FloatTensor([0.667, 1.0, 0.8])
     dummy_input = (sequences, sequence_lengths, scales, sid)
 
+    dynamo = args.dynamo
+
     # Export
     torch.onnx.export(
         model=model_g,
         args=dummy_input,
         f=output_path,
         verbose=False,
+        dynamo=dynamo,
         opset_version=OPSET_VERSION,
         input_names=["input", "input_lengths", "scales", "sid"],
         output_names=["output"],
