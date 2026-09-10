@@ -87,6 +87,13 @@ def main() -> None:
     parser.add_argument(
         "--no-normalize", action="store_true", help="Don't normalize audio"
     )
+    parser.add_argument(
+        "--stream",
+        action="store_true",
+        help="With --output-raw: write audio in decoder chunks as they are "
+        "synthesized instead of whole sentences (requires the voice halves "
+        "from `python3 -m piper.split`; audio is not normalized)",
+    )
     #
     parser.add_argument(
         "--data-dir",
@@ -100,6 +107,8 @@ def main() -> None:
         "--debug", action="store_true", help="Print DEBUG messages to console"
     )
     args, unknown_args = parser.parse_known_args()
+    if args.stream and not args.output_raw:
+        parser.error("--stream requires --output-raw")
     logging.basicConfig(level=logging.DEBUG if args.debug else logging.INFO)
     _LOGGER.debug(args)
 
@@ -146,7 +155,7 @@ def main() -> None:
 
     # Load voice
     _LOGGER.debug("Loading voice: '%s'", model_path)
-    voice = PiperVoice.load(model_path, use_cuda=args.cuda)
+    voice = PiperVoice.load(model_path, use_cuda=args.cuda, streaming=args.stream)
     syn_config = SynthesisConfig(
         speaker_id=args.speaker,
         length_scale=args.length_scale,
@@ -184,6 +193,15 @@ def main() -> None:
     if args.output_raw:
         # Write raw audio to stdout as its produced
         for line in lines():
+            if args.stream:
+                # Decoder chunks as they decode (see piper.split); sentence
+                # boundaries are not visible here, so no inter-sentence silence.
+                for audio_chunk in voice.synthesize_stream(line, syn_config):
+                    sys.stdout.buffer.write(audio_chunk.audio_int16_bytes)
+                    sys.stdout.buffer.flush()
+
+                continue
+
             audio_stream = voice.synthesize(line, syn_config)
             for i, audio_chunk in enumerate(audio_stream):
                 if i > 0:
