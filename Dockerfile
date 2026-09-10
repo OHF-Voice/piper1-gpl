@@ -17,12 +17,15 @@ RUN script/package
 
 FROM python:3.12-slim
 
+ARG lang=
+
 ENV PIP_BREAK_SYSTEM_PACKAGES=1
 
 WORKDIR /app
 COPY --from=builder /app/dist/piper_tts-*linux*.whl ./dist/
-RUN pip3 install ./dist/piper_tts-*linux*.whl
-RUN pip3 install 'flask>=3,<4'
+RUN WHEEL=$(ls ./dist/piper_tts-*linux*.whl) && \
+    if [ -n "${lang}" ]; then EXTRAS="http,${lang}"; else EXTRAS="http"; fi && \
+    pip3 install "$WHEEL[$EXTRAS]"
 
 COPY docker/entrypoint.sh /
 
