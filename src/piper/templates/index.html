@@ -13,6 +13,25 @@
           width: 100%;
       }
 
+      #voiceControls {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 12px 24px;
+          align-items: end;
+          margin-top: 10px;
+      }
+
+      #voiceControls label {
+          display: block;
+          font-weight: bold;
+          margin-bottom: 4px;
+      }
+
+      #voiceControls select {
+          min-width: 280px;
+          padding: 5px;
+      }
+
       #logo {
           margin-left: -30px;
           height: 6em;
@@ -138,6 +157,17 @@
 
     <textarea id="textInput" rows=5 placeholder="Enter text to speak..."></textarea>
 
+    <div id="voiceControls">
+      <div>
+        <label for="voiceSelect">Voice</label>
+        <select id="voiceSelect" aria-label="Select voice"></select>
+      </div>
+      <div id="speakerControls" style="display: none;">
+        <label for="speakerSelect">Speaker</label>
+        <select id="speakerSelect" aria-label="Select speaker"></select>
+      </div>
+    </div>
+
     <div id="divSpeak">
       <button id="buttonSpeak">Speak</button>
       <audio id="audioTTS" controls></audio>
@@ -205,6 +235,87 @@
       const buttonSpeak = document.getElementById("buttonSpeak");
       const audioTTS = document.getElementById("audioTTS");
       const timeline = document.getElementById("timeline");
+      const voiceSelect = document.getElementById("voiceSelect");
+      const speakerControls = document.getElementById("speakerControls");
+      const speakerSelect = document.getElementById("speakerSelect");
+
+      let availableVoices = {};
+
+      function updateSelectedVoice() {
+          const voiceName = voiceSelect.value;
+          const config = availableVoices[voiceName];
+          if (!config) {
+              return;
+          }
+
+          document.getElementById("voiceName").textContent = voiceName;
+          document.getElementById("voiceLanguage").textContent =
+              config.language?.name_english ||
+              config.language?.name_native ||
+              config.language?.code ||
+              config.espeak?.voice ||
+              "";
+          document.getElementById("voiceSpeakers").textContent =
+              config.num_speakers ?? 1;
+
+          const speakers = Object.entries(config.speaker_id_map || {});
+          speakerSelect.innerHTML = "";
+          for (const [name, id] of speakers) {
+              const option = document.createElement("option");
+              option.value = name;
+              option.textContent = name;
+              option.dataset.speakerId = id;
+              speakerSelect.appendChild(option);
+          }
+
+          speakerControls.style.display = speakers.length ? "" : "none";
+      }
+
+      async function loadVoices() {
+          const [voicesResponse, infoResponse] = await Promise.all([
+              fetch("voices"),
+              fetch("info"),
+          ]);
+          if (!voicesResponse.ok) {
+              throw new Error("Unable to load voices.");
+          }
+
+          availableVoices = await voicesResponse.json();
+          const info = infoResponse.ok ? await infoResponse.json() : null;
+          const defaultVoice = info?.voice?.name;
+
+          const voicesByLanguage = new Map();
+          for (const [voiceName, config] of Object.entries(availableVoices)) {
+              const language =
+                  config.language?.name_english ||
+                  config.language?.name_native ||
+                  config.language?.code ||
+                  "Other";
+              if (!voicesByLanguage.has(language)) {
+                  voicesByLanguage.set(language, []);
+              }
+              voicesByLanguage.get(language).push(voiceName);
+          }
+
+          voiceSelect.innerHTML = "";
+          const languages = Array.from(voicesByLanguage.keys()).sort();
+          for (const language of languages) {
+              const optgroup = document.createElement("optgroup");
+              optgroup.label = language;
+              for (const voiceName of voicesByLanguage.get(language).sort()) {
+                  const option = document.createElement("option");
+                  option.value = voiceName;
+                  option.textContent = voiceName;
+                  optgroup.appendChild(option);
+              }
+              voiceSelect.appendChild(optgroup);
+          }
+
+          if (defaultVoice && availableVoices[defaultVoice]) {
+              voiceSelect.value = defaultVoice;
+          }
+          updateSelectedVoice();
+      }
 
       // Segment DOM elements + their [start, end) times, for playback highlighting
       let segments = [];
@@ -469,12 +580,6 @@
 
           const info = await response.json();
 
-          // Voice section
-          document.getElementById("voiceName").textContent = info.voice.name;
-          document.getElementById("voiceLanguage").textContent = info.voice.language;
-          document.getElementById("voiceSpeakers").textContent =
-              info.voice.num_speakers;
-
           // Last utterance section
           const last = info.last;
           const lastEmpty = document.getElementById("lastEmpty");
@@ -518,7 +623,13 @@
               const response = await fetch("synthesize", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ text: text }),
+                  body: JSON.stringify({
+                      text: text,
+                      voice: voiceSelect.value,
+                      ...(speakerControls.style.display !== "none"
+                          ? { speaker: speakerSelect.value }
+                          : {}),
+                  }),
               });
 
               if (!response.ok) {
@@ -548,9 +659,10 @@
       }
 
       buttonSpeak.addEventListener("click", speak);
+      voiceSelect.addEventListener("change", updateSelectedVoice);
 
-      // Populate the voice section on page load
-      loadInfo();
+      // Populate the voice selection and status section on page load.
+      loadVoices().then(loadInfo).catch((err) => alert(err));
     </script>
 </body>
 </html>
