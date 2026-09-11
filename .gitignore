@@ -20,3 +20,6 @@ src/piper/train/vits/monotonic_align/core.c
 *.so
 
 lightning_logs/
+
+# Symlink/copy of the built espeak-ng data when working from src/
+src/piper/espeak-ng-data
