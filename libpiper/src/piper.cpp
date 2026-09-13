@@ -2,6 +2,8 @@
 #include "piper.h"
 #include "piper_impl.hpp"
 
+#include "japanese_phonemizer.h"
+
 #include <array>
 #include <cstddef>
 #include <filesystem>
@@ -47,6 +49,7 @@ auto piper_create_with_options(const piper_create_options *options)
   const char *espeak_data_path = options->espeak_data_path;
   const char *g2pw_model_dir_opt = nullptr;
   const char *data_dir_opt = nullptr;
+  const char *openjtalk_dict_dir_opt = nullptr;
 
   // Read newer fields if struct is large enough
   if (options->struct_size >= offsetof(piper_create_options, g2pw_model_dir) +
@@ -56,6 +59,10 @@ auto piper_create_with_options(const piper_create_options *options)
   if (options->struct_size >=
       offsetof(piper_create_options, data_dir) + sizeof(options->data_dir)) {
     data_dir_opt = options->data_dir;
+  }
+  if (options->struct_size >= offsetof(piper_create_options, openjtalk_dict_dir) +
+                                  sizeof(options->openjtalk_dict_dir)) {
+    openjtalk_dict_dir_opt = options->openjtalk_dict_dir;
   }
 
   // Resolve espeak_data_path via data_dir fallback
@@ -256,6 +263,54 @@ auto piper_create_with_options(const piper_create_options *options)
         }
       }
     } catch (...) {
+    }
+  }
+
+  // ---- OpenJTalk dictionary dir (Japanese) ----
+  // Resolution order: explicit openjtalk_dict_dir option, <data_dir>/openjtalk,
+  // <data_dir>, <model_dir>/openjtalk. A candidate wins when it contains the
+  // MeCab system dictionary (sys.dic).
+  std::string effective_openjtalk_dir;
+  if (openjtalk_dict_dir_opt && openjtalk_dict_dir_opt[0] != '\0') {
+    effective_openjtalk_dir = openjtalk_dict_dir_opt;
+  }
+  auto openjtalk_has_dict = [](const std::filesystem::path &d) {
+    return std::filesystem::exists(d / "sys.dic");
+  };
+  if (effective_openjtalk_dir.empty() && data_dir_opt) {
+    std::filesystem::path cand1 = std::filesystem::path(data_dir_opt) / "openjtalk";
+    std::filesystem::path cand2 = std::filesystem::path(data_dir_opt);
+    if (openjtalk_has_dict(cand1)) {
+      effective_openjtalk_dir = cand1.string();
+    } else if (openjtalk_has_dict(cand2)) {
+      effective_openjtalk_dir = cand2.string();
+    }
+  }
+  if (effective_openjtalk_dir.empty() && phoneme_type == PhonemeType::Japanese) {
+    std::filesystem::path model_dir =
+        std::filesystem::path(model_path).parent_path();
+    std::filesystem::path cand = model_dir / "openjtalk";
+    if (openjtalk_has_dict(cand)) {
+      effective_openjtalk_dir = cand.string();
+    }
+  }
+  synth->openjtalk_dict_dir = effective_openjtalk_dir;
+
+  if (phoneme_type == PhonemeType::Japanese) {
+    // The dictionary is required: without it every sentence phonemizes to
+    // nothing, which would be a silent training/inference mismatch. Fail
+    // creation instead so the caller can trigger the on-demand download.
+    try {
+      auto ph = std::make_unique<piper::JapanesePhonemizer>();
+      if (ph->load(synth->openjtalk_dict_dir)) {
+        synth->japanese_phonemizer = std::move(ph);
+      } else {
+        piper_free(synth);
+        return nullptr;
+      }
+    } catch (...) {
+      piper_free(synth);
+      return nullptr;
     }
   }
 
@@ -488,6 +543,24 @@ auto piper_synthesize_start(struct piper_synthesizer *synth, const char *text,
     }
 
     return synth->phoneme_id_queue.empty() ? PIPER_ERR_GENERIC : PIPER_OK;
+  }
+  case PhonemeType::Japanese: {
+    // OpenJTalk frontend produces one IPA+prosody string per sentence; the
+    // shared phoneme->id tail below handles the rest, exactly like Espeak.
+    if (!synth->japanese_phonemizer) {
+      return PIPER_ERR_GENERIC;
+    }
+    try {
+      sentence_phonemes.clear();
+      for (auto &s : synth->japanese_phonemizer->phonemize(text)) {
+        if (!s.empty()) {
+          sentence_phonemes.push_back(s);
+        }
+      }
+    } catch (...) {
+      return PIPER_ERR_GENERIC;
+    }
+    break;
   }
   case PhonemeType::Espeak: {
     std::size_t current_idx = 0;

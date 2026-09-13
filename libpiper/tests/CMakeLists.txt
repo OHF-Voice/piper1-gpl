@@ -38,8 +38,13 @@ add_executable(piper_test
    test_process.cpp
    test_wav_headers.cpp
    test_wavfile.cpp
+   test_japanese.cpp
 )
 enable_clang_tidy(piper_test)
+
+# So tests can include the phonemizer headers (chinese_phonemizer.h,
+# japanese_phonemizer.h) the same way test_piper.cpp already does.
+target_include_directories(piper_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
 
 target_compile_definitions(piper_test
     PRIVATE "ESPEAK_DATA_PATH=\"${CMAKE_BINARY_DIR}/espeak_ng-install/share/espeak-ng-data\""
