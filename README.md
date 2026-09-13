@@ -42,6 +42,7 @@ People/projects using Piper:
 * [POTaTOS](https://www.youtube.com/watch?v=Dz95q6XYjwY)
 * [Narration Studio](https://github.com/phyce/Narration-Studio)
 * [Basic TTS](https://basictts.com/) - Simple online text-to-speech converter.
+* [Apple Piper App](https://github.com/IhorShevchuk/piper-app) - Native iOS/macOS app for offline Piper text-to-speech.
 
 Bindings to use Piper in programming languages other than Python and C/C++:
 
