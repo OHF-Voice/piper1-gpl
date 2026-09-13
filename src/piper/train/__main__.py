@@ -1,8 +1,14 @@
 import logging
 
-import torch
-from lightning.pytorch.callbacks import ModelCheckpoint
-from lightning.pytorch.cli import LightningCLI
+try:
+    import torch
+    from lightning.pytorch.callbacks import ModelCheckpoint
+    from lightning.pytorch.cli import LightningCLI
+except ImportError as e:
+    raise SystemExit(
+        "Training requires additional dependencies. "
+        "Install with: pip install piper-tts[train]"
+    ) from e
 
 from .vits.dataset import VitsDataModule
 from .vits.lightning import VitsModel

@@ -7,7 +7,13 @@ import argparse
 import logging
 from typing import Optional, Set
 
-import onnx
+try:
+    import onnx
+except ImportError as e:
+    raise SystemExit(
+        "Alignment requires additional dependencies. "
+        "Install with: pip install piper-tts[alignment]"
+    ) from e
 
 _LOGGER = logging.getLogger(__name__)
 
