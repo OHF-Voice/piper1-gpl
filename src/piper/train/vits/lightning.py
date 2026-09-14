@@ -24,6 +24,14 @@ from .mos import MosPredictor
 
 _LOGGER = logging.getLogger(__name__)
 
+# Upstream VITS LR decay constants. They were picked for a ~20k-epoch
+# schedule; across the ~100 epochs a Piper run actually gets they shrink the
+# learning rate by about 1%, i.e. no meaningful anneal at all. Kept only as
+# the fallback for open-ended runs (max_epochs <= 0), where there is no run
+# length to anneal over.
+_UPSTREAM_LR_DECAY = 0.999875
+_UPSTREAM_LR_DECAY_D = 0.9999
+
 
 class VitsModel(L.LightningModule):
     def __init__(
@@ -74,8 +82,15 @@ class VitsModel(L.LightningModule):
         betas: tuple[float, float] = (0.8, 0.99),
         betas_d: tuple[float, float] = (0.5, 0.9),
         eps: float = 1e-9,
-        lr_decay: float = 0.999875,
-        lr_decay_d: float = 0.9999,
+        # Per-epoch ExponentialLR gamma for the generator/discriminator.
+        # Leave as None to derive a gamma that anneals the learning rate
+        # down to "lr_final_ratio" of its initial value over
+        # trainer.max_epochs -- see _resolve_lr_decay.
+        lr_decay: Optional[float] = None,
+        lr_decay_d: Optional[float] = None,
+        # Fraction of the initial learning rate to finish training at when
+        # lr_decay is derived. 1.0 disables the anneal (constant LR).
+        lr_final_ratio: float = 0.05,
         init_lr_ratio: float = 1.0,
         warmup_epochs: int = 0,
         c_mel: int = 45,
@@ -137,6 +152,10 @@ class VitsModel(L.LightningModule):
         # Only the text/phoneme agnostic portions are loaded.
         self._vocoder_warmstart_ckpt = vocoder_warmstart_ckpt
         self._warmstart_ckpt = warmstart_ckpt
+
+        # Gammas resolved in configure_optimizers, re-asserted in
+        # on_train_start after any checkpoint restore.
+        self._resolved_gammas: list[float] = []
 
         # Set up models
         self.model_g = SynthesizerTrn(
@@ -331,6 +350,53 @@ class VitsModel(L.LightningModule):
         self.manual_backward(loss_d)
         opt_d.step()
 
+    def on_train_start(self) -> None:
+        # ExponentialLR.state_dict() includes gamma, and load_state_dict()
+        # does a plain __dict__.update() -- so resuming with --ckpt_path
+        # overwrites whatever configure_optimizers just resolved with the
+        # gamma the checkpoint was written with. That would silently
+        # discard a derived anneal every time you continue an older run,
+        # which is exactly when you most want one, so re-assert it here.
+        schedulers = self.lr_schedulers()
+        if (schedulers is None) or (not self._resolved_gammas):
+            return
+
+        if not isinstance(schedulers, (list, tuple)):
+            schedulers = [schedulers]
+
+        for scheduler, gamma in zip(schedulers, self._resolved_gammas):
+            restored = getattr(scheduler, "gamma", gamma)
+            if restored != gamma:
+                _LOGGER.info(
+                    "Restored checkpoint carried gamma %s; using the "
+                    "configured %s instead.",
+                    restored,
+                    gamma,
+                )
+                scheduler.gamma = gamma
+
+    def on_train_epoch_end(self) -> None:
+        # Step the LR schedulers ourselves. automatic_optimization is False,
+        # and under manual optimization Lightning never touches the
+        # schedulers returned by configure_optimizers -- so without this they
+        # are inert and the learning rate stays pinned at its initial value
+        # for the entire run. (Checkpoints written before this fix all show
+        # lr_schedulers last_epoch=0 no matter how many epochs they ran.)
+        schedulers = self.lr_schedulers()
+        if schedulers is None:
+            return
+
+        if not isinstance(schedulers, (list, tuple)):
+            schedulers = [schedulers]
+
+        # Log the LR that was in force for the epoch just finished, before
+        # advancing the schedule.
+        for name, scheduler in zip(("lr_g", "lr_d"), schedulers):
+            self.log(name, scheduler.get_last_lr()[0], batch_size=self.batch_size)
+
+        for scheduler in schedulers:
+            scheduler.step()
+
     def validation_step(self, batch: Batch, batch_idx: int):
         loss_g, _loss_d, metrics = self._compute_loss(batch)
         val_loss = loss_g  # kept for backwards compatibility
@@ -402,6 +468,50 @@ class VitsModel(L.LightningModule):
             val_mos = sum(mos_scores) / len(mos_scores)
             self.log("val_mos", val_mos, prog_bar=True, sync_dist=True)
 
+    def _resolve_lr_decay(
+        self, explicit: Optional[float], fallback: float, name: str
+    ) -> float:
+        """Per-epoch ExponentialLR gamma, derived from run length if unset.
+
+        The upstream constants assume a schedule two orders of magnitude
+        longer than a Piper run, so hard-coding one leaves the learning rate
+        effectively constant. Deriving it from max_epochs makes the LR
+        actually land at lr_final_ratio x its initial value by the end of
+        training, which is what lets the model settle instead of wandering.
+        """
+        if explicit is not None:
+            return explicit
+
+        ratio = self.hparams.lr_final_ratio
+        if not 0.0 < ratio <= 1.0:
+            raise ValueError(f"lr_final_ratio must be in (0, 1], got {ratio}")
+
+        max_epochs = getattr(getattr(self, "_trainer", None), "max_epochs", None)
+        if (not max_epochs) or (max_epochs <= 0):
+            _LOGGER.warning(
+                "%s is unset and max_epochs is open-ended (%s), so the "
+                "learning rate cannot be annealed over the run; falling back "
+                "to the upstream gamma %s, which decays it by only ~1%% per "
+                "100 epochs. Set --trainer.max_epochs for a real anneal, or "
+                "--model.%s to pick a gamma yourself.",
+                name,
+                max_epochs,
+                fallback,
+                name,
+            )
+            return fallback
+
+        gamma = ratio ** (1.0 / max_epochs)
+        _LOGGER.info(
+            "%s derived as %.6f: anneals the learning rate to %.3gx its "
+            "initial value over %s epochs.",
+            name,
+            gamma,
+            ratio,
+            max_epochs,
+        )
+        return gamma
+
     def configure_optimizers(self):
         # The discriminator optimizer also drives the MRD when enabled, so its
         # parameters are updated by the same opt_d.step() in training_step.
@@ -423,12 +533,20 @@ class VitsModel(L.LightningModule):
                 eps=self.hparams.eps,
             ),
         ]
+        self._resolved_gammas = [
+            self._resolve_lr_decay(
+                self.hparams.lr_decay, _UPSTREAM_LR_DECAY, "lr_decay"
+            ),
+            self._resolve_lr_decay(
+                self.hparams.lr_decay_d, _UPSTREAM_LR_DECAY_D, "lr_decay_d"
+            ),
+        ]
         schedulers = [
             torch.optim.lr_scheduler.ExponentialLR(
-                optimizers[0], gamma=self.hparams.lr_decay
+                optimizers[0], gamma=self._resolved_gammas[0]
             ),
             torch.optim.lr_scheduler.ExponentialLR(
-                optimizers[1], gamma=self.hparams.lr_decay_d
+                optimizers[1], gamma=self._resolved_gammas[1]
             ),
         ]
 

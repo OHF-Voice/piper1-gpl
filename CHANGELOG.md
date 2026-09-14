@@ -2,6 +2,15 @@
 
 ## 1.8.0
 
+- Fix the training learning rate never decaying
+    - `VitsModel` sets `automatic_optimization = False`, and under manual optimization Lightning does not step the schedulers returned by `configure_optimizers` — nothing else did either, so the learning rate stayed pinned at its initial value for the whole run
+    - Every checkpoint written before this reports `lr_schedulers` `last_epoch=0` no matter how many epochs it trained
+    - `on_train_epoch_end` now steps both schedulers, and logs `lr_g`/`lr_d`
+- Derive `--model.lr_decay`/`--model.lr_decay_d` from `--trainer.max_epochs` when they are not set explicitly
+    - The old default (`0.999875`, from upstream VITS) assumes a ~20,000-epoch schedule and decays the learning rate by only ~1% per 100 epochs, so simply stepping the scheduler would have changed almost nothing
+    - The derived decay anneals to `--model.lr_final_ratio` (default `0.05`) of the initial learning rate over the run; `--model.lr_final_ratio 1.0` keeps it constant
+    - Open-ended runs (`max_epochs=-1`, the default) have no run length to anneal over and still fall back to the upstream constants, with a warning
+    - Resuming with `--ckpt_path` re-asserts the configured decay: `ExponentialLR.state_dict()` carries `gamma`, so the restored value would otherwise silently replace it
 - Add Thai phonemizer using TLTK in the new `th` extra
     - `--data.phoneme_type thai` for training; `"phoneme_type": "thai"` in a voice config for synthesis
     - espeak-ng's Thai voice is a placeholder: its `th_dict` holds no lexicon, so unspaced Thai is never segmented; the leading vowels เ แ โ ใ ไ are not reordered; and a tone mark deletes the syllable's vowel, collapsing ป่า/ป้า/ป๊า/ป๋า to the same phonemes

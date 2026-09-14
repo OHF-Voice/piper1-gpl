@@ -130,6 +130,28 @@ Setting `--data.phonemes_path <FILE>` will copy a phoneme/id map into the voice'
 }
 ```
 
+### Learning Rate Schedule
+
+The learning rate decays once per epoch by `--model.lr_decay` (generator) and
+`--model.lr_decay_d` (discriminators). Leave both unset and a decay is derived
+from `--trainer.max_epochs` so that the learning rate ends the run at
+`--model.lr_final_ratio` (default `0.05`) of where it started:
+
+``` sh
+python3 -m piper.train fit \
+  ... \
+  --trainer.max_epochs 100   # lr_decay becomes 0.05 ** (1/100) = 0.9705
+```
+
+Set `--trainer.max_epochs` if you want this. Runs are open-ended by default
+(`max_epochs=-1`), and with no run length to anneal over the schedule falls back
+to upstream VITS's `0.999875` — which was chosen for a ~20,000-epoch schedule and
+decays the learning rate by only about 1% per 100 epochs. A warning is logged
+when that happens.
+
+Pass `--model.lr_decay`/`--model.lr_decay_d` to choose a decay yourself, or
+`--model.lr_final_ratio 1.0` to hold the learning rate constant.
+
 ### Vocoder Warmstart
 
 When training a new model from scratch, you can significantly speed up training by using `--model.vocoder_warmstart_ckpt <CHECKPOINT>`. This will copy the model parameters for the vocoder, but not the phoneme embedding layer.
