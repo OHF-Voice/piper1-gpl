@@ -601,6 +601,26 @@ class VitsModel(L.LightningModule):
 
     def on_fit_start(self):
         # Called once at the start of fit()
+
+        # A resume must never warmstart. LightningCLI._parse_ckpt_path merges a
+        # resumed checkpoint's saved hyper_parameters back over the config, so
+        # warmstart_ckpt comes back even when it is absent from the command
+        # line. Trainer restores model weights BEFORE this hook (trainer.py
+        # _restore_modules_and_callbacks) and the optimizer/loop state after it,
+        # so warmstarting here would overwrite the resumed weights with the base
+        # model while keeping the restored epoch and optimizer state -- silently
+        # throwing away every epoch trained so far, with nothing but this log
+        # line to show for it.
+        resume_ckpt = getattr(self.trainer, "ckpt_path", None)
+        if resume_ckpt and (self._warmstart_ckpt or self._vocoder_warmstart_ckpt):
+            _LOGGER.info(
+                "Resuming from %s; skipping the warmstart carried in its "
+                "hyperparameters",
+                resume_ckpt,
+            )
+            self._warmstart_ckpt = None
+            self._vocoder_warmstart_ckpt = None
+
         if self._vocoder_warmstart_ckpt is not None:
             # Make sure we're on the correct device
             self._warmstart_vocoder_from_ckpt(self._vocoder_warmstart_ckpt)

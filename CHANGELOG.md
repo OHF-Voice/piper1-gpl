@@ -11,6 +11,10 @@
     - The derived decay anneals to `--model.lr_final_ratio` (default `0.05`) of the initial learning rate over the run; `--model.lr_final_ratio 1.0` keeps it constant
     - Open-ended runs (`max_epochs=-1`, the default) have no run length to anneal over and still fall back to the upstream constants, with a warning
     - Resuming with `--ckpt_path` re-asserts the configured decay: `ExponentialLR.state_dict()` carries `gamma`, so the restored value would otherwise silently replace it
+- Fix a resume silently reverting to the warmstart checkpoint
+    - `LightningCLI._parse_ckpt_path` merges a resumed checkpoint's saved `hyper_parameters` back over the parsed config, so `--model.warmstart_ckpt` comes back even when it is absent from the command line
+    - Trainer restores model weights before `on_fit_start` and the optimizer/loop state after it, so the warmstart overwrote the resumed weights with the base model while keeping the restored epoch — discarding every epoch trained so far
+    - `on_fit_start` now skips both warmstart paths whenever `trainer.ckpt_path` is set, and logs that it did
 - Add `script/libritts_r_to_csv`, which converts extracted LibriTTS-R splits to Piper's metadata CSV
     - Writes through `csv.writer(delimiter="|")` so quoting round-trips through the `csv.reader` the trainer uses — a hand-rolled `"|".join()` silently drops the quotation marks that LibriTTS dialogue is full of
     - Falls back from `.normalized.txt` to the chapter `.trans.tsv` to `.original.txt`, and skips utterances whose audio has no transcript
