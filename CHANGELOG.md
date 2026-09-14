@@ -11,6 +11,10 @@
     - The derived decay anneals to `--model.lr_final_ratio` (default `0.05`) of the initial learning rate over the run; `--model.lr_final_ratio 1.0` keeps it constant
     - Open-ended runs (`max_epochs=-1`, the default) have no run length to anneal over and still fall back to the upstream constants, with a warning
     - Resuming with `--ckpt_path` re-asserts the configured decay: `ExponentialLR.state_dict()` carries `gamma`, so the restored value would otherwise silently replace it
+- Add `script/libritts_r_to_csv`, which converts extracted LibriTTS-R splits to Piper's metadata CSV
+    - Writes through `csv.writer(delimiter="|")` so quoting round-trips through the `csv.reader` the trainer uses — a hand-rolled `"|".join()` silently drops the quotation marks that LibriTTS dialogue is full of
+    - Falls back from `.normalized.txt` to the chapter `.trans.tsv` to `.original.txt`, and skips utterances whose audio has no transcript
+    - Optional `--min-seconds`/`--max-seconds` filtering and a `--stats` duration histogram
 - Add Thai phonemizer using TLTK in the new `th` extra
     - `--data.phoneme_type thai` for training; `"phoneme_type": "thai"` in a voice config for synthesis
     - espeak-ng's Thai voice is a placeholder: its `th_dict` holds no lexicon, so unspaced Thai is never segmented; the leading vowels เ แ โ ใ ไ are not reordered; and a tone mark deletes the syllable's vowel, collapsing ป่า/ป้า/ป๊า/ป๋า to the same phonemes

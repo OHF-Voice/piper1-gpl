@@ -78,6 +78,22 @@ Run `python3 -m piper.train fit --help` for many more options.
 
 Some training settings will change the input data format.
 
+### LibriTTS-R
+
+`script/libritts_r_to_csv` converts extracted [LibriTTS-R][libritts-r] splits
+into the multi-speaker CSV below:
+
+``` sh
+script/libritts_r_to_csv /path/to/libritts_r -o metadata.csv \
+  --min-seconds 0.5 --max-seconds 20
+```
+
+It reads `train-clean-100`, `train-clean-360` and `train-other-500` by default
+(`--splits` to choose), prefers each utterance's `.normalized.txt` and falls
+back to the chapter `.trans.tsv` then `.original.txt`, and skips utterances with
+no transcript. It prints the `--data.audio_dir` and `--model.num_speakers` to
+train with. `--stats` reports a duration histogram without filtering anything.
+
 ### Multiple Speakers
 
 If you have more than one speaker in your dataset, the input CSV format changes to:
@@ -180,6 +196,7 @@ Most of the Piper voices were trained/fine-tuned on a Threadripper 1900X with 12
 Users have reported success with as little as 8GB of VRAM and alternative GPUs like the RX 7600.
 
 <!-- Links -->
+[libritts-r]: https://www.openslr.org/141/
 [espeak-ng]: https://github.com/espeak-ng/espeak-ng
 [lighting]: https://lightning.ai/docs/pytorch/stable/
 [librosa]: https://librosa.org/doc/latest/index.html
