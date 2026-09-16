@@ -4,9 +4,9 @@ import argparse
 import json
 import logging
 import re
-import shutil
 from pathlib import Path
-from urllib.request import urlopen
+from tempfile import TemporaryDirectory
+from urllib.request import urlopen, urlretrieve
 
 URL_FORMAT = "https://huggingface.co/rhasspy/piper-voices/resolve/main/{lang_family}/{lang_code}/{voice_name}/{voice_quality}/{lang_code}-{voice_name}-{voice_quality}{extension}?download=true"
 VOICES_JSON = (
@@ -97,25 +97,28 @@ def download_voice(
         "voice_quality": voice_quality,
     }
 
-    model_path = download_dir / f"{voice_code}.onnx"
-    if force_redownload or _needs_download(model_path):
-        model_url = URL_FORMAT.format(extension=".onnx", **format_args)
-        _LOGGER.debug("Downloading model from '%s' to '%s'", model_url, model_path)
-        with urlopen(model_url) as response:
-            with open(model_path, "wb") as model_file:
-                shutil.copyfileobj(response, model_file)
+    files_to_download = []
+    for extension in (".onnx", ".onnx.json"):
+        path = download_dir / f"{voice_code}{extension}"
+        if force_redownload or _needs_download(path):
+            files_to_download.append((extension, path))
 
-        _LOGGER.debug("Downloaded: '%s'", model_path)
+    if files_to_download:
+        with TemporaryDirectory(dir=download_dir) as temp_dir:
+            temp_path = Path(temp_dir)
+            for extension, path in files_to_download:
+                file_url = URL_FORMAT.format(extension=extension, **format_args)
+                file_type = "model" if extension == ".onnx" else "config"
+                _LOGGER.debug(
+                    "Downloading %s from '%s' to '%s'", file_type, file_url, path
+                )
+                # urlretrieve checks Content-Length when the server supplies it.
+                urlretrieve(file_url, temp_path / path.name)
 
-    config_path = download_dir / f"{voice_code}.onnx.json"
-    if force_redownload or _needs_download(config_path):
-        config_url = URL_FORMAT.format(extension=".onnx.json", **format_args)
-        _LOGGER.debug("Downloading config from '%s' to '%s'", config_url, config_path)
-        with urlopen(config_url) as response:
-            with open(config_path, "wb") as config_file:
-                shutil.copyfileobj(response, config_file)
-
-        _LOGGER.debug("Downloaded: '%s'", config_path)
+            # Keep existing files intact until every download has succeeded.
+            for _, path in files_to_download:
+                (temp_path / path.name).replace(path)
+                _LOGGER.debug("Downloaded: '%s'", path)
 
     _LOGGER.info("Downloaded: %s", voice)
 
