@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+
 #include <memory>
 #include <sstream>
 
@@ -6,29 +7,32 @@
 #include "utils/piper_test_assets.h"
 #include "utils/wavfile.hpp"
 
-class WavFileTest : public ::testing::Test {
-protected:
+class WavFileTest : public ::testing::Test
+{
+ protected:
   static std::unique_ptr<PiperTestAssets> assets;
-  static piper_synthesizer *synth;
+  static piper_synthesizer* synth;
 
-  static void SetUpTestSuite() {
+  static void SetUpTestSuite()
+  {
     assets = PiperTestAssets::enModel();
-    synth = piper_create(assets->modelPath().string().c_str(),
-                         assets->configPath().string().c_str(),
+    synth = piper_create(assets->modelPath().string().c_str(), assets->configPath().string().c_str(),
                          PiperTestAssets::espeakDataPath().string().c_str());
     ASSERT_NE(synth, nullptr);
   }
 
-  static void TearDownTestSuite() {
+  static void TearDownTestSuite()
+  {
     piper_free(synth);
     assets.reset();
   }
 };
 
 std::unique_ptr<PiperTestAssets> WavFileTest::assets = nullptr;
-piper_synthesizer *WavFileTest::synth = nullptr;
+piper_synthesizer* WavFileTest::synth = nullptr;
 
-TEST_F(WavFileTest, TextToWavFile) {
+TEST_F(WavFileTest, TextToWavFile)
+{
   std::stringstream audio_stream;
   piper_synthesize_options options = piper_default_synthesize_options(synth);
   options.speaker_id = 0;
