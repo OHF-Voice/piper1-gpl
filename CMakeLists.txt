@@ -24,7 +24,7 @@ endif()
 
 ExternalProject_Add(espeak_ng_external
     GIT_REPOSITORY https://github.com/espeak-ng/espeak-ng.git
-    GIT_TAG 724808c  # 2026-Apr-06
+    GIT_TAG 724808c5a83f9ef95fdd0db886ba7ba537ff224a  # 2026-Apr-06
     PREFIX ${ESPEAKNG_BUILD_DIR}
     CMAKE_ARGS
         -DCMAKE_INSTALL_PREFIX=${ESPEAKNG_INSTALL_DIR}
