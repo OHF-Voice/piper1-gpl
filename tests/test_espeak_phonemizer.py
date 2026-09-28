@@ -1,6 +1,16 @@
+import subprocess
+import sys
+from pathlib import Path
+
 from piper.phonemize_espeak import EspeakPhonemizer
 
 from . import EN_US_VOWEL_CLUSTERS
+
+_INITIALIZE_SCRIPT = """
+import sys
+from piper.phonemize_espeak import EspeakPhonemizer
+EspeakPhonemizer(sys.argv[1])
+"""
 
 
 def test_phonemize() -> None:
@@ -70,3 +80,22 @@ def test_vowel_clusters_without_terminator() -> None:
     assert phonemizer.phonemize("en-us", "my", vowel_clusters=EN_US_VOWEL_CLUSTERS) == [
         ["m", "ˈ", "aɪ"],
     ]
+
+
+def test_long_espeak_data_dir(tmp_path: Path) -> None:
+    """Data dir is used as given, even when its path is long."""
+    # espeak-ng sizes its data path buffer at 160 bytes off Linux and silently
+    # falls back to the build-time default when the path does not fit.
+    data_dir = tmp_path / ("d" * 200)
+    data_dir.mkdir()
+
+    # The directory is empty, so espeak-ng must fail on this exact path.
+    # It exits the process on failure, hence the subprocess.
+    result = subprocess.run(
+        [sys.executable, "-c", _INITIALIZE_SCRIPT, str(data_dir)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode != 0
+    assert str(data_dir) in result.stderr
