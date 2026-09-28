@@ -78,6 +78,22 @@ Run `python3 -m piper.train fit --help` for many more options.
 
 Some training settings will change the input data format.
 
+### LibriTTS-R
+
+`script/libritts_r_to_csv` converts extracted [LibriTTS-R][libritts-r] splits
+into the multi-speaker CSV below:
+
+``` sh
+script/libritts_r_to_csv /path/to/libritts_r -o metadata.csv \
+  --min-seconds 0.5 --max-seconds 20
+```
+
+It reads `train-clean-100`, `train-clean-360` and `train-other-500` by default
+(`--splits` to choose), prefers each utterance's `.normalized.txt` and falls
+back to the chapter `.trans.tsv` then `.original.txt`, and skips utterances with
+no transcript. It prints the `--data.audio_dir` and `--model.num_speakers` to
+train with. `--stats` reports a duration histogram without filtering anything.
+
 ### Multiple Speakers
 
 If you have more than one speaker in your dataset, the input CSV format changes to:
@@ -130,6 +146,28 @@ Setting `--data.phonemes_path <FILE>` will copy a phoneme/id map into the voice'
 }
 ```
 
+### Learning Rate Schedule
+
+The learning rate decays once per epoch by `--model.lr_decay` (generator) and
+`--model.lr_decay_d` (discriminators). Leave both unset and a decay is derived
+from `--trainer.max_epochs` so that the learning rate ends the run at
+`--model.lr_final_ratio` (default `0.05`) of where it started:
+
+``` sh
+python3 -m piper.train fit \
+  ... \
+  --trainer.max_epochs 100   # lr_decay becomes 0.05 ** (1/100) = 0.9705
+```
+
+Set `--trainer.max_epochs` if you want this. Runs are open-ended by default
+(`max_epochs=-1`), and with no run length to anneal over the schedule falls back
+to upstream VITS's `0.999875` — which was chosen for a ~20,000-epoch schedule and
+decays the learning rate by only about 1% per 100 epochs. A warning is logged
+when that happens.
+
+Pass `--model.lr_decay`/`--model.lr_decay_d` to choose a decay yourself, or
+`--model.lr_final_ratio 1.0` to hold the learning rate constant.
+
 ### Vocoder Warmstart
 
 When training a new model from scratch, you can significantly speed up training by using `--model.vocoder_warmstart_ckpt <CHECKPOINT>`. This will copy the model parameters for the vocoder, but not the phoneme embedding layer.
@@ -158,6 +196,7 @@ Most of the Piper voices were trained/fine-tuned on a Threadripper 1900X with 12
 Users have reported success with as little as 8GB of VRAM and alternative GPUs like the RX 7600.
 
 <!-- Links -->
+[libritts-r]: https://www.openslr.org/141/
 [espeak-ng]: https://github.com/espeak-ng/espeak-ng
 [lighting]: https://lightning.ai/docs/pytorch/stable/
 [librosa]: https://librosa.org/doc/latest/index.html
