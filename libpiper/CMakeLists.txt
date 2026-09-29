@@ -5,6 +5,11 @@ project(piper LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+if(MSVC)
+    # Keep source and narrow string literals in UTF-8 on every Windows code page.
+    add_compile_options(/utf-8)
+endif()
+
 include(ExternalProject)
 
 # Install location for espeak-ng
