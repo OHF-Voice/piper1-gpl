@@ -29,7 +29,12 @@ cdef void maximum_path_each(int[:,::1] path, float[:,::1] value, int t_y, int t_
 
   for y in range(t_y - 1, -1, -1):
     path[y, index] = 1
-    if index != 0 and (index == y or value[y-1, index] < value[y-1, index-1]):
+    # NOTE (2026-09-28): added `y > 0` guard. With wraparound(False),
+    # value[y-1, ...] at y == 0 reads out of bounds and segfaults
+    # (seen live: SIGSEGV in maximum_path_c on a batch where the
+    # backtrack had not reached index 0 by y == 0). The wraparound read
+    # was meaningless anyway since the loop ends at y == 0.
+    if y > 0 and index != 0 and (index == y or value[y-1, index] < value[y-1, index-1]):
       index = index - 1
 
 
