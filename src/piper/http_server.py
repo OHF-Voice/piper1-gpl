@@ -66,6 +66,12 @@ def main() -> None:
     )
     #
     parser.add_argument(
+        "--extra-models-dir",
+        "--extra_models_dir",
+        help="Directory for downloadable resources like the Chinese g2pW model (default: current directory)",
+    )
+    #
+    parser.add_argument(
         "--debug", action="store_true", help="Print DEBUG messages to console"
     )
     args = parser.parse_args()
@@ -99,7 +105,10 @@ def main() -> None:
 
     # Load voice
     default_voice = PiperVoice.load(
-        model_path, use_cuda=args.cuda, include_alignments=True
+        model_path,
+        use_cuda=args.cuda,
+        include_alignments=True,
+        download_dir=args.extra_models_dir,
     )
     loaded_voices: Dict[str, PiperVoice] = {default_model_id: default_voice}
 
@@ -242,7 +251,11 @@ def main() -> None:
                 maybe_model_path = Path(data_dir) / f"{model_id}.onnx"
                 if maybe_model_path.exists():
                     _LOGGER.debug("Loading voice %s", model_id)
-                    voice = PiperVoice.load(maybe_model_path, use_cuda=args.cuda)
+                    voice = PiperVoice.load(
+                        maybe_model_path,
+                        use_cuda=args.cuda,
+                        download_dir=args.extra_models_dir,
+                    )
                     loaded_voices[model_id] = voice
                     break
 
