@@ -6,7 +6,8 @@ import struct
 import sys
 import wave
 from pathlib import Path
-from unittest.mock import patch
+from typing import Any
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -30,6 +31,95 @@ def test_load_voice() -> None:
     assert voice.config.num_speakers == 1
     assert voice.config.phoneme_type == "espeak"
     assert voice.config.espeak_voice == "en-us"
+
+
+def test_load_voice_cuda_preloads_dlls() -> None:
+    """Test that use_cuda=True calls preload_dlls before creating InferenceSession."""
+    call_order: list[str] = []
+
+    def fake_preload() -> None:
+        call_order.append("preload")
+
+    def fake_session(*args: Any, **kwargs: Any) -> MagicMock:
+        call_order.append("session")
+        return MagicMock()
+
+    with (
+        patch(
+            "piper.voice.onnxruntime.preload_dlls",
+            side_effect=fake_preload,
+            create=True,
+        ) as mock_preload,
+        patch(
+            "piper.voice.onnxruntime.InferenceSession",
+            side_effect=fake_session,
+        ) as mock_session,
+    ):
+        PiperVoice.load(_TEST_VOICE, use_cuda=True)
+        assert mock_preload.call_count == 1
+        assert mock_session.call_count == 1
+        assert call_order == ["preload", "session"]
+        _args, kwargs = mock_session.call_args
+        assert kwargs["providers"] == [
+            (
+                "CUDAExecutionProvider",
+                {"cudnn_conv_algo_search": "HEURISTIC"},
+            )
+        ]
+
+
+def test_load_voice_cuda_without_preload_dlls(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test that older ONNX Runtime without preload_dlls retains the CUDA session path."""
+    import onnxruntime
+
+    monkeypatch.delattr(onnxruntime, "preload_dlls", raising=False)
+
+    with patch("piper.voice.onnxruntime.InferenceSession") as mock_session:
+        PiperVoice.load(_TEST_VOICE, use_cuda=True)
+        assert mock_session.call_count == 1
+        _args, kwargs = mock_session.call_args
+        assert kwargs["providers"] == [
+            (
+                "CUDAExecutionProvider",
+                {"cudnn_conv_algo_search": "HEURISTIC"},
+            )
+        ]
+
+
+def test_load_voice_cuda_preload_exception_resilient() -> None:
+    """Test that an exception during preload_dlls does not prevent session construction."""
+    with (
+        patch(
+            "piper.voice.onnxruntime.preload_dlls",
+            side_effect=RuntimeError("Preload failed"),
+            create=True,
+        ) as mock_preload,
+        patch("piper.voice.onnxruntime.InferenceSession") as mock_session,
+    ):
+        voice = PiperVoice.load(_TEST_VOICE, use_cuda=True)
+        assert mock_preload.call_count == 1
+        assert mock_session.call_count == 1
+        assert voice.session is mock_session.return_value
+        _args, kwargs = mock_session.call_args
+        assert kwargs["providers"] == [
+            (
+                "CUDAExecutionProvider",
+                {"cudnn_conv_algo_search": "HEURISTIC"},
+            )
+        ]
+
+
+def test_load_voice_cuda_disabled_no_preload() -> None:
+    """Test that use_cuda=False does not call preload_dlls."""
+    with (
+        patch("piper.voice.onnxruntime.preload_dlls", create=True) as mock_preload,
+        patch("piper.voice.onnxruntime.InferenceSession") as mock_session,
+    ):
+        PiperVoice.load(_TEST_VOICE, use_cuda=False)
+        mock_preload.assert_not_called()
+        assert mock_session.call_count == 1
+        _args, kwargs = mock_session.call_args
+        assert kwargs["providers"] == ["CPUExecutionProvider"]
 
 
 def test_phonemize_synthesize() -> None:

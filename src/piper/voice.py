@@ -150,6 +150,12 @@ class PiperVoice:
 
         providers: list[Union[str, tuple[str, dict[str, Any]]]]
         if use_cuda:
+            if hasattr(onnxruntime, "preload_dlls"):
+                try:
+                    onnxruntime.preload_dlls()
+                except Exception as error:
+                    _LOGGER.debug("Failed to preload CUDA DLLs: %s", error)
+
             providers = [
                 (
                     "CUDAExecutionProvider",
