@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- Add synthesis settings and a speaker picker to the web page of `piper.http_server`
+    - `/synthesize` has always accepted `length_scale`, `noise_scale`, `noise_w_scale`, and `speaker`/`speaker_id`, but the page sent nothing but `text`, so the only way to hear a voice's other speakers or a different speaking rate was to leave the browser and use `curl`
+    - The page now has a **Settings** section with a slider and a number box per scale, plus a speaker drop-down for multi-speaker voices; **Reset to voice defaults** restores the starting values
+    - The settings start at the voice's defaults and survive each synthesis - only the first `/info` fetch loads them, so the values a user picked are not thrown away when the page refreshes the alignment timeline
+    - Emptying a number box drops that field from the request rather than sending `NaN`, so the server falls back to its own default
+- Report the speakers and default synthesis settings of the current voice from `/info`
+    - The page needs them to populate its new controls, and nothing else exposed them: `/voices` has the whole config of every downloaded voice, but not which voice the server is serving or what `--length-scale` and friends were set to on the command line
+    - `voice.speakers` lists `{"id", "name"}` ordered by id, naming speakers the voice does not name itself (`speaker_id_map` is empty on some multi-speaker voices) as `Speaker <id>`
+    - `voice.defaults` gives the `speaker_id`/`length_scale`/`noise_scale`/`noise_w_scale` a request gets when it leaves them out, with the command-line arguments applied over the voice config
+- Fix `/synthesize` accepting a speaker id one past the last speaker
+    - The bounds check was `speaker_id > num_speakers`, so an id equal to `num_speakers` passed through to onnxruntime; negative ids were not checked at all
+    - Out-of-range ids now fall back to speaker 0 with a warning, and a `speaker_id` sent as a string is accepted
+- Stop warning that speaker `None` was not found
+    - Every request to a multi-speaker voice that did not name a speaker logged a "Speaker not found" warning before falling back to the default speaker, which is the documented behavior, not a problem; the warning is now logged only when a `speaker` name was actually given and did not match
+
 - Resolve renamed voices in `piper.download_voices` using the `aliases` list in voices.json
     - A voice that has been renamed keeps its old name in the `aliases` list of its voices.json entry, but nothing honored it: the downloader builds its URL from the voice name alone and never reads voices.json, so every pre-1.0 name (`de-karlsson-low`, `zh-cn-huayan-x-low`, ...) failed - those names do not even match the `<language>-<name>-<quality>` pattern, so they raised before any download was attempted
     - A name that does not parse, or that parses but 404s, is now looked up in the `aliases` lists and downloaded under its current name, with a warning saying what it was renamed to
