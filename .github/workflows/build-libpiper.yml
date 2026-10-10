@@ -84,6 +84,12 @@ jobs:
       - name: Install
         run: cmake --install build --config Release
 
+      - name: Check installed Windows CLI
+        if: runner.os == 'Windows'
+        shell: pwsh
+        timeout-minutes: 1
+        run: ./tests/check_installed_windows.ps1 -InstallPrefix ./install
+
       - name: Upload install artifact
         uses: actions/upload-artifact@v4
         with:

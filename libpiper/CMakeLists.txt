@@ -181,9 +181,16 @@ target_compile_definitions(piper PRIVATE BUILDING_LIBPIPER)
 
 include(GNUInstallDirs)
 
-install(TARGETS piper
-    DESTINATION ${CMAKE_INSTALL_LIBDIR}
-)
+if(WIN32)
+    install(TARGETS piper
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    )
+else()
+    install(TARGETS piper
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    )
+endif()
 
 install(
     FILES ${CMAKE_CURRENT_SOURCE_DIR}/include/piper.h
@@ -191,12 +198,29 @@ install(
 )
 
 if(DEFINED ONNXRUNTIME_DIR)
-    install(
-        DIRECTORY ${ONNXRUNTIME_DIR}/lib/
-        DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        PATTERN "cmake" EXCLUDE
-        PATTERN "pkgconfig" EXCLUDE
-    )
+    if(WIN32)
+        install(
+            DIRECTORY ${ONNXRUNTIME_DIR}/lib/
+            DESTINATION ${CMAKE_INSTALL_BINDIR}
+            FILES_MATCHING PATTERN "*.dll"
+            PATTERN "cmake" EXCLUDE
+            PATTERN "pkgconfig" EXCLUDE
+        )
+        install(
+            DIRECTORY ${ONNXRUNTIME_DIR}/lib/
+            DESTINATION ${CMAKE_INSTALL_LIBDIR}
+            PATTERN "*.dll" EXCLUDE
+            PATTERN "cmake" EXCLUDE
+            PATTERN "pkgconfig" EXCLUDE
+        )
+    else()
+        install(
+            DIRECTORY ${ONNXRUNTIME_DIR}/lib/
+            DESTINATION ${CMAKE_INSTALL_LIBDIR}
+            PATTERN "cmake" EXCLUDE
+            PATTERN "pkgconfig" EXCLUDE
+        )
+    endif()
 endif()
 
 # Copy espeak-ng-data
@@ -206,6 +230,14 @@ install(
     DIRECTORY ${ESPEAKNG_DATA_SRC}
     DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}
 )
+
+if(WIN32)
+    # The CLI looks next to its executable; retain the shared API data above.
+    install(
+        DIRECTORY ${ESPEAKNG_DATA_SRC}
+        DESTINATION ${CMAKE_INSTALL_BINDIR}
+    )
+endif()
 
 # ----------------
 # Testing
