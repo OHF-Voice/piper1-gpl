@@ -58,14 +58,21 @@ enum class PhonemeType {
   Text,
   Espeak,
   Pinyin,
+  Japanese,
 };
 
-NLOHMANN_JSON_SERIALIZE_ENUM(PhonemeType, {
-                                              {PhonemeType::Text, nullptr},
-                                              {PhonemeType::Espeak, "espeak"},
-                                              {PhonemeType::Text, "text"},
-                                              {PhonemeType::Pinyin, "pinyin"},
-                                          })
+NLOHMANN_JSON_SERIALIZE_ENUM(PhonemeType,
+                             {
+                                 {PhonemeType::Text, nullptr},
+                                 {PhonemeType::Espeak, "espeak"},
+                                 {PhonemeType::Text, "text"},
+                                 {PhonemeType::Pinyin, "pinyin"},
+                                 {PhonemeType::Japanese, "japanese"},
+                             })
+
+namespace piper {
+class JapanesePhonemizer;
+}
 
 struct piper_synthesizer {
   // From config JSON file
@@ -92,6 +99,13 @@ struct piper_synthesizer {
   // Full BERT disambiguation deferred; see PR 271 review
   std::string g2pw_model_dir;
   std::unique_ptr<piper::ChinesePhonemizer> chinese_phonemizer;
+
+  // OpenJTalk dictionary dir - for Japanese. Resolved from the
+  // openjtalk_dict_dir create option, <data_dir>/openjtalk, <data_dir>, or
+  // <model_dir>/openjtalk. The pyopenjtalk-plus dictionary is required for
+  // training parity; it is downloaded on demand, never bundled.
+  std::string openjtalk_dict_dir;
+  std::unique_ptr<piper::JapanesePhonemizer> japanese_phonemizer;
 
   // synthesize state
   std::queue<std::pair<std::vector<Phoneme>, std::vector<PhonemeId>>>

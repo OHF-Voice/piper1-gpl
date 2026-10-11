@@ -65,6 +65,81 @@ include_directories(
     ${ESPEAKNG_INSTALL_DIR}/include
 )
 
+# ---- open_jtalk (Japanese frontend: text -> full-context labels) ---
+#
+# Built from tsukumijima/open_jtalk, the same fork pyopenjtalk-plus vendors
+# (this is what the ja_JA voice was trained with). Only the frontend sources
+# are compiled - no hts_engine waveform code. The fork already ships a CMake
+# build at src/CMakeLists.txt producing a single `openjtalk` static library
+# from jpcommon, mecab, mecab2njd, njd, njd2jpcommon, njd_set_* and text2mecab.
+#
+# Notes:
+# - The fork declares cmake_minimum_required(VERSION 3.5), so CMake >= 4 needs
+#   -DCMAKE_POLICY_VERSION_MINIMUM=3.5.
+# - Its configure_file() writes mecab/src/config.h into the *source* tree, so
+#   multi-ABI builds (e.g. Android) must build ABIs serially, not in parallel.
+set(OPENJTALK_BUILD_DIR ${CMAKE_BINARY_DIR}/open_jtalk)
+set(OPENJTALK_SRC_DIR ${OPENJTALK_BUILD_DIR}/src/openjtalk_external/src)
+set(OPENJTALK_LIB_DIR
+    ${OPENJTALK_BUILD_DIR}/src/openjtalk_external-build)
+
+# Multi-config generators (e.g. Visual Studio) place the library in a
+# per-config subdirectory whose name is only known at build time, so
+# resolve it with a $<CONFIG> generator expression - the same pattern
+# used for the ucd library above. Single-config generators (Unix
+# Makefiles, Ninja) write directly into the build directory.
+if(IS_MULTI_CONFIG)
+    set(OPENJTALK_CONFIG_SUBDIR "$<CONFIG>/")
+else()
+    set(OPENJTALK_CONFIG_SUBDIR "")
+endif()
+
+if(MSVC)
+    set(OPENJTALK_STATIC_LIB
+        ${OPENJTALK_LIB_DIR}/${OPENJTALK_CONFIG_SUBDIR}openjtalk.lib)
+else()
+    set(OPENJTALK_STATIC_LIB
+        ${OPENJTALK_LIB_DIR}/${OPENJTALK_CONFIG_SUBDIR}libopenjtalk.a)
+endif()
+
+ExternalProject_Add(openjtalk_external
+    GIT_REPOSITORY https://github.com/tsukumijima/open_jtalk.git
+    # master as of 2026-09-12; re-pin deliberately on update
+    GIT_TAG 4a1ef70897689d2ee6b8f9be35454a3a4b15b289
+    PREFIX ${OPENJTALK_BUILD_DIR}
+    SOURCE_SUBDIR src
+    CMAKE_ARGS
+        -DCMAKE_INSTALL_PREFIX=${OPENJTALK_BUILD_DIR}/install
+        -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
+        -DBUILD_SHARED_LIBS:BOOL=OFF
+        -DCMAKE_POSITION_INDEPENDENT_CODE:BOOL=ON
+        -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+    BUILD_BYPRODUCTS
+        ${OPENJTALK_STATIC_LIB}
+    UPDATE_DISCONNECTED TRUE
+    # open_jtalk defines no install rules: headers come from the
+    # source tree and the library from the build tree, so there is
+    # nothing to install. The default install step must be skipped
+    # explicitly - on Windows it runs MSBuild on an INSTALL project
+    # that a project without install rules never generates (MSB1009).
+    INSTALL_COMMAND ""
+)
+
+set(OPENJTALK_INCLUDE_DIRS
+    ${OPENJTALK_SRC_DIR}/jpcommon
+    ${OPENJTALK_SRC_DIR}/mecab/src
+    ${OPENJTALK_SRC_DIR}/mecab2njd
+    ${OPENJTALK_SRC_DIR}/njd
+    ${OPENJTALK_SRC_DIR}/njd2jpcommon
+    ${OPENJTALK_SRC_DIR}/njd_set_accent_phrase
+    ${OPENJTALK_SRC_DIR}/njd_set_accent_type
+    ${OPENJTALK_SRC_DIR}/njd_set_digit
+    ${OPENJTALK_SRC_DIR}/njd_set_long_vowel
+    ${OPENJTALK_SRC_DIR}/njd_set_pronunciation
+    ${OPENJTALK_SRC_DIR}/njd_set_unvoiced_vowel
+    ${OPENJTALK_SRC_DIR}/text2mecab
+)
+
 # ---- onnxruntime ---
 
 find_package(onnxruntime QUIET)
@@ -144,17 +219,20 @@ include(ClangTidy.cmake)
 add_library(piper SHARED
     ${CMAKE_CURRENT_SOURCE_DIR}/src/piper.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/chinese_phonemizer.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/japanese_phonemizer.cpp
 )
 enable_clang_tidy(piper)
 
-add_dependencies(piper espeak_ng_external)
+add_dependencies(piper espeak_ng_external openjtalk_external)
 target_include_directories(piper PUBLIC
     ${ESPEAKNG_INSTALL_DIR}/include
+    ${OPENJTALK_INCLUDE_DIRS}
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 target_link_libraries(piper
     ${ESPEAKNG_STATIC_LIB}
     ${UCD_STATIC_LIB}
+    ${OPENJTALK_STATIC_LIB}
     onnxruntime::onnxruntime
 )
 
