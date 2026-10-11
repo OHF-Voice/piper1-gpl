@@ -190,7 +190,7 @@ GROUP_END_PHONEMES = {
 G2PW_URL = "https://huggingface.co/datasets/rhasspy/piper-checkpoints/resolve/main/zh/zh_CN/_resources/g2pw.tar.gz?download=true"
 
 TEMP_PATTERN = re.compile(
-    r"(?P<sign>[-−])?(?P<num>\d+)\s*(?:°\s*C|℃)",  # handles "-7°C", "7℃", "−3°C"
+    r"(?P<sign>[-−])?(?P<num>\d+(?:\.\d+)?)\s*(?:°\s*C|℃)",  # -7°C, 7.5°C, 7℃
 )
 
 # 98.76% / -7% / 77％
@@ -255,7 +255,7 @@ class ChinesePhonemizer:
     def _numbers_to_words(self, text: str) -> str:
         # TODO: dates/times/ordinals
 
-        # 1) Temperatures: -7°C → 零下七度; 7°C → 七度
+        # 1) Temperatures: -7°C → 零下七度; 7.5°C → 七点五度
         def replace_temp(m: re.Match) -> str:
             sign = m.group("sign")
             num_str = m.group("num")
