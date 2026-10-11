@@ -8,6 +8,29 @@ on:
       - main
 
 jobs:
+  test_sdist:
+    name: Test source distribution
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build wheel from source distribution
+        run: |
+          python -m pip install build
+          python -m build
+
+      - name: Test installed wheel
+        run: |
+          python -m pip install pytest dist/*.whl
+          mkdir -p "$RUNNER_TEMP/sdist-tests/tests"
+          cp tests/__init__.py tests/test_espeak_phonemizer.py "$RUNNER_TEMP/sdist-tests/tests/"
+          cd "$RUNNER_TEMP/sdist-tests"
+          python -I -m pytest tests/test_espeak_phonemizer.py
+
   build_wheels:
     name: Test on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
