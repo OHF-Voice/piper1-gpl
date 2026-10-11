@@ -60,8 +60,9 @@ auto piper_create_with_options(const piper_create_options *options)
       offsetof(piper_create_options, data_dir) + sizeof(options->data_dir)) {
     data_dir_opt = options->data_dir;
   }
-  if (options->struct_size >= offsetof(piper_create_options, openjtalk_dict_dir) +
-                                  sizeof(options->openjtalk_dict_dir)) {
+  if (options->struct_size >=
+      offsetof(piper_create_options, openjtalk_dict_dir) +
+          sizeof(options->openjtalk_dict_dir)) {
     openjtalk_dict_dir_opt = options->openjtalk_dict_dir;
   }
 
@@ -278,7 +279,8 @@ auto piper_create_with_options(const piper_create_options *options)
     return std::filesystem::exists(d / "sys.dic");
   };
   if (effective_openjtalk_dir.empty() && data_dir_opt) {
-    std::filesystem::path cand1 = std::filesystem::path(data_dir_opt) / "openjtalk";
+    std::filesystem::path cand1 =
+        std::filesystem::path(data_dir_opt) / "openjtalk";
     std::filesystem::path cand2 = std::filesystem::path(data_dir_opt);
     if (openjtalk_has_dict(cand1)) {
       effective_openjtalk_dir = cand1.string();
@@ -286,7 +288,8 @@ auto piper_create_with_options(const piper_create_options *options)
       effective_openjtalk_dir = cand2.string();
     }
   }
-  if (effective_openjtalk_dir.empty() && phoneme_type == PhonemeType::Japanese) {
+  if (effective_openjtalk_dir.empty() &&
+      phoneme_type == PhonemeType::Japanese) {
     std::filesystem::path model_dir =
         std::filesystem::path(model_path).parent_path();
     std::filesystem::path cand = model_dir / "openjtalk";

@@ -61,13 +61,14 @@ enum class PhonemeType {
   Japanese,
 };
 
-NLOHMANN_JSON_SERIALIZE_ENUM(PhonemeType, {
-                                              {PhonemeType::Text, nullptr},
-                                              {PhonemeType::Espeak, "espeak"},
-                                              {PhonemeType::Text, "text"},
-                                              {PhonemeType::Pinyin, "pinyin"},
-                                              {PhonemeType::Japanese, "japanese"},
-                                          })
+NLOHMANN_JSON_SERIALIZE_ENUM(PhonemeType,
+                             {
+                                 {PhonemeType::Text, nullptr},
+                                 {PhonemeType::Espeak, "espeak"},
+                                 {PhonemeType::Text, "text"},
+                                 {PhonemeType::Pinyin, "pinyin"},
+                                 {PhonemeType::Japanese, "japanese"},
+                             })
 
 namespace piper {
 class JapanesePhonemizer;

@@ -68,20 +68,20 @@ const std::unordered_map<std::string, std::string> &openjtalkToIpa() {
       {"ny", "nʲ"}, // ニャ
       {"h", "h"},
       {"hy", "hʲ"}, // ヒャ
-      {"f", "ɸ"},  // フ
+      {"f", "ɸ"},   // フ
       {"b", "b"},
       {"by", "bʲ"}, // ビャ
       {"p", "p"},
       {"py", "pʲ"}, // ピャ
       {"m", "m"},
       {"my", "mʲ"}, // ミャ
-      {"y", "j"},  // ヤ
+      {"y", "j"},   // ヤ
       {"r", "ɾ"},
       {"ry", "ɾʲ"}, // リャ
       {"w", "w"},
       {"v", "v"}, // ヴ
       // Specials
-      {"N", "ɴ"}, // ん (moraic nasal)
+      {"N", "ɴ"},  // ん (moraic nasal)
       {"cl", "ʔ"}, // っ (geminate closure)
   };
   return *map;
@@ -89,9 +89,9 @@ const std::unordered_map<std::string, std::string> &openjtalkToIpa() {
 
 // OpenJTalk marks devoiced vowels with an uppercase letter (desU = です).
 bool isDevoicedVowel(const std::string &phone) {
-  return (phone.size() == 1) && (phone[0] == 'A' || phone[0] == 'I' ||
-                                 phone[0] == 'U' || phone[0] == 'E' ||
-                                 phone[0] == 'O');
+  return (phone.size() == 1) &&
+         (phone[0] == 'A' || phone[0] == 'I' || phone[0] == 'U' ||
+          phone[0] == 'E' || phone[0] == 'O');
 }
 
 // Vowels and moraic phones that can carry an accent phrase boundary.
@@ -218,7 +218,8 @@ bool isUnicodeSpace(char32_t cp) {
   }
 }
 
-// Python str.isdigit() on the chars before/after "." (covers full-width digits).
+// Python str.isdigit() on the chars before/after "." (covers full-width
+// digits).
 bool isUnicodeDigit(char32_t cp) {
   return (cp >= U'0' && cp <= U'9') || (cp >= 0xFF10 && cp <= 0xFF19);
 }
@@ -303,9 +304,9 @@ void applyChainingRules(NJD *njd) {
     }
 
     // 算用数字が別形態素になった分数では、数詞と「の」に挟まれた助数詞の分をブンへ変える
-    if (prev != nullptr && following != nullptr &&
-        strEq(node->string, "分") && strEq(prev->pos_group1, "数") &&
-        strEq(next->string, "の") && strEq(following->pos_group1, "数")) {
+    if (prev != nullptr && following != nullptr && strEq(node->string, "分") &&
+        strEq(prev->pos_group1, "数") && strEq(next->string, "の") &&
+        strEq(following->pos_group1, "数")) {
       NJDNode_set_read(node, "ブン");
       NJDNode_set_pron(node, "ブン");
     }
@@ -358,7 +359,8 @@ void applyChainingRules(NJD *njd) {
     }
 
     // 連用形のアクセント核の登録を修正する
-    if (strIn(node->cform, {"連用形", "連用タ接続", "連用ゴザイ接続", "連用テ接続"}) &&
+    if (strIn(node->cform,
+              {"連用形", "連用タ接続", "連用ゴザイ接続", "連用テ接続"}) &&
         node->acc == node->mora_size && node->mora_size > 1) {
       NJDNode_set_acc(node, node->acc - 1);
     }
@@ -370,8 +372,7 @@ void applyChainingRules(NJD *njd) {
     }
 
     // 形容詞＋「なる、する」は一つのアクセント句に纏める
-    if (strEq(node->pos, "形容詞") &&
-        strIn(next->orig, {"なる", "する"})) {
+    if (strEq(node->pos, "形容詞") && strIn(next->orig, {"なる", "する"})) {
       NJDNode_set_chain_flag(next, 1);
     }
   }
@@ -392,8 +393,9 @@ void applyChainingRules(NJD *njd) {
 // - process_odori_features(): 踊り字/一の字点 handling, partly requiring MeCab
 //   re-analysis. TODO for a follow-up.
 
-// _DAN_MAP from pyopenjtalk/utils.py: katakana -> vowel row ('a'/'i'/'u'/'e'/'o').
-// Used to detect unnatural long-vowel-ization of the auxiliary "う".
+// _DAN_MAP from pyopenjtalk/utils.py: katakana -> vowel row
+// ('a'/'i'/'u'/'e'/'o'). Used to detect unnatural long-vowel-ization of the
+// auxiliary "う".
 char kanaDanRow(const std::string &kana) {
   static const std::pair<const char *, char> kMap[] = {
       {"ア", 'a'}, {"カ", 'a'}, {"サ", 'a'}, {"タ", 'a'}, {"ナ", 'a'},
@@ -466,8 +468,8 @@ void retreatAccNuc(NJD *njd) {
   if (njd->head == nullptr)
     return;
   static const char *kBadNucleus[] = {"ー", "ッ", "ン"};
-  static const char32_t kYouon[] = {0x30E3, 0x30E5, 0x30E7, 0x30A1,
-                                   0x30A3, 0x30A5, 0x30A7, 0x30A9}; // ャュョァィゥェォ
+  static const char32_t kYouon[] = {0x30E3, 0x30E5, 0x30E7, 0x30A1, 0x30A3,
+                                    0x30A5, 0x30A7, 0x30A9}; // ャュョァィゥェォ
   int acc = 0;
   NJDNode *head = njd->head;
   for (NJDNode *node = njd->head; node != nullptr; node = node->next) {
@@ -587,8 +589,8 @@ int numericFeature(const std::string &label, const std::regex &pattern) {
 
 // Port of JapanesePhonemizer._phonemize_sentence: parse one sentence's
 // full-context labels into OpenJTalk phones + prosody symbols.
-std::vector<std::string>
-phonemizeSentenceLabels(char **labels, int num_labels, bool drop_devoiced) {
+std::vector<std::string> phonemizeSentenceLabels(char **labels, int num_labels,
+                                                 bool drop_devoiced) {
   static const std::regex kPhoneRe(R"(\-(.*?)\+)");
   static const std::regex kQuestionRe(R"(!(\d+)_)");
 
@@ -706,8 +708,7 @@ JapanesePhonemizer::phonemize(const std::string &text) {
   return result;
 }
 
-std::string
-JapanesePhonemizer::phonemizeSentence(const std::string &sentence) {
+std::string JapanesePhonemizer::phonemizeSentence(const std::string &sentence) {
   // Caller holds the lock.
   std::string out;
 
@@ -769,8 +770,8 @@ JapanesePhonemizer::phonemizeSentence(const std::string &sentence) {
   if (label_size <= 0 || label_feature == nullptr)
     return out;
 
-  auto phones = phonemizeSentenceLabels(label_feature, label_size,
-                                        drop_devoiced_vowels_);
+  auto phones =
+      phonemizeSentenceLabels(label_feature, label_size, drop_devoiced_vowels_);
 
   // Map to IPA. Multi-symbol IPA (kʲ, tɕ, dʑ, ...) becomes separate
   // single-codepoint phonemes, matching the Python `ipa_phonemes.extend(ipa)`.
@@ -824,8 +825,7 @@ JapanesePhonemizer::splitSentences(const std::string &text) {
       0xFF0E, // ．
       0xFF01, // ！
       0xFF1F, // ？
-      U'!',
-      U'?',
+      U'!',   U'?',
   };
   // Trailing closers/quotes: 」』）】〉》”’"'() ] plus whitespace.
   auto isCloser = [](char32_t cp) {

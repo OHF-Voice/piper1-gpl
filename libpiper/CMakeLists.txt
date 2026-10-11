@@ -80,16 +80,32 @@ include_directories(
 #   multi-ABI builds (e.g. Android) must build ABIs serially, not in parallel.
 set(OPENJTALK_BUILD_DIR ${CMAKE_BINARY_DIR}/open_jtalk)
 set(OPENJTALK_SRC_DIR ${OPENJTALK_BUILD_DIR}/src/openjtalk_external/src)
+set(OPENJTALK_LIB_DIR
+    ${OPENJTALK_BUILD_DIR}/src/openjtalk_external-build)
+
+# Multi-config generators (e.g. Visual Studio) place the library in a
+# per-config subdirectory whose name is only known at build time, so
+# resolve it with a $<CONFIG> generator expression - the same pattern
+# used for the ucd library above. Single-config generators (Unix
+# Makefiles, Ninja) write directly into the build directory.
+if(IS_MULTI_CONFIG)
+    set(OPENJTALK_CONFIG_SUBDIR "$<CONFIG>/")
+else()
+    set(OPENJTALK_CONFIG_SUBDIR "")
+endif()
 
 if(MSVC)
-    set(OPENJTALK_STATIC_LIB ${OPENJTALK_BUILD_DIR}/src/openjtalk_external-build/openjtalk.lib)
+    set(OPENJTALK_STATIC_LIB
+        ${OPENJTALK_LIB_DIR}/${OPENJTALK_CONFIG_SUBDIR}openjtalk.lib)
 else()
-    set(OPENJTALK_STATIC_LIB ${OPENJTALK_BUILD_DIR}/src/openjtalk_external-build/libopenjtalk.a)
+    set(OPENJTALK_STATIC_LIB
+        ${OPENJTALK_LIB_DIR}/${OPENJTALK_CONFIG_SUBDIR}libopenjtalk.a)
 endif()
 
 ExternalProject_Add(openjtalk_external
     GIT_REPOSITORY https://github.com/tsukumijima/open_jtalk.git
-    GIT_TAG 4a1ef70897689d2ee6b8f9be35454a3a4b15b289  # master as of 2026-09-12; re-pin deliberately on update
+    # master as of 2026-09-12; re-pin deliberately on update
+    GIT_TAG 4a1ef70897689d2ee6b8f9be35454a3a4b15b289
     PREFIX ${OPENJTALK_BUILD_DIR}
     SOURCE_SUBDIR src
     CMAKE_ARGS
@@ -101,6 +117,12 @@ ExternalProject_Add(openjtalk_external
     BUILD_BYPRODUCTS
         ${OPENJTALK_STATIC_LIB}
     UPDATE_DISCONNECTED TRUE
+    # open_jtalk defines no install rules: headers come from the
+    # source tree and the library from the build tree, so there is
+    # nothing to install. The default install step must be skipped
+    # explicitly - on Windows it runs MSBuild on an INSTALL project
+    # that a project without install rules never generates (MSB1009).
+    INSTALL_COMMAND ""
 )
 
 set(OPENJTALK_INCLUDE_DIRS
