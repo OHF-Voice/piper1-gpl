@@ -3,6 +3,6 @@
 
 #include <ostream>
 
-void writeWavStreamHeader(std::ostream &stream, int sample_rate);
+void writeWavStreamHeader(std::ostream& stream, int sample_rate);
 
-#endif // WAV_HEADERS_HPP
+#endif  // WAV_HEADERS_HPP

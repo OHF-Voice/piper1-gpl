@@ -1,9 +1,7 @@
 #ifndef PIPER_IMPL_H_
 #define PIPER_IMPL_H_
 
-#include "chinese_phonemizer.h"
-#include "json.hpp"
-#include "uni_algo.h"
+#include <onnxruntime_cxx_api.h>
 
 #include <cstdint>
 #include <map>
@@ -13,7 +11,9 @@
 #include <string>
 #include <vector>
 
-#include <onnxruntime_cxx_api.h>
+#include "chinese_phonemizer.h"
+#include "json.hpp"
+#include "uni_algo.h"
 
 typedef char32_t Phoneme;
 typedef int64_t PhonemeId;
@@ -21,9 +21,9 @@ typedef int64_t SpeakerId;
 typedef std::map<Phoneme, std::vector<PhonemeId>> PhonemeIdMap;
 typedef std::map<std::string, std::vector<PhonemeId>> PinyinIdMap;
 
-const PhonemeId ID_PAD = 0; // interleaved
-const PhonemeId ID_BOS = 1; // beginning of sentence
-const PhonemeId ID_EOS = 2; // end of sentence
+const PhonemeId ID_PAD = 0;  // interleaved
+const PhonemeId ID_BOS = 1;  // beginning of sentence
+const PhonemeId ID_EOS = 2;  // end of sentence
 
 const Phoneme PHONEME_PAD = U'_';
 const Phoneme PHONEME_BOS = U'^';
@@ -48,12 +48,12 @@ const int DEFAULT_HOP_LENGTH = 256;
 #define CLAUSE_PERIOD (40 | CLAUSE_INTONATION_FULL_STOP | CLAUSE_TYPE_SENTENCE)
 #define CLAUSE_COMMA (20 | CLAUSE_INTONATION_COMMA | CLAUSE_TYPE_CLAUSE)
 #define CLAUSE_QUESTION (40 | CLAUSE_INTONATION_QUESTION | CLAUSE_TYPE_SENTENCE)
-#define CLAUSE_EXCLAMATION                                                     \
-  (45 | CLAUSE_INTONATION_EXCLAMATION | CLAUSE_TYPE_SENTENCE)
+#define CLAUSE_EXCLAMATION (45 | CLAUSE_INTONATION_EXCLAMATION | CLAUSE_TYPE_SENTENCE)
 #define CLAUSE_COLON (30 | CLAUSE_INTONATION_FULL_STOP | CLAUSE_TYPE_CLAUSE)
 #define CLAUSE_SEMICOLON (30 | CLAUSE_INTONATION_COMMA | CLAUSE_TYPE_CLAUSE)
 
-enum class PhonemeType {
+enum class PhonemeType
+{
   Invalid = 0,
   Text,
   Espeak,
@@ -67,7 +67,8 @@ NLOHMANN_JSON_SERIALIZE_ENUM(PhonemeType, {
                                               {PhonemeType::Pinyin, "pinyin"},
                                           })
 
-struct piper_synthesizer {
+struct piper_synthesizer
+{
   // From config JSON file
   std::string espeak_voice;
   int sample_rate;
@@ -94,8 +95,7 @@ struct piper_synthesizer {
   std::unique_ptr<piper::ChinesePhonemizer> chinese_phonemizer;
 
   // synthesize state
-  std::queue<std::pair<std::vector<Phoneme>, std::vector<PhonemeId>>>
-      phoneme_id_queue;
+  std::queue<std::pair<std::vector<Phoneme>, std::vector<PhonemeId>>> phoneme_id_queue;
   std::vector<float> chunk_samples;
   std::vector<int> chunk_phoneme_ids;
   std::vector<Phoneme> chunk_phonemes;
@@ -107,15 +107,17 @@ struct piper_synthesizer {
 };
 
 // Get the first UTF-8 codepoint of a string
-inline std::optional<Phoneme> get_codepoint(std::string s) {
+inline std::optional<Phoneme> get_codepoint(std::string s)
+{
   auto view = una::views::utf8(s);
   auto it = view.begin();
 
-  if (it != view.end()) {
+  if (it != view.end())
+  {
     return *it;
   }
 
   return std::nullopt;
 }
 
-#endif // PIPER_IMPL_H_
+#endif  // PIPER_IMPL_H_
