@@ -10,8 +10,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 from urllib.request import urlopen
 
-from flask import Flask, render_template, request
-
 from . import PiperVoice, SynthesisConfig
 from .download_voices import VOICES_JSON, download_voice
 
@@ -20,6 +18,15 @@ _LOGGER = logging.getLogger()
 
 def main() -> None:
     """Run HTTP server."""
+
+    try:
+        from flask import Flask, render_template, request
+    except ImportError as e:
+        raise SystemExit(
+            "The HTTP server requires additional dependencies. "
+            "Install with: pip install piper-tts[http]"
+        ) from e
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", default="0.0.0.0", help="HTTP server host")
     parser.add_argument("--port", type=int, default=5000, help="HTTP server port")
