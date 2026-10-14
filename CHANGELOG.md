@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Fix training failing on a clip shorter than `segment_size` (#155)
+    - A clip that ends up shorter than `segment_size` (8192 samples) after VAD trimming makes the generator produce fewer samples than the reference slice, which the collate function pads to `segment_size`; when every clip in a batch is that short (always with `--data.batch_size 1`), the discriminator feature loss failed with `The size of tensor a (8192) must match the size of tensor b (7424)`
+    - The generated and reference audio are now both trimmed to the shorter of the two before the discriminators, so the clip trains on its real content
+    - A clip shorter than the STFT window (1024 samples) still cannot be trained on
 - Add synthesis settings and a speaker picker to the web page of `piper.http_server`
     - `/synthesize` has always accepted `length_scale`, `noise_scale`, `noise_w_scale`, and `speaker`/`speaker_id`, but the page sent nothing but `text`, so the only way to hear a voice's other speakers or a different speaking rate was to leave the browser and use `curl`
     - The page now has a **Settings** section with a slider and a number box per scale, plus a speaker drop-down for multi-speaker voices; **Reset to voice defaults** restores the starting values
