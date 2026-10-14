@@ -272,6 +272,9 @@ class VitsDataModule(L.LightningDataModule):
                 return [list(unicodedata.normalize("NFD", text))]
 
         else:
+            if self.phoneme_type != PhonemeType.ESPEAK:
+                raise ValueError(f"Unexpected phoneme type: {self.phoneme_type}")
+
             # espeak-ng
             phonemizer = EspeakPhonemizer()
 

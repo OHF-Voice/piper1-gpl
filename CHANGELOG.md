@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Phonemize Hebrew with `HebrewPhonemizer` in `piper.train.infer_torch`
+    - The dispatch had no `HEBREW` branch, so a Hebrew checkpoint was inferred from raw espeak-ng output with no error
+    - The espeak-ng fallback in `infer_torch` and in the training dataset now raises `ValueError` for any phoneme type other than `espeak`, as `PiperVoice.phonemize` already does, so a type without its own branch fails instead of training or inferring on the wrong phonemes
 - Add synthesis settings and a speaker picker to the web page of `piper.http_server`
     - `/synthesize` has always accepted `length_scale`, `noise_scale`, `noise_w_scale`, and `speaker`/`speaker_id`, but the page sent nothing but `text`, so the only way to hear a voice's other speakers or a different speaking rate was to leave the browser and use `curl`
     - The page now has a **Settings** section with a slider and a number box per scale, plus a speaker drop-down for multi-speaker voices; **Reset to voice defaults** restores the starting values
