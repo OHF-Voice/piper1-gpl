@@ -16,6 +16,8 @@ import torch
 
 lightning_module = pytest.importorskip("piper.train.vits.lightning")
 dataset_module = pytest.importorskip("piper.train.vits.dataset")
+# The training step aligns with the Cython extension from build_monotonic_align.sh
+pytest.importorskip("piper.train.vits.monotonic_align")
 
 
 def _tiny_model(use_mrd: bool) -> Any:
