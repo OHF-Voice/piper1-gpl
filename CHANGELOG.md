@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Phonemize Hebrew with `HebrewPhonemizer` in `piper.train.infer_torch`
+    - The dispatch had no `HEBREW` branch, so a Hebrew checkpoint was inferred from raw espeak-ng output with no error
+    - The espeak-ng fallback in `infer_torch` and in the training dataset now raises `ValueError` for any phoneme type other than `espeak`, as `PiperVoice.phonemize` already does, so a type without its own branch fails instead of training or inferring on the wrong phonemes
 - Fix training failing on a clip shorter than `segment_size` (#155)
     - A clip that ends up shorter than `segment_size` (8192 samples) after VAD trimming makes the generator produce fewer samples than the reference slice, which the collate function pads to `segment_size`; when every clip in a batch is that short (always with `--data.batch_size 1`), the discriminator feature loss failed with `The size of tensor a (8192) must match the size of tensor b (7424)`
     - The generated and reference audio are now both trimmed to the shorter of the two before the discriminators, so the clip trains on its real content
