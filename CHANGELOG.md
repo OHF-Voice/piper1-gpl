@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Skip an utterance in training when its cached phoneme ids, audio, or spectrogram are missing
+    - `VitsDataModule.setup()` tested the cache paths themselves (`if not phoneme_ids_path:`), which are always true, so the "Missing ..." warnings never fired and the utterance stayed in the dataset; training then failed later in the data loader with `FileNotFoundError`
+    - When no utterance is left, `setup()` now raises `ValueError` instead of starting a training run with an empty dataset
 - Phonemize Hebrew with `HebrewPhonemizer` in `piper.train.infer_torch`
     - The dispatch had no `HEBREW` branch, so a Hebrew checkpoint was inferred from raw espeak-ng output with no error
     - The espeak-ng fallback in `infer_torch` and in the training dataset now raises `ValueError` for any phoneme type other than `espeak`, as `PiperVoice.phonemize` already does, so a type without its own branch fails instead of training or inferring on the wrong phonemes
