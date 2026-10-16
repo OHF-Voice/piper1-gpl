@@ -172,6 +172,10 @@ class VitsModel(L.LightningModule):
         # on_train_start after any checkpoint restore.
         self._resolved_gammas: list[float] = []
 
+        # Transcript last written for each validation clip tag, so the text is
+        # logged once rather than every epoch. See _log_audio_text.
+        self._logged_audio_text: dict[str, str] = {}
+
         # Set up models
         self.model_g = SynthesizerTrn(
             n_vocab=num_symbols,
@@ -525,6 +529,27 @@ class VitsModel(L.LightningModule):
         )
         return val_loss
 
+    def _log_audio_text(self, tag: str, text: Optional[str]) -> None:
+        """Record which transcript a validation clip belongs to.
+
+        The clip tags are positional now, so the text goes to the Text
+        dashboard instead. Written only when it changes, since the test split
+        is fixed for the life of a process and re-logging it every epoch would
+        be 168 identical entries on a run like the en_GB one.
+        """
+        if not text:
+            return
+
+        experiment = getattr(self.logger, "experiment", None)
+        if not hasattr(experiment, "add_text"):
+            return
+
+        if self._logged_audio_text.get(tag) == text:
+            return
+
+        self._logged_audio_text[tag] = text
+        experiment.add_text(tag, text, global_step=self.global_step)
+
     def _log_vocoder_mel(self) -> None:
         """Log "val_vocoder_mel": full-utterance, teacher-forced decoder error.
 
@@ -639,7 +664,21 @@ class VitsModel(L.LightningModule):
             if has_audio_logger:
                 # Requires tensorboard. Scale to make louder in [-1, 1].
                 norm_audio = test_audio * (1.0 / max(0.01, abs(test_audio).max()))
-                tag = test_utt.text or str(utt_idx)
+
+                # A fixed, URL-safe tag rather than the transcript. The audio
+                # dashboard fetches each clip's bytes through a request keyed
+                # by the tag, and transcripts carry the characters that need
+                # escaping there -- quotes, question marks, ampersands. Runs
+                # whose test set came from prose (LibriTTS-R, Hi-Fi TTS) had
+                # half their tags affected and rendered those clips as zero
+                # length, while a run with plain prompts had none. The written
+                # audio was intact in both cases; only the fetch was not.
+                #
+                # It also keeps clips comparable across restarts: the test
+                # split is drawn randomly, so transcript tags changed whenever
+                # a run was resumed, scattering the history across new tags.
+                tag = f"val/{utt_idx:02d}"
+
                 # Pass global_step so each validation epoch's clip lands on its
                 # own step. Without it, every epoch's audio is written at step 0,
                 # and TensorBoard's audio dashboard can't scrub across epochs --
@@ -650,6 +689,7 @@ class VitsModel(L.LightningModule):
                     sample_rate=self.hparams.sample_rate,
                     global_step=self.global_step,
                 )
+                self._log_audio_text(tag, test_utt.text)
 
         if mos_scores:
             val_mos = sum(mos_scores) / len(mos_scores)

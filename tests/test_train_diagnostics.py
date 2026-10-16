@@ -39,6 +39,7 @@ class _StubTrainer:
         self.max_epochs = max_epochs
         self.optimizers = [object()] * num_optimizers
         self.datamodule = None
+        self.global_step = 0
 
 
 def _tiny_model(**kwargs) -> "VitsModel":
@@ -274,3 +275,101 @@ def test_bucketing_tolerates_a_missing_cache_file(tmp_path) -> None:
 
     sampler = LengthBucketSampler(utts, batch_size=4, drop_last=False)
     assert sorted(i for batch in sampler for i in batch) == list(range(16))
+
+
+# ------------------------------------------------------- validation audio tags
+
+
+class _StubLogger:
+    def __init__(self, experiment) -> None:
+        self.experiment = experiment
+
+
+class _StubExperiment:
+    def __init__(self) -> None:
+        self.audio: List[tuple] = []
+        self.text: List[tuple] = []
+
+    def add_audio(self, tag, snd, sample_rate=None, global_step=None):
+        self.audio.append((tag, global_step))
+
+    def add_text(self, tag, text, global_step=None):
+        self.text.append((tag, text, global_step))
+
+
+def test_audio_tags_are_url_safe_and_positional() -> None:
+    """Transcripts must not become the tag the audio fetch is keyed by.
+
+    TensorBoard requests each clip's bytes by tag, and transcripts carry the
+    characters that need escaping there. Runs whose test set came from prose
+    had half their clips render as zero length while the bytes on disk were
+    intact; a run with plain prompts had none.
+    """
+    model = _tiny_model()
+    experiment = _StubExperiment()
+    model._logger = None  # not used; _log_audio_text reads self.logger
+
+    transcripts = [
+        '"No, really?"',
+        "Don't you remember, Harvey?",
+        "A & B",
+        "plain sentence",
+    ]
+    for index, transcript in enumerate(transcripts):
+        tag = f"val/{index:02d}"
+        experiment.add_audio(tag, None, global_step=10)
+        model._logged_audio_text[tag] = transcript
+
+    tags = [tag for tag, _ in experiment.audio]
+    assert tags == ["val/00", "val/01", "val/02", "val/03"]
+    assert not any(ch in tag for tag in tags for ch in '"?&#%')
+
+
+def test_audio_text_is_logged_once_per_transcript(monkeypatch) -> None:
+    """The text dashboard gets one entry, not one per validation epoch."""
+    model = _tiny_model()
+    experiment = _StubExperiment()
+    monkeypatch.setattr(
+        type(model),
+        "logger",
+        property(lambda self: _StubLogger(experiment)),
+        raising=False,
+    )
+
+    for _ in range(5):
+        model._log_audio_text("val/00", "Don't you remember, Harvey?")
+
+    assert len(experiment.text) == 1
+    assert experiment.text[0][0] == "val/00"
+
+    # A changed split writes the new transcript under the same tag.
+    model._log_audio_text("val/00", "Something else entirely.")
+    assert len(experiment.text) == 2
+
+
+def test_audio_text_tolerates_a_logger_without_add_text(monkeypatch) -> None:
+    model = _tiny_model()
+    monkeypatch.setattr(
+        type(model),
+        "logger",
+        property(lambda self: _StubLogger(object())),
+        raising=False,
+    )
+
+    model._log_audio_text("val/00", "text")  # must not raise
+
+
+def test_audio_text_skips_empty_transcripts(monkeypatch) -> None:
+    model = _tiny_model()
+    experiment = _StubExperiment()
+    monkeypatch.setattr(
+        type(model),
+        "logger",
+        property(lambda self: _StubLogger(experiment)),
+        raising=False,
+    )
+
+    model._log_audio_text("val/00", None)
+    model._log_audio_text("val/01", "")
+
+    assert experiment.text == []
