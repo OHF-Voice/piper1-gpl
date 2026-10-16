@@ -814,6 +814,24 @@ class SynthesizerTrn(nn.Module):
 
         return o, attn, y_mask, (z, z_p, m_p, logs_p)
 
+    def reconstruct(self, y, y_lengths, sid=None):
+        """Decode the posterior latent for a whole utterance (teacher forced).
+
+        This is the training path with the random segment slice removed: the
+        posterior encoder produces z from the ground-truth spectrogram and the
+        decoder renders all of it, rather than one `segment_size` window. The
+        text encoder, alignment and duration predictor are not involved, so
+        comparing the result against the real waveform isolates the vocoder.
+
+        Training only ever shows the decoder a ~0.37 s slice per utterance per
+        epoch, so the segment-scoped mel loss saturates long before the decoder
+        has actually converged. This is what makes that visible -- see
+        "val_vocoder_mel" in VitsModel.
+        """
+        g = self.emb_g(sid).unsqueeze(-1) if self.n_speakers > 1 else None
+        z, _m_q, _logs_q, y_mask = self.enc_q(y, y_lengths, g=g)
+        return self.dec(z * y_mask, g=g), y_mask
+
     def voice_conversion(self, y, y_lengths, sid_src, sid_tgt):
         assert self.n_speakers > 1, "n_speakers have to be larger than 1."
         g_src = self.emb_g(sid_src).unsqueeze(-1)

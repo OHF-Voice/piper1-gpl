@@ -5,6 +5,7 @@ import itertools
 import json
 import logging
 import math
+import os
 import unicodedata
 from dataclasses import dataclass
 from enum import Enum
@@ -17,7 +18,7 @@ import numpy as np
 import torch
 from pysilero_vad import SileroVoiceActivityDetector
 from torch import FloatTensor, LongTensor
-from torch.utils.data import DataLoader, Dataset, random_split
+from torch.utils.data import DataLoader, Dataset, Sampler, random_split
 
 from piper.config import PhonemeType, PiperConfig
 from piper.phoneme_ids import DEFAULT_PHONEME_ID_MAP
@@ -73,6 +74,13 @@ class VitsDataModule(L.LightningDataModule):
         dataset_type: Union[str, DatasetType] = DatasetType.TEXT.value,
         phonemes_path: Optional[Union[str, Path]] = None,
         vowel_clusters: Optional[str] = None,
+        # Group similar-length utterances into the same batch, so the collate
+        # pads much less. See LengthBucketSampler. Off by default: it changes
+        # batch composition, so turning it on mid-run changes the training
+        # distribution of a schedule already in progress. Worth enabling for a
+        # new run, especially on a corpus with a long duration tail.
+        length_bucketing: bool = False,
+        bucket_multiplier: int = 32,
     ) -> None:
         super().__init__()
 
@@ -107,6 +115,8 @@ class VitsDataModule(L.LightningDataModule):
 
         self.segment_size = segment_size
         self.num_workers = num_workers
+        self.length_bucketing = length_bucketing
+        self.bucket_multiplier = bucket_multiplier
 
         # Silence trimming
         self.trim_silence = trim_silence
@@ -522,18 +532,27 @@ class VitsDataModule(L.LightningDataModule):
         )
 
     def _make_dataloader(
-        self, dataset, shuffle: bool = False, drop_last: bool = False
+        self,
+        dataset,
+        shuffle: bool = False,
+        drop_last: bool = False,
+        batch_sampler: Optional[Sampler] = None,
     ) -> DataLoader:
         kwargs = dict(
             collate_fn=UtteranceCollate(
                 is_multispeaker=(self.num_speakers > 1), segment_size=self.segment_size
             ),
-            batch_size=self.batch_size,
             num_workers=self.num_workers,
-            shuffle=shuffle,
-            drop_last=drop_last,
             pin_memory=True,
         )
+        if batch_sampler is not None:
+            # batch_sampler owns batching entirely; DataLoader rejects
+            # batch_size/shuffle/drop_last alongside it.
+            kwargs["batch_sampler"] = batch_sampler
+        else:
+            kwargs["batch_size"] = self.batch_size
+            kwargs["shuffle"] = shuffle
+            kwargs["drop_last"] = drop_last
         # persistent_workers/prefetch_factor are only valid with workers
         if self.num_workers > 0:
             kwargs["persistent_workers"] = True
@@ -550,6 +569,26 @@ class VitsDataModule(L.LightningDataModule):
                 len(self.train_dataset),
                 self.batch_size,
             )
+        if self.length_bucketing:
+            # random_split hands back a Subset, so map the subset positions
+            # back onto the CachedUtterance records the sampler measures.
+            utterances = [
+                self.train_dataset.dataset.utts[i] for i in self.train_dataset.indices
+            ]
+            _LOGGER.info(
+                "Length bucketing enabled (window %s batches)",
+                self.bucket_multiplier,
+            )
+            return self._make_dataloader(
+                self.train_dataset,
+                batch_sampler=LengthBucketSampler(
+                    utterances,
+                    batch_size=self.batch_size,
+                    drop_last=drop_last,
+                    bucket_multiplier=self.bucket_multiplier,
+                ),
+            )
+
         return self._make_dataloader(
             self.train_dataset, shuffle=True, drop_last=drop_last
         )
@@ -642,6 +681,71 @@ class Batch:
     audios: FloatTensor
     audio_lengths: LongTensor
     speaker_ids: Optional[LongTensor] = None
+
+
+class LengthBucketSampler(Sampler[List[int]]):
+    """Batch sampler that groups utterances of similar length together.
+
+    UtteranceCollate pads every batch to its longest member, and nothing else
+    orders the data, so a uniformly shuffled batch is padded to roughly the
+    longest utterance in the corpus. On a corpus whose p90 is 11 s but whose
+    tail reaches 20 s, almost every batch drags in something near the tail and
+    the padding dominates.
+
+    Each epoch the indices are shuffled, cut into windows of
+    `batch_size * bucket_multiplier`, and sorted by length inside the window
+    before being split into batches. Batch order is then shuffled again. That
+    keeps the sampling stochastic while making individual batches
+    length-homogeneous.
+
+    Lengths come from the size of the cached audio tensor on disk. It is a
+    plain 1-D float32 tensor, so its byte size is proportional to its sample
+    count, and os.stat costs nothing next to loading every tensor up front.
+    """
+
+    def __init__(
+        self,
+        utterances: Sequence["CachedUtterance"],
+        batch_size: int,
+        drop_last: bool = True,
+        bucket_multiplier: int = 32,
+        generator: Optional[torch.Generator] = None,
+    ) -> None:
+        super().__init__()
+        self.batch_size = batch_size
+        self.drop_last = drop_last
+        self.window = max(batch_size, batch_size * bucket_multiplier)
+        self.generator = generator
+
+        self.lengths: List[int] = []
+        for utt in utterances:
+            try:
+                self.lengths.append(os.path.getsize(utt.audio_norm_path))
+            except OSError:
+                # Sorts with the shortest; a missing file fails later anyway.
+                self.lengths.append(0)
+
+    def __len__(self) -> int:
+        if self.drop_last:
+            return len(self.lengths) // self.batch_size
+        return math.ceil(len(self.lengths) / self.batch_size)
+
+    def __iter__(self):
+        order = torch.randperm(len(self.lengths), generator=self.generator).tolist()
+
+        batches: List[List[int]] = []
+        for start in range(0, len(order), self.window):
+            window = sorted(
+                order[start : start + self.window], key=lambda i: self.lengths[i]
+            )
+            for offset in range(0, len(window), self.batch_size):
+                batch = window[offset : offset + self.batch_size]
+                if self.drop_last and len(batch) < self.batch_size:
+                    continue
+                batches.append(batch)
+
+        for index in torch.randperm(len(batches), generator=self.generator).tolist():
+            yield batches[index]
 
 
 class VitsDataset(Dataset):

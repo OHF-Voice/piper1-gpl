@@ -168,6 +168,80 @@ when that happens.
 Pass `--model.lr_decay`/`--model.lr_decay_d` to choose a decay yourself, or
 `--model.lr_final_ratio 1.0` to hold the learning rate constant.
 
+### How Long To Train
+
+Run length is usually chosen as a step count, but that is the wrong unit for
+two of the modules. The decoder only ever sees one random `--model.segment_size`
+window per utterance per epoch (8192 samples, about 0.37 s at 22.05 kHz), so its
+real exposure is **passes over the training waveform**:
+
+```
+vocoder passes = epochs x segment_size / mean utterance samples
+```
+
+That scales with *epochs*, not steps. Growing the corpus at a fixed step budget
+divides it: the same step count that gives a 17 h corpus ~160 passes gives a
+290 h corpus ~18. The duration predictor is in the same position — it sees each
+utterance once per epoch. A model can complete its entire learning-rate anneal
+with both still badly underfit, and the segment-scoped training losses will not
+say so.
+
+For reference, the published VITS/LJSpeech recipe works out to ~220 passes and
+the Piper Lessac checkpoint to ~163. The coverage is logged at the start of
+training, with a warning below ~150:
+
+```
+Vocoder coverage: ~190 passes over the training waveform
+(3774 epochs x 8192 samples / 158760 mean samples per utterance).
+```
+
+If that number is low, the fixes are a smaller corpus, a larger
+`--model.segment_size`, a larger batch, or more epochs — not more steps at the
+same epoch count. `segment_size` is not written into the preprocessed cache, so
+it can be changed on a resume without rebuilding.
+
+**Step counts are doubled.** `VitsModel` uses manual optimization and steps both
+the generator and the discriminator in each `training_step`, so Lightning's
+`global_step` — the number in progress bars and in checkpoint filenames like
+`epoch=2164-step=1355540.ckpt` — counts two per batch. The real iteration count
+is half of it, and is logged separately as `iters`.
+
+### Validation Metrics
+
+| Metric | Monitor | What it measures |
+|---|---|---|
+| `val_mel` | `min` | Mel L1 over the random `segment_size` window the generator trains on. Local spectral match on ~0.37 s. Saturates early. |
+| `val_vocoder_mel` | `min` | Mel L1 between the real waveform and the decoder's own reconstruction of it, teacher forced over the **whole** utterance. No text encoder, alignment or duration predictor involved, so it moves with vocoder fit alone. |
+| `val_mos` | `max` | UTMOS on synthesized audio. Perceptual proxy; insensitive to some vocoder artifacts. |
+
+`val_mel` is a good general target but cannot distinguish a converged decoder
+from one that has seen each waveform a handful of times — it is scored on the
+same window the decoder trains on. Watch `val_vocoder_mel` alongside it when you
+suspect the vocoder rather than the alignment.
+
+### Length Bucketing
+
+Batches are padded to their longest member, and by default nothing orders the
+data, so on a corpus with a long duration tail almost every batch is padded to
+near that tail. On a corpus with p50 7 s and a tail to 20 s this measures at
+~61% of each batch being padding.
+
+``` sh
+python3 -m piper.train fit \
+  ... \
+  --data.length_bucketing true
+```
+
+Each epoch the indices are shuffled, cut into windows of
+`--data.bucket_multiplier` batches (default 32), sorted by length inside the
+window, and split into batches whose order is then shuffled again — so batches
+stay stochastic but become length-homogeneous. On the corpus above this takes
+padding to ~3%.
+
+It is off by default because it changes batch composition, and so changes the
+training distribution of a schedule already in progress. Turn it on for a new
+run rather than partway through one.
+
 ### Vocoder Warmstart
 
 When training a new model from scratch, you can significantly speed up training by using `--model.vocoder_warmstart_ckpt <CHECKPOINT>`. This will copy the model parameters for the vocoder, but not the phoneme embedding layer.
