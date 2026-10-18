@@ -265,8 +265,11 @@ class VitsModel(L.LightningModule):
             self.hparams.segment_size,
         )  # slice
 
-        # Trim to avoid padding issues
-        y_hat = y_hat[..., : y.shape[-1]]
+        # Trim to avoid padding issues. A clip shorter than segment_size gives a
+        # shorter y_hat than the y slice, which collate pads to segment_size.
+        min_length = min(y.shape[-1], y_hat.shape[-1])
+        y = y[..., :min_length]
+        y_hat = y_hat[..., :min_length]
 
         _y_d_hat_r, y_d_hat_g, fmap_r, fmap_g = self.model_d(y, y_hat)
         if self.model_mrd is not None:
