@@ -365,9 +365,8 @@ def main() -> None:
                     if i > 0:
                         wav_file.writeframes(
                             bytes(
-                                int(
-                                    voice.config.sample_rate * args.sentence_silence * 2
-                                )
+                                int(voice.config.sample_rate * args.sentence_silence)
+                                * 2
                             )
                         )
 
