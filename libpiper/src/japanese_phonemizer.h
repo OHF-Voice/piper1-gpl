@@ -24,7 +24,8 @@ typedef struct _JPCommon JPCommon;
 #define JAPANESE_PHONEMIZER_API
 #endif
 
-namespace piper {
+namespace piper
+{
 
 // Japanese phonemizer: OpenJTalk full-context labels -> IPA + prosody symbols.
 //
@@ -48,22 +49,26 @@ namespace piper {
 //
 // The OpenJTalk structs are not thread-safe; all public methods take an
 // internal lock (same as pyopenjtalk's per-instance lock).
-class JAPANESE_PHONEMIZER_API JapanesePhonemizer {
-public:
+class JAPANESE_PHONEMIZER_API JapanesePhonemizer
+{
+ public:
   JapanesePhonemizer();
   ~JapanesePhonemizer();
 
-  JapanesePhonemizer(const JapanesePhonemizer &) = delete;
-  JapanesePhonemizer &operator=(const JapanesePhonemizer &) = delete;
+  JapanesePhonemizer(const JapanesePhonemizer&) = delete;
+  JapanesePhonemizer& operator=(const JapanesePhonemizer&) = delete;
 
   // Load the OpenJTalk system dictionary directory (contains sys.dic,
   // matrix.bin, char.bin, unk.dic). Returns false on failure.
   // The pyopenjtalk-plus dictionary (mecab-naist-jdic base + jpreprocess
   // fixes) is required for training parity; stock open_jtalk_dic_utf_8-1.11
   // gives different readings on some words.
-  bool load(const std::string &openjtalk_dict_dir);
+  bool load(const std::string& openjtalk_dict_dir);
 
-  bool isLoaded() const { return loaded_; }
+  bool isLoaded() const
+  {
+    return loaded_;
+  }
 
   // Phonemize text into one UTF-8 string per sentence. Each string is the
   // concatenation of single-codepoint phonemes (IPA + prosody symbols ↑↓#,./?),
@@ -71,25 +76,25 @@ public:
   // Returns an empty vector when the dictionary is not loaded.
   // Never throws: internal errors are swallowed and yield no sentences,
   // mirroring the Python implementation's per-sentence try/except.
-  std::vector<std::string> phonemize(const std::string &text);
+  std::vector<std::string> phonemize(const std::string& text);
 
   // Split text into sentences, keeping final punctuation.
   // Exposed for testing (mirrors _split_sentences in the Python module).
-  static std::vector<std::string> splitSentences(const std::string &text);
+  static std::vector<std::string> splitSentences(const std::string& text);
 
-private:
-  std::string phonemizeSentence(const std::string &sentence);
+ private:
+  std::string phonemizeSentence(const std::string& sentence);
 
   bool loaded_ = false;
   bool drop_devoiced_vowels_ = true;
 
-  Mecab *mecab_ = nullptr;
-  NJD *njd_ = nullptr;
-  JPCommon *jpcommon_ = nullptr;
+  Mecab* mecab_ = nullptr;
+  NJD* njd_ = nullptr;
+  JPCommon* jpcommon_ = nullptr;
 
   mutable std::mutex mutex_;
 };
 
-} // namespace piper
+}  // namespace piper
 
-#endif // JAPANESE_PHONEMIZER_H_
+#endif  // JAPANESE_PHONEMIZER_H_
