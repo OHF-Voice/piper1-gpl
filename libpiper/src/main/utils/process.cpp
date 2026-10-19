@@ -13,8 +13,7 @@
 using json = nlohmann::json;
 
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
-void processInputStream(piper::RunConfig& runConfig, piper_synthesizer* piper,
-                        piper_synthesize_options* options)
+void processInputStream(piper::RunConfig& runConfig, piper_synthesizer* piper, piper_synthesize_options* options)
 {
   std::string line;
   while (getline(std::cin, line))
@@ -40,8 +39,7 @@ void processInputStream(piper::RunConfig& runConfig, piper_synthesizer* piper,
       {
         // Override output WAV file path
         outputType = piper::OUTPUT_FILE;
-        maybeOutputPath =
-            std::filesystem::path(lineRoot["output_file"].get<std::string>());
+        maybeOutputPath = std::filesystem::path(lineRoot["output_file"].get<std::string>());
       }
 
       if (lineRoot.contains("speaker_id"))
@@ -53,9 +51,7 @@ void processInputStream(piper::RunConfig& runConfig, piper_synthesizer* piper,
 
     // Timestamp is used for path to output WAV file
     const auto now = std::chrono::system_clock::now();
-    const auto timestamp = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                               now.time_since_epoch())
-                               .count();
+    const auto timestamp = std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count();
     if (outputType == piper::OUTPUT_DIRECTORY)
     {
       // Generate path using timestamp

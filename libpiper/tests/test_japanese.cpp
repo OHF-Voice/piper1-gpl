@@ -50,8 +50,7 @@ std::string spaced(const std::string& s)
 // splitSentences needs no dictionary.
 TEST(JapaneseSplitSentences, Basic)
 {
-  auto s = JapanesePhonemizer::splitSentences(
-      "今日は良い天気です。明日も晴れるでしょう。");
+  auto s = JapanesePhonemizer::splitSentences("今日は良い天気です。明日も晴れるでしょう。");
   ASSERT_EQ(s.size(), 2u);
   EXPECT_EQ(s[0], "今日は良い天気です。");
   EXPECT_EQ(s[1], "明日も晴れるでしょう。");
@@ -114,8 +113,7 @@ TEST_F(JapaneseGoldenTest, GoldenVectors)
 {
   const std::vector<std::pair<std::string, std::string>> cases = {
       // Basic: kanji readings, は particle -> わ, accent phrase boundary.
-      {"今日は良い天気です。",
-       "k ʲ o ↓ o w a # j o ↓ i # t e ↓ ɴ k i d e s ɯ ."},
+      {"今日は良い天気です。", "k ʲ o ↓ o w a # j o ↓ i # t e ↓ ɴ k i d e s ɯ ."},
       // Decimal guard + katakana loanwords + geminate っ -> ʔ.
       {"これは1.5リットルのペットボトルです。",
        "k o ↑ ɾ e w a # i ↓ ʔ t e ɴ # ɡ o ↑ ɾ i ↓ ʔ t o ɾ ɯ n o # p e ↑ ʔ t o "
@@ -123,8 +121,7 @@ TEST_F(JapaneseGoldenTest, GoldenVectors)
       // Question intonation (e3 == 1 -> ?).
       {"元気ですか？", "ɡ e ↓ ɴ k i d e s ɯ k a ?"},
       // Causative/passive verb chaining (F2@1 rule).
-      {"食べさせられたくなかった。",
-       "t a ↑ b e s a s e ɾ a ↓ ɾ e t a k ɯ n a k a ʔ t a ."},
+      {"食べさせられたくなかった。", "t a ↑ b e s a s e ɾ a ↓ ɾ e t a k ɯ n a k a ʔ t a ."},
       // Fraction denominator: 分 -> ブン.
       {"三分の二は小数で表せます。",
        "s a ↓ ɴ b ɯ ɴ n o # n i ↓ w a # ɕ o ↑ o "
@@ -135,8 +132,7 @@ TEST_F(JapaneseGoldenTest, GoldenVectors)
        "d ʑ o ↑ o h o o ɡ a # ɸ ɯ ↑ s o k ɯ s ɯ ɾ ɯ # b a ↑ a i w a # ɾ e ↑ ɴ "
        "ɾ a k ɯ ɕ i t e k ɯ d a s a ↓ i ."},
       // 球 suffix rule (キュウ, not ダマ, without okurigana mix).
-      {"野球の球を投げた。",
-       "j a ↑ k ʲ ɯ ɯ n o # t a ↓ m a o # n a ↓ ɡ e t a ."},
+      {"野球の球を投げた。", "j a ↑ k ʲ ɯ ɯ n o # t a ↓ m a o # n a ↓ ɡ e t a ."},
       // Devoiced vowel folding: です -> desu.
       {"おはようございます。", "o ↑ h a j o o # ɡ o ↑ z a i m a ↓ s ɯ ."},
   };

@@ -44,6 +44,5 @@ TEST(WavHeadersTest, WriteWavStreamHeader)
   expectedHeader.insert(expectedHeader.end(), {'d', 'a', 't', 'a'});
   pushLittleEndian<uint32_t>(expectedHeader, 0x7ffff000);
 
-  EXPECT_EQ(std::vector<char>(headerStr.begin(), headerStr.end()),
-            expectedHeader);
+  EXPECT_EQ(std::vector<char>(headerStr.begin(), headerStr.end()), expectedHeader);
 }

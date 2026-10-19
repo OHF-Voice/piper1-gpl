@@ -74,10 +74,7 @@ auto main(int argc, char* argv[]) -> int
     else
     {
       // Assume next to piper executable
-      runConfig.eSpeakDataPath =
-          std::filesystem::absolute(
-              exePath.parent_path().append("espeak-ng-data"))
-              .string();
+      runConfig.eSpeakDataPath = std::filesystem::absolute(exePath.parent_path().append("espeak-ng-data")).string();
     }
     if (!runConfig.eSpeakDataPath.has_value())
     {
@@ -108,8 +105,7 @@ auto main(int argc, char* argv[]) -> int
     if (!piper)
     {
       // Fallback to legacy for compatibility
-      piper = piper_create(model_path_str.c_str(), config_path_str.c_str(),
-                           espeak_path_str.c_str());
+      piper = piper_create(model_path_str.c_str(), config_path_str.c_str(), espeak_path_str.c_str());
     }
 
     piper_synthesize_options options;

@@ -94,15 +94,14 @@ const std::unordered_map<std::string, std::string>& openjtalkToIpa()
 bool isDevoicedVowel(const std::string& phone)
 {
   return (phone.size() == 1) &&
-         (phone[0] == 'A' || phone[0] == 'I' || phone[0] == 'U' ||
-          phone[0] == 'E' || phone[0] == 'O');
+         (phone[0] == 'A' || phone[0] == 'I' || phone[0] == 'U' || phone[0] == 'E' || phone[0] == 'O');
 }
 
 // Vowels and moraic phones that can carry an accent phrase boundary.
 bool isMoraFinalPhone(const std::string& phone)
 {
-  static const std::unordered_set<std::string> kMoraFinal = {
-      "a", "i", "u", "e", "o", "A", "I", "U", "E", "O", "N", "cl"};
+  static const std::unordered_set<std::string> kMoraFinal = {"a", "i", "u", "e", "o", "A",
+                                                             "I", "U", "E", "O", "N", "cl"};
   return kMoraFinal.count(phone) != 0;
 }
 
@@ -298,16 +297,14 @@ bool strIn(const char* s, std::initializer_list<const char*> options)
 // feature dicts.
 void applyChainingRules(NJD* njd)
 {
-  for (NJDNode* node = njd->head; node != nullptr && node->next != nullptr;
-       node = node->next)
+  for (NJDNode* node = njd->head; node != nullptr && node->next != nullptr; node = node->next)
   {
     NJDNode* prev = node->prev;
     NJDNode* next = node->next;
     NJDNode* following = next->next;
 
     // 名詞の後ろで新しい語を作る「不足」は連濁したブソクと読む
-    if (strEq(node->pos, "名詞") && strEq(next->string, "不足") &&
-        strEq(next->pron, "フソク"))
+    if (strEq(node->pos, "名詞") && strEq(next->string, "不足") && strEq(next->pron, "フソク"))
     {
       NJDNode_set_read(next, "ブソク");
       NJDNode_set_pron(next, "ブソク");
@@ -338,9 +335,8 @@ void applyChainingRules(NJD* njd)
     }
 
     // 算用数字が別形態素になった分数では、数詞と「の」に挟まれた助数詞の分をブンへ変える
-    if (prev != nullptr && following != nullptr && strEq(node->string, "分") &&
-        strEq(prev->pos_group1, "数") && strEq(next->string, "の") &&
-        strEq(following->pos_group1, "数"))
+    if (prev != nullptr && following != nullptr && strEq(node->string, "分") && strEq(prev->pos_group1, "数") &&
+        strEq(next->string, "の") && strEq(following->pos_group1, "数"))
     {
       NJDNode_set_read(node, "ブン");
       NJDNode_set_pron(node, "ブン");
@@ -360,9 +356,8 @@ void applyChainingRules(NJD* njd)
     }
 
     // 接尾辞「球」は漢語・外来語との生産的な結合をキュウとし、送り仮名を持つ和語だけ連濁させる
-    if (strEq(next->string, "球") && strEq(next->pos, "名詞") &&
-        strEq(next->pos_group1, "接尾") && strEq(next->pron, "キュー") &&
-        hasCodepointInRange(node->string, 0x4E00, 0x9FFF) &&  // 一..鿿
+    if (strEq(next->string, "球") && strEq(next->pos, "名詞") && strEq(next->pos_group1, "接尾") &&
+        strEq(next->pron, "キュー") && hasCodepointInRange(node->string, 0x4E00, 0x9FFF) &&  // 一..鿿
         hasCodepointInRange(node->string, 0x3041, 0x3096))
     {  // ぁ..ゖ
       NJDNode_set_read(next, "ダマ");
@@ -374,16 +369,14 @@ void applyChainingRules(NJD* njd)
 
     // サ変動詞(スル)の前にサ変接続や名詞が来た場合は、一つのアクセント句に纏める
     if ((strIn(node->pos_group1, {"サ変接続", "格助詞", "接続助詞"}) ||
-         (strEq(node->pos, "名詞") && strEq(node->pos_group1, "一般")) ||
-         strEq(node->pos, "副詞")) &&
+         (strEq(node->pos, "名詞") && strEq(node->pos_group1, "一般")) || strEq(node->pos, "副詞")) &&
         strEq(next->ctype, "サ変・スル"))
     {
       NJDNode_set_chain_flag(next, 1);
     }
 
     // ご遠慮、ご配慮のような接頭語がつく場合にその後に続く単語の結合則を変更する
-    if (strIn(node->string, {"お", "御", "ご"}) &&
-        strEq(node->chain_rule, "P1"))
+    if (strIn(node->string, {"お", "御", "ご"}) && strEq(node->chain_rule, "P1"))
     {
       if (next->acc == 0 || next->acc == next->mora_size)
       {
@@ -403,16 +396,14 @@ void applyChainingRules(NJD* njd)
     }
 
     // 連用形のアクセント核の登録を修正する
-    if (strIn(node->cform,
-              {"連用形", "連用タ接続", "連用ゴザイ接続", "連用テ接続"}) &&
-        node->acc == node->mora_size && node->mora_size > 1)
+    if (strIn(node->cform, {"連用形", "連用タ接続", "連用ゴザイ接続", "連用テ接続"}) && node->acc == node->mora_size &&
+        node->mora_size > 1)
     {
       NJDNode_set_acc(node, node->acc - 1);
     }
 
     // 「らる、られる」＋「た」の組み合わせで「た」の助動詞/F2@0を上書きしてアクセントを下げないようにする
-    if (strIn(node->orig, {"れる", "られる", "せる", "させる", "ちゃう"}) &&
-        strEq(next->string, "た"))
+    if (strIn(node->orig, {"れる", "られる", "せる", "させる", "ちゃう"}) && strEq(next->string, "た"))
     {
       NJDNode_set_chain_rule(next, "F2@1");
     }
@@ -446,22 +437,16 @@ void applyChainingRules(NJD* njd)
 char kanaDanRow(const std::string& kana)
 {
   static const std::pair<const char*, char> kMap[] = {
-      {"ア", 'a'}, {"カ", 'a'}, {"サ", 'a'}, {"タ", 'a'}, {"ナ", 'a'},
-      {"ハ", 'a'}, {"マ", 'a'}, {"ヤ", 'a'}, {"ラ", 'a'}, {"ワ", 'a'},
-      {"ガ", 'a'}, {"ザ", 'a'}, {"ダ", 'a'}, {"バ", 'a'}, {"パ", 'a'},
-      {"ァ", 'a'}, {"イ", 'i'}, {"キ", 'i'}, {"シ", 'i'}, {"チ", 'i'},
-      {"ニ", 'i'}, {"ヒ", 'i'}, {"ミ", 'i'}, {"リ", 'i'}, {"ギ", 'i'},
-      {"ジ", 'i'}, {"ヂ", 'i'}, {"ビ", 'i'}, {"ピ", 'i'}, {"ィ", 'i'},
-      {"ウ", 'u'}, {"ク", 'u'}, {"ス", 'u'}, {"ツ", 'u'}, {"ヌ", 'u'},
-      {"フ", 'u'}, {"ム", 'u'}, {"ユ", 'u'}, {"ル", 'u'}, {"グ", 'u'},
-      {"ズ", 'u'}, {"ヅ", 'u'}, {"ブ", 'u'}, {"プ", 'u'}, {"ヴ", 'u'},
-      {"ゥ", 'u'}, {"エ", 'e'}, {"ケ", 'e'}, {"セ", 'e'}, {"テ", 'e'},
-      {"ネ", 'e'}, {"ヘ", 'e'}, {"メ", 'e'}, {"レ", 'e'}, {"ゲ", 'e'},
-      {"ゼ", 'e'}, {"デ", 'e'}, {"ベ", 'e'}, {"ペ", 'e'}, {"ェ", 'e'},
-      {"オ", 'o'}, {"コ", 'o'}, {"ソ", 'o'}, {"ト", 'o'}, {"ノ", 'o'},
-      {"ホ", 'o'}, {"モ", 'o'}, {"ヨ", 'o'}, {"ロ", 'o'}, {"ヲ", 'o'},
-      {"ゴ", 'o'}, {"ゾ", 'o'}, {"ド", 'o'}, {"ボ", 'o'}, {"ポ", 'o'},
-      {"ォ", 'o'},
+      {"ア", 'a'}, {"カ", 'a'}, {"サ", 'a'}, {"タ", 'a'}, {"ナ", 'a'}, {"ハ", 'a'}, {"マ", 'a'}, {"ヤ", 'a'},
+      {"ラ", 'a'}, {"ワ", 'a'}, {"ガ", 'a'}, {"ザ", 'a'}, {"ダ", 'a'}, {"バ", 'a'}, {"パ", 'a'}, {"ァ", 'a'},
+      {"イ", 'i'}, {"キ", 'i'}, {"シ", 'i'}, {"チ", 'i'}, {"ニ", 'i'}, {"ヒ", 'i'}, {"ミ", 'i'}, {"リ", 'i'},
+      {"ギ", 'i'}, {"ジ", 'i'}, {"ヂ", 'i'}, {"ビ", 'i'}, {"ピ", 'i'}, {"ィ", 'i'}, {"ウ", 'u'}, {"ク", 'u'},
+      {"ス", 'u'}, {"ツ", 'u'}, {"ヌ", 'u'}, {"フ", 'u'}, {"ム", 'u'}, {"ユ", 'u'}, {"ル", 'u'}, {"グ", 'u'},
+      {"ズ", 'u'}, {"ヅ", 'u'}, {"ブ", 'u'}, {"プ", 'u'}, {"ヴ", 'u'}, {"ゥ", 'u'}, {"エ", 'e'}, {"ケ", 'e'},
+      {"セ", 'e'}, {"テ", 'e'}, {"ネ", 'e'}, {"ヘ", 'e'}, {"メ", 'e'}, {"レ", 'e'}, {"ゲ", 'e'}, {"ゼ", 'e'},
+      {"デ", 'e'}, {"ベ", 'e'}, {"ペ", 'e'}, {"ェ", 'e'}, {"オ", 'o'}, {"コ", 'o'}, {"ソ", 'o'}, {"ト", 'o'},
+      {"ノ", 'o'}, {"ホ", 'o'}, {"モ", 'o'}, {"ヨ", 'o'}, {"ロ", 'o'}, {"ヲ", 'o'}, {"ゴ", 'o'}, {"ゾ", 'o'},
+      {"ド", 'o'}, {"ボ", 'o'}, {"ポ", 'o'}, {"ォ", 'o'},
   };
   for (const auto& e : kMap)
   {
@@ -494,15 +479,13 @@ void modifyFillerAccent(NJD* njd)
 // long-vowel-ization of the auxiliary "う" after a/i/e-row verb stems.
 void suppressUnnaturalAuxiliaryULongVowel(NJD* njd)
 {
-  for (NJDNode* node = njd->head; node != nullptr && node->next != nullptr;
-       node = node->next)
+  for (NJDNode* node = njd->head; node != nullptr && node->next != nullptr; node = node->next)
   {
     NJDNode* next = node->next;
     if (!strEq(next->pron, "ー") || !strEq(next->read, "ウ")) continue;
     // current_pron = node.pron with trailing "’" (unvoiced-vowel mark) removed.
     std::string current_pron = node->pron ? node->pron : "";
-    while (strEndsWith(current_pron.c_str(), "’"))
-      current_pron = dropLastCodepoints(current_pron.c_str(), 1);
+    while (strEndsWith(current_pron.c_str(), "’")) current_pron = dropLastCodepoints(current_pron.c_str(), 1);
     if (current_pron.empty()) continue;
     auto cps = toCodepoints(current_pron);
     std::string last;
@@ -518,9 +501,8 @@ void retreatAccNuc(NJD* njd)
 {
   if (njd->head == nullptr) return;
   static const char* kBadNucleus[] = {"ー", "ッ", "ン"};
-  static const char32_t kYouon[] = {
-      0x30E3, 0x30E5, 0x30E7, 0x30A1,
-      0x30A3, 0x30A5, 0x30A7, 0x30A9};  // ャュョァィゥェォ
+  static const char32_t kYouon[] = {0x30E3, 0x30E5, 0x30E7, 0x30A1,
+                                    0x30A3, 0x30A5, 0x30A7, 0x30A9};  // ャュョァィゥェォ
   int acc = 0;
   NJDNode* head = njd->head;
   for (NJDNode* node = njd->head; node != nullptr; node = node->next)
@@ -606,15 +588,13 @@ void modifyAccAfterChaining(NJD* njd)
     {
       if (strEq(node->ctype, "特殊・マス"))
       {
-        NJDNode_set_acc(
-            head, strEq(node->cform, "未然形") ? phase_len + 2 : phase_len + 1);
+        NJDNode_set_acc(head, strEq(node->cform, "未然形") ? phase_len + 2 : phase_len + 1);
       }
       else if (strEq(node->ctype, "特殊・ナイ"))
       {
         NJDNode_set_acc(head, phase_len);
       }
-      else if (strIn(node->orig,
-                     {"れる", "られる", "すぎる", "せる", "させる"}))
+      else if (strIn(node->orig, {"れる", "られる", "すぎる", "せる", "させる"}))
       {
         NJDNode_set_acc(head, phase_len + node->acc);
       }
@@ -670,8 +650,7 @@ int numericFeature(const std::string& label, const std::regex& pattern)
 
 // Port of JapanesePhonemizer._phonemize_sentence: parse one sentence's
 // full-context labels into OpenJTalk phones + prosody symbols.
-std::vector<std::string> phonemizeSentenceLabels(char** labels, int num_labels,
-                                                 bool drop_devoiced)
+std::vector<std::string> phonemizeSentenceLabels(char** labels, int num_labels, bool drop_devoiced)
 {
   static const std::regex kPhoneRe(R"(\-(.*?)\+)");
   static const std::regex kQuestionRe(R"(!(\d+)_)");
@@ -755,8 +734,7 @@ std::vector<std::string> phonemizeSentenceLabels(char** labels, int num_labels,
 
 }  // namespace
 
-JapanesePhonemizer::JapanesePhonemizer()
-    : mecab_(new Mecab()), njd_(new NJD()), jpcommon_(new JPCommon())
+JapanesePhonemizer::JapanesePhonemizer() : mecab_(new Mecab()), njd_(new NJD()), jpcommon_(new JPCommon())
 {
   Mecab_initialize(mecab_);
   NJD_initialize(njd_);
@@ -866,8 +844,7 @@ std::string JapanesePhonemizer::phonemizeSentence(const std::string& sentence)
   char** label_feature = JPCommon_get_label_feature(jpcommon_);
   if (label_size <= 0 || label_feature == nullptr) return out;
 
-  auto phones =
-      phonemizeSentenceLabels(label_feature, label_size, drop_devoiced_vowels_);
+  auto phones = phonemizeSentenceLabels(label_feature, label_size, drop_devoiced_vowels_);
 
   // Map to IPA. Multi-symbol IPA (kʲ, tɕ, dʑ, ...) becomes separate
   // single-codepoint phonemes, matching the Python `ipa_phonemes.extend(ipa)`.
@@ -923,8 +900,7 @@ std::string JapanesePhonemizer::phonemizeSentence(const std::string& sentence)
 // whitespace with it. OpenJTalk itself only turns these into a `pau`, so we
 // split first to get one audio chunk per sentence.
 // Mirrors _SENTENCE_END_PATTERN = [。．！？!?]+[」』）】〉》”’\"')\]\s]*
-std::vector<std::string> JapanesePhonemizer::splitSentences(
-    const std::string& text)
+std::vector<std::string> JapanesePhonemizer::splitSentences(const std::string& text)
 {
   static const std::unordered_set<char32_t> kEnders = {
       0x3002,  // 。
@@ -997,9 +973,7 @@ std::vector<std::string> JapanesePhonemizer::splitSentences(
       if (before_digit && after_digit) continue;
     }
 
-    size_t end_byte = (j < cps.size())
-                          ? cps[j].byte_offset
-                          : cps.back().byte_offset + cps.back().byte_len;
+    size_t end_byte = (j < cps.size()) ? cps[j].byte_offset : cps.back().byte_offset + cps.back().byte_len;
     std::string sentence = trim(text.substr(start_byte, end_byte - start_byte));
     if (!sentence.empty()) sentences.push_back(std::move(sentence));
     start_byte = end_byte;

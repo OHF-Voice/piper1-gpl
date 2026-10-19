@@ -4,8 +4,8 @@
 
 #include "wav_headers.hpp"
 
-void textToWavFile(piper_synthesizer* piper, piper_synthesize_options* options,
-                   const char* string, std::ostream& stream)
+void textToWavFile(piper_synthesizer* piper, piper_synthesize_options* options, const char* string,
+                   std::ostream& stream)
 {
   piper_synthesize_start(piper, string, options /* NULL for defaults */);
   piper_audio_chunk chunk;

@@ -16,8 +16,7 @@ class WavFileTest : public ::testing::Test
   static void SetUpTestSuite()
   {
     assets = PiperTestAssets::enModel();
-    synth = piper_create(assets->modelPath().string().c_str(),
-                         assets->configPath().string().c_str(),
+    synth = piper_create(assets->modelPath().string().c_str(), assets->configPath().string().c_str(),
                          PiperTestAssets::espeakDataPath().string().c_str());
     ASSERT_NE(synth, nullptr);
   }

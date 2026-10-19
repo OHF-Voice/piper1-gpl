@@ -31,8 +31,7 @@ TEST_F(MainUtilsTest, ParseArgsBasic)
   piper::RunConfig runConfig;
 
   // NOLINTNEXTLINE(modernize-avoid-c-arrays)
-  const char* argv[] = {"test_program", "--model", "model.onnx",
-                        "--output_file", "output.wav"};
+  const char* argv[] = {"test_program", "--model", "model.onnx", "--output_file", "output.wav"};
   int argc = sizeof(argv) / sizeof(argv[0]);
 
   parseArgsLogic(argc, const_cast<char**>(argv), runConfig);
@@ -62,8 +61,7 @@ TEST_F(MainUtilsTest, ParseArgsWithSpeaker)
   piper::RunConfig runConfig;
 
   // NOLINTNEXTLINE(modernize-avoid-c-arrays)
-  const char* argv[] = {"test_program", "--model", "model.onnx", "--speaker",
-                        "1"};
+  const char* argv[] = {"test_program", "--model", "model.onnx", "--speaker", "1"};
   int argc = sizeof(argv) / sizeof(argv[0]);
 
   parseArgsLogic(argc, const_cast<char**>(argv), runConfig);
@@ -78,11 +76,9 @@ TEST_F(MainUtilsTest, ParseArgsAllParams)
   piper::RunConfig runConfig;
 
   // NOLINTNEXTLINE(modernize-avoid-c-arrays)
-  const char* argv[] = {"test_program",  "--model",     "model.onnx",
-                        "--config",      "config.json", "--output_file",
-                        "out.wav",       "--speaker",   "5",
-                        "--noise_scale", "0.5",         "--length_scale",
-                        "1.2",           "--noise_w",   "0.8"};
+  const char* argv[] = {"test_program",  "--model",        "model.onnx", "--config",  "config.json",
+                        "--output_file", "out.wav",        "--speaker",  "5",         "--noise_scale",
+                        "0.5",           "--length_scale", "1.2",        "--noise_w", "0.8"};
   int argc = sizeof(argv) / sizeof(argv[0]);
 
   parseArgsLogic(argc, const_cast<char**>(argv), runConfig);
@@ -113,9 +109,7 @@ TEST_F(MainUtilsTest, ParseArgsMissingModel)
 
   // This should throw an exception
   EXPECT_THROW(
-      try {
-        parseArgsLogic(argc, const_cast<char**>(argv), runConfig);
-      } catch (const std::runtime_error& e) {
+      try { parseArgsLogic(argc, const_cast<char**>(argv), runConfig); } catch (const std::runtime_error& e) {
         EXPECT_STREQ(e.what(), "Model file doesn't exist");
         throw;
       },
@@ -131,9 +125,7 @@ TEST_F(MainUtilsTest, ParseArgsMissingArgument)
   int argc = sizeof(argv) / sizeof(argv[0]);
 
   EXPECT_THROW(
-      try {
-        parseArgsLogic(argc, const_cast<char**>(argv), runConfig);
-      } catch (const piper::ArgError& e) {
+      try { parseArgsLogic(argc, const_cast<char**>(argv), runConfig); } catch (const piper::ArgError& e) {
         EXPECT_STREQ(e.what(), "Missing argument for --model");
         throw;
       },
@@ -145,8 +137,7 @@ TEST_F(MainUtilsTest, ParseArgsDataDir)
   piper::RunConfig runConfig;
 
   // NOLINTNEXTLINE(modernize-avoid-c-arrays)
-  const char* argv[] = {"test_program", "--model", "model.onnx", "--data-dir",
-                        "/data/piper"};
+  const char* argv[] = {"test_program", "--model", "model.onnx", "--data-dir", "/data/piper"};
   int argc = sizeof(argv) / sizeof(argv[0]);
 
   parseArgsLogic(argc, const_cast<char**>(argv), runConfig);
@@ -161,8 +152,7 @@ TEST_F(MainUtilsTest, ParseArgsG2pwDir)
   piper::RunConfig runConfig;
 
   // NOLINTNEXTLINE(modernize-avoid-c-arrays)
-  const char* argv[] = {"test_program", "--model", "model.onnx", "--g2pw-dir",
-                        "/tmp/g2pw_dict"};
+  const char* argv[] = {"test_program", "--model", "model.onnx", "--g2pw-dir", "/tmp/g2pw_dict"};
   int argc = sizeof(argv) / sizeof(argv[0]);
 
   parseArgsLogic(argc, const_cast<char**>(argv), runConfig);
@@ -177,8 +167,7 @@ TEST_F(MainUtilsTest, ParseArgsG2pwAlias)
 
   // alias --g2pw_model_dir
   // NOLINTNEXTLINE(modernize-avoid-c-arrays)
-  const char* argv[] = {"test_program", "--model", "model.onnx",
-                        "--g2pw_model_dir", "/custom/g2pw"};
+  const char* argv[] = {"test_program", "--model", "model.onnx", "--g2pw_model_dir", "/custom/g2pw"};
   int argc = sizeof(argv) / sizeof(argv[0]);
 
   parseArgsLogic(argc, const_cast<char**>(argv), runConfig);
