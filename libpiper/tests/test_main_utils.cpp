@@ -5,9 +5,11 @@
 
 #include "utils/main_utils.hpp"
 
-class MainUtilsTest : public ::testing::Test {
-protected:
-  void SetUp() override {
+class MainUtilsTest : public ::testing::Test
+{
+ protected:
+  void SetUp() override
+  {
     // Create dummy files for validation to pass
     std::ofstream modelFile("model.onnx");
     std::ofstream("model.onnx.json").close();
@@ -15,7 +17,8 @@ protected:
     std::ofstream("out.wav").close();
   }
 
-  void TearDown() override {
+  void TearDown() override
+  {
     std::filesystem::remove("model.onnx");
     std::filesystem::remove("model.onnx.json");
     std::filesystem::remove("config.json");
@@ -23,28 +26,30 @@ protected:
   }
 };
 
-TEST_F(MainUtilsTest, ParseArgsBasic) {
+TEST_F(MainUtilsTest, ParseArgsBasic)
+{
   piper::RunConfig runConfig;
 
   // NOLINTNEXTLINE(modernize-avoid-c-arrays)
-  const char *argv[] = {"test_program", "--model", "model.onnx",
+  const char* argv[] = {"test_program", "--model", "model.onnx",
                         "--output_file", "output.wav"};
   int argc = sizeof(argv) / sizeof(argv[0]);
 
-  parseArgsLogic(argc, const_cast<char **>(argv), runConfig);
+  parseArgsLogic(argc, const_cast<char**>(argv), runConfig);
 
   EXPECT_EQ(runConfig.modelPath, "model.onnx");
   EXPECT_EQ(runConfig.outputPath.value(), "output.wav");
 }
 
-TEST_F(MainUtilsTest, ParseArgsNoOutputFile) {
+TEST_F(MainUtilsTest, ParseArgsNoOutputFile)
+{
   piper::RunConfig runConfig;
 
   // NOLINTNEXTLINE(modernize-avoid-c-arrays)
-  const char *argv[] = {"test_program", "--model", "model.onnx"};
+  const char* argv[] = {"test_program", "--model", "model.onnx"};
   int argc = sizeof(argv) / sizeof(argv[0]);
 
-  parseArgsLogic(argc, const_cast<char **>(argv), runConfig);
+  parseArgsLogic(argc, const_cast<char**>(argv), runConfig);
 
   EXPECT_EQ(runConfig.modelPath, "model.onnx");
   // Defaults to output directory "."
@@ -52,33 +57,35 @@ TEST_F(MainUtilsTest, ParseArgsNoOutputFile) {
   EXPECT_EQ(runConfig.outputPath.value(), ".");
 }
 
-TEST_F(MainUtilsTest, ParseArgsWithSpeaker) {
+TEST_F(MainUtilsTest, ParseArgsWithSpeaker)
+{
   piper::RunConfig runConfig;
 
   // NOLINTNEXTLINE(modernize-avoid-c-arrays)
-  const char *argv[] = {"test_program", "--model", "model.onnx", "--speaker",
+  const char* argv[] = {"test_program", "--model", "model.onnx", "--speaker",
                         "1"};
   int argc = sizeof(argv) / sizeof(argv[0]);
 
-  parseArgsLogic(argc, const_cast<char **>(argv), runConfig);
+  parseArgsLogic(argc, const_cast<char**>(argv), runConfig);
 
   EXPECT_EQ(runConfig.modelPath, "model.onnx");
   ASSERT_TRUE(runConfig.speakerId.has_value());
   EXPECT_EQ(runConfig.speakerId.value(), 1);
 }
 
-TEST_F(MainUtilsTest, ParseArgsAllParams) {
+TEST_F(MainUtilsTest, ParseArgsAllParams)
+{
   piper::RunConfig runConfig;
 
   // NOLINTNEXTLINE(modernize-avoid-c-arrays)
-  const char *argv[] = {"test_program",  "--model",     "model.onnx",
+  const char* argv[] = {"test_program",  "--model",     "model.onnx",
                         "--config",      "config.json", "--output_file",
                         "out.wav",       "--speaker",   "5",
                         "--noise_scale", "0.5",         "--length_scale",
                         "1.2",           "--noise_w",   "0.8"};
   int argc = sizeof(argv) / sizeof(argv[0]);
 
-  parseArgsLogic(argc, const_cast<char **>(argv), runConfig);
+  parseArgsLogic(argc, const_cast<char**>(argv), runConfig);
 
   EXPECT_EQ(runConfig.modelPath, "model.onnx");
   EXPECT_EQ(runConfig.modelConfigPath, "config.json");
@@ -93,83 +100,88 @@ TEST_F(MainUtilsTest, ParseArgsAllParams) {
   EXPECT_FLOAT_EQ(runConfig.noiseW.value(), 0.8F);
 }
 
-TEST_F(MainUtilsTest, ParseArgsMissingModel) {
+TEST_F(MainUtilsTest, ParseArgsMissingModel)
+{
   piper::RunConfig runConfig;
 
   // Don't create dummy model file
   std::filesystem::remove("model.onnx");
 
   // NOLINTNEXTLINE(modernize-avoid-c-arrays)
-  const char *argv[] = {"test_program", "--model", "model.onnx"};
+  const char* argv[] = {"test_program", "--model", "model.onnx"};
   int argc = sizeof(argv) / sizeof(argv[0]);
 
   // This should throw an exception
   EXPECT_THROW(
       try {
-        parseArgsLogic(argc, const_cast<char **>(argv), runConfig);
-      } catch (const std::runtime_error &e) {
+        parseArgsLogic(argc, const_cast<char**>(argv), runConfig);
+      } catch (const std::runtime_error& e) {
         EXPECT_STREQ(e.what(), "Model file doesn't exist");
         throw;
       },
       std::runtime_error);
 }
 
-TEST_F(MainUtilsTest, ParseArgsMissingArgument) {
+TEST_F(MainUtilsTest, ParseArgsMissingArgument)
+{
   piper::RunConfig runConfig;
 
   // NOLINTNEXTLINE(modernize-avoid-c-arrays)
-  const char *argv[] = {"test_program", "--model"};
+  const char* argv[] = {"test_program", "--model"};
   int argc = sizeof(argv) / sizeof(argv[0]);
 
   EXPECT_THROW(
       try {
-        parseArgsLogic(argc, const_cast<char **>(argv), runConfig);
-      } catch (const piper::ArgError &e) {
+        parseArgsLogic(argc, const_cast<char**>(argv), runConfig);
+      } catch (const piper::ArgError& e) {
         EXPECT_STREQ(e.what(), "Missing argument for --model");
         throw;
       },
       piper::ArgError);
 }
 
-TEST_F(MainUtilsTest, ParseArgsDataDir) {
+TEST_F(MainUtilsTest, ParseArgsDataDir)
+{
   piper::RunConfig runConfig;
 
   // NOLINTNEXTLINE(modernize-avoid-c-arrays)
-  const char *argv[] = {"test_program", "--model", "model.onnx", "--data-dir",
+  const char* argv[] = {"test_program", "--model", "model.onnx", "--data-dir",
                         "/data/piper"};
   int argc = sizeof(argv) / sizeof(argv[0]);
 
-  parseArgsLogic(argc, const_cast<char **>(argv), runConfig);
+  parseArgsLogic(argc, const_cast<char**>(argv), runConfig);
 
   EXPECT_EQ(runConfig.modelPath, "model.onnx");
   ASSERT_TRUE(runConfig.dataDir.has_value());
   EXPECT_EQ(runConfig.dataDir.value(), "/data/piper");
 }
 
-TEST_F(MainUtilsTest, ParseArgsG2pwDir) {
+TEST_F(MainUtilsTest, ParseArgsG2pwDir)
+{
   piper::RunConfig runConfig;
 
   // NOLINTNEXTLINE(modernize-avoid-c-arrays)
-  const char *argv[] = {"test_program", "--model", "model.onnx", "--g2pw-dir",
+  const char* argv[] = {"test_program", "--model", "model.onnx", "--g2pw-dir",
                         "/tmp/g2pw_dict"};
   int argc = sizeof(argv) / sizeof(argv[0]);
 
-  parseArgsLogic(argc, const_cast<char **>(argv), runConfig);
+  parseArgsLogic(argc, const_cast<char**>(argv), runConfig);
 
   ASSERT_TRUE(runConfig.g2pwModelDir.has_value());
   EXPECT_EQ(runConfig.g2pwModelDir.value(), "/tmp/g2pw_dict");
 }
 
-TEST_F(MainUtilsTest, ParseArgsG2pwAlias) {
+TEST_F(MainUtilsTest, ParseArgsG2pwAlias)
+{
   piper::RunConfig runConfig;
 
   // alias --g2pw_model_dir
   // NOLINTNEXTLINE(modernize-avoid-c-arrays)
-  const char *argv[] = {"test_program", "--model", "model.onnx",
+  const char* argv[] = {"test_program", "--model", "model.onnx",
                         "--g2pw_model_dir", "/custom/g2pw"};
   int argc = sizeof(argv) / sizeof(argv[0]);
 
-  parseArgsLogic(argc, const_cast<char **>(argv), runConfig);
+  parseArgsLogic(argc, const_cast<char**>(argv), runConfig);
 
   ASSERT_TRUE(runConfig.g2pwModelDir.has_value());
   EXPECT_EQ(runConfig.g2pwModelDir.value(), "/custom/g2pw");

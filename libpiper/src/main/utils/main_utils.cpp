@@ -9,9 +9,11 @@
 
 #include "piper.h"
 
-namespace piper {
+namespace piper
+{
 
-void printUsage(char *argv[]) { // NOLINT(modernize-avoid-c-arrays)
+void printUsage(char* argv[])
+{  // NOLINT(modernize-avoid-c-arrays)
   std::cerr << '\n';
   std::cerr << "usage: " << argv[0] << " [options]" << '\n';
   std::cerr << '\n';
@@ -55,69 +57,102 @@ void printUsage(char *argv[]) { // NOLINT(modernize-avoid-c-arrays)
 }
 
 // NOLINTNEXTLINE(modernize-avoid-c-arrays)
-void ensureArg(int argc, char *argv[], int argi) {
-  if ((argi + 1) >= argc) {
+void ensureArg(int argc, char* argv[], int argi)
+{
+  if ((argi + 1) >= argc)
+  {
     throw ArgError(std::string("Missing argument for ") + argv[argi]);
   }
 }
 
 // Parse command-line arguments
 // NOLINTNEXTLINE(readability-function-cognitive-complexity,modernize-avoid-c-arrays)
-void parseArgsLogic(int argc, char *argv[], RunConfig &runConfig) {
+void parseArgsLogic(int argc, char* argv[], RunConfig& runConfig)
+{
   std::optional<std::filesystem::path> modelConfigPath;
 
-  for (int i = 1; i < argc; i++) {
+  for (int i = 1; i < argc; i++)
+  {
     std::string arg = argv[i];
 
-    if (arg == "-m" || arg == "--model") {
+    if (arg == "-m" || arg == "--model")
+    {
       ensureArg(argc, argv, i);
       runConfig.modelPath = std::filesystem::path(argv[++i]);
-    } else if (arg == "-c" || arg == "--config") {
+    }
+    else if (arg == "-c" || arg == "--config")
+    {
       ensureArg(argc, argv, i);
       modelConfigPath = std::filesystem::path(argv[++i]);
-    } else if (arg == "-f" || arg == "--output_file" ||
-               arg == "--output-file") {
+    }
+    else if (arg == "-f" || arg == "--output_file" || arg == "--output-file")
+    {
       ensureArg(argc, argv, i);
       std::string filePath = argv[++i];
-      if (filePath == "-") {
+      if (filePath == "-")
+      {
         runConfig.outputType = OUTPUT_STDOUT;
         runConfig.outputPath = std::nullopt;
-      } else {
+      }
+      else
+      {
         runConfig.outputType = OUTPUT_FILE;
         runConfig.outputPath = std::filesystem::path(filePath);
       }
-    } else if (arg == "-d" || arg == "--output_dir" || arg == "--output-dir") {
+    }
+    else if (arg == "-d" || arg == "--output_dir" || arg == "--output-dir")
+    {
       ensureArg(argc, argv, i);
       runConfig.outputType = OUTPUT_DIRECTORY;
       runConfig.outputPath = std::filesystem::path(argv[++i]);
-    } else if (arg == "-s" || arg == "--speaker") {
+    }
+    else if (arg == "-s" || arg == "--speaker")
+    {
       ensureArg(argc, argv, i);
       runConfig.speakerId = std::stol(argv[++i]);
-    } else if (arg == "--noise_scale" || arg == "--noise-scale") {
+    }
+    else if (arg == "--noise_scale" || arg == "--noise-scale")
+    {
       ensureArg(argc, argv, i);
       runConfig.noiseScale = std::stof(argv[++i]);
-    } else if (arg == "--length_scale" || arg == "--length-scale") {
+    }
+    else if (arg == "--length_scale" || arg == "--length-scale")
+    {
       ensureArg(argc, argv, i);
       runConfig.lengthScale = std::stof(argv[++i]);
-    } else if (arg == "--noise_w" || arg == "--noise-w") {
+    }
+    else if (arg == "--noise_w" || arg == "--noise-w")
+    {
       ensureArg(argc, argv, i);
       runConfig.noiseW = std::stof(argv[++i]);
-    } else if (arg == "--espeak_data" || arg == "--espeak-data") {
+    }
+    else if (arg == "--espeak_data" || arg == "--espeak-data")
+    {
       ensureArg(argc, argv, i);
       runConfig.eSpeakDataPath = std::filesystem::path(argv[++i]);
-    } else if (arg == "--data_dir" || arg == "--data-dir") {
+    }
+    else if (arg == "--data_dir" || arg == "--data-dir")
+    {
       ensureArg(argc, argv, i);
       runConfig.dataDir = std::filesystem::path(argv[++i]);
-    } else if (arg == "--g2pw_dir" || arg == "--g2pw-dir" ||
-               arg == "--g2pw_model_dir" || arg == "--g2pw-model-dir") {
+    }
+    else if (arg == "--g2pw_dir" || arg == "--g2pw-dir" ||
+             arg == "--g2pw_model_dir" || arg == "--g2pw-model-dir")
+    {
       ensureArg(argc, argv, i);
       runConfig.g2pwModelDir = std::filesystem::path(argv[++i]);
-    } else if (arg == "--json_input" || arg == "--json-input") {
+    }
+    else if (arg == "--json_input" || arg == "--json-input")
+    {
       runConfig.jsonInput = true;
-    } else if (arg == "--version") {
+    }
+    else if (arg == "--version")
+    {
       std::cout << piper_version() << '\n';
       exit(0);
-    } else if (arg == "-h" || arg == "--help") {
+    }
+    else if (arg == "-h" || arg == "--help")
+    {
       printUsage(argv);
       exit(0);
     }
@@ -125,36 +160,47 @@ void parseArgsLogic(int argc, char *argv[], RunConfig &runConfig) {
 
   // Verify model file exists
   std::ifstream modelFile(runConfig.modelPath.c_str(), std::ios::binary);
-  if (!modelFile.good()) {
+  if (!modelFile.good())
+  {
     throw std::runtime_error("Model file doesn't exist");
   }
 
-  if (!modelConfigPath) {
+  if (!modelConfigPath)
+  {
     runConfig.modelConfigPath =
         std::filesystem::path(runConfig.modelPath.string() + ".json");
-  } else {
+  }
+  else
+  {
     runConfig.modelConfigPath = modelConfigPath.value();
   }
 
   // Verify model config exists
   std::ifstream modelConfigFile(runConfig.modelConfigPath.c_str());
-  if (!modelConfigFile.good()) {
+  if (!modelConfigFile.good())
+  {
     throw std::runtime_error("Model config doesn't exist");
   }
 }
 
 // NOLINTNEXTLINE(modernize-avoid-c-arrays)
-void parseArgs(int argc, char *argv[], RunConfig &runConfig) {
-  try {
+void parseArgs(int argc, char* argv[], RunConfig& runConfig)
+{
+  try
+  {
     parseArgsLogic(argc, argv, runConfig);
-  } catch (const ArgError &e) {
+  }
+  catch (const ArgError& e)
+  {
     std::cerr << e.what() << '\n';
     printUsage(argv);
     exit(1);
-  } catch (const std::exception &e) {
+  }
+  catch (const std::exception& e)
+  {
     std::cerr << e.what() << '\n';
     exit(1);
   }
 }
 
-} // namespace piper
+}  // namespace piper
