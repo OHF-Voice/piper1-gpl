@@ -25,7 +25,29 @@ _ESPEAK_PHONEMIZER_LOCK = ESPEAK_LOCK
 
 _DEFAULT_SYNTHESIS_CONFIG = SynthesisConfig()
 _MAX_WAV_VALUE = 32767.0
+_CLOSING_PUNCT = "\"'“”‘’«»›‹)]}"
 _PHONEME_BLOCK_PATTERN = re.compile(r"(\[\[.*?\]\])")
+_ELLIPSIS_REPEATED_PATTERN = re.compile(r"((\.{2,}|…+)\s*)+")
+_ELLIPSIS_BEFORE_CLOSING_PATTERN = re.compile(
+    rf"(\.{{2,}}|…+)\s*(?=[{_CLOSING_PUNCT}])"
+)
+_ELLIPSIS_SENTENCE_PATTERN = re.compile(
+    rf"(\.{{2,}}|…+)\s*(?=[A-Z0-9\n]|$)", re.UNICODE
+)
+_ELLIPSIS_CLAUSE_PATTERN = re.compile(r"(\.{2,}|…+)\s*")
+
+
+def normalize_ellipsis(text: str) -> str:
+    """Normalize ellipses (... and …) into sentence or clause boundaries."""
+    parts = _PHONEME_BLOCK_PATTERN.split(text)
+    for idx, part in enumerate(parts):
+        if not part.startswith("[["):
+            part = _ELLIPSIS_REPEATED_PATTERN.sub("... ", part)
+            part = _ELLIPSIS_BEFORE_CLOSING_PATTERN.sub(".", part)
+            part = _ELLIPSIS_SENTENCE_PATTERN.sub(". ", part)
+            part = _ELLIPSIS_CLAUSE_PATTERN.sub(", ", part)
+            parts[idx] = part
+    return "".join(parts)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -207,6 +229,8 @@ class PiperVoice:
         :return: List of phonemes for each sentence.
         """
         global _ESPEAK_PHONEMIZER
+
+        text = normalize_ellipsis(text)
 
         if self.config.phoneme_type == PhonemeType.TEXT:
             # Phonemes = codepoints
