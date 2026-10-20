@@ -452,6 +452,24 @@ class PiperVoice:
                 phoneme_alignments=phoneme_alignments,
             )
 
+    def get_silence_samples(self, seconds: float) -> int:
+        """
+        Get the number of whole audio samples for a silence duration.
+
+        :param seconds: Silence duration in seconds.
+        :return: Integer sample count.
+        """
+        return int(self.config.sample_rate * seconds)
+
+    def get_silence_bytes(self, seconds: float) -> bytes:
+        """
+        Get byte-aligned 16-bit PCM silence frames for a silence duration.
+
+        :param seconds: Silence duration in seconds.
+        :return: Byte-aligned 16-bit PCM silence bytes.
+        """
+        return bytes(self.get_silence_samples(seconds) * 2)
+
     def synthesize_wav(
         self,
         text: str,
@@ -459,6 +477,7 @@ class PiperVoice:
         syn_config: Optional[SynthesisConfig] = None,
         set_wav_format: bool = True,
         include_alignments: bool = False,
+        sentence_silence: Optional[float] = None,
     ) -> Optional[list[PhonemeAlignment]]:
         """
         Synthesize and write WAV audio from text.
@@ -468,13 +487,29 @@ class PiperVoice:
         :param syn_config: Synthesis configuration.
         :param set_wav_format: True if the WAV format should be set automatically.
         :param include_alignments: If True and the model supports it, return phoneme/audio alignments.
+        :param sentence_silence: Seconds of silence between sentences (overrides syn_config.sentence_silence).
 
         :return: Phoneme/audio alignments if include_alignments is True, otherwise None.
         """
+        if syn_config is None:
+            syn_config = _DEFAULT_SYNTHESIS_CONFIG
+
+        silence_sec = (
+            sentence_silence
+            if sentence_silence is not None
+            else syn_config.sentence_silence
+        )
+        silence_bytes = self.get_silence_bytes(silence_sec) if silence_sec > 0 else b""
+        silence_samples = (
+            self.get_silence_samples(silence_sec) if silence_sec > 0 else 0
+        )
+
         alignments: list[PhonemeAlignment] = []
         first_chunk = True
-        for audio_chunk in self.synthesize(
-            text, syn_config=syn_config, include_alignments=include_alignments
+        for i, audio_chunk in enumerate(
+            self.synthesize(
+                text, syn_config=syn_config, include_alignments=include_alignments
+            )
         ):
             if first_chunk:
                 if set_wav_format:
@@ -485,6 +520,17 @@ class PiperVoice:
 
                 first_chunk = False
 
+            if (i > 0) and silence_bytes:
+                wav_file.writeframes(silence_bytes)
+                if include_alignments:
+                    alignments.append(
+                        PhonemeAlignment(
+                            phoneme="",
+                            phoneme_ids=[],
+                            num_samples=silence_samples,
+                        )
+                    )
+
             wav_file.writeframes(audio_chunk.audio_int16_bytes)
 
             if include_alignments and audio_chunk.phoneme_alignments:
@@ -494,6 +540,40 @@ class PiperVoice:
             return alignments
 
         return None
+
+    def synthesize_stream_raw(
+        self,
+        text: str,
+        syn_config: Optional[SynthesisConfig] = None,
+        sentence_silence: Optional[float] = None,
+    ) -> Iterable[bytes]:
+        """
+        Synthesize text to raw 16-bit PCM bytes with sentence pauses.
+
+        :param text: Text to synthesize.
+        :param syn_config: Synthesis configuration.
+        :param sentence_silence: Seconds of silence between sentences (overrides syn_config.sentence_silence).
+        :return: Iterable of 16-bit PCM audio bytes chunks.
+        """
+        if syn_config is None:
+            syn_config = _DEFAULT_SYNTHESIS_CONFIG
+
+        silence_sec = (
+            sentence_silence
+            if sentence_silence is not None
+            else syn_config.sentence_silence
+        )
+        silence_bytes = (
+            self.get_silence_bytes(silence_sec) if silence_sec > 0 else b""
+        )
+
+        for i, audio_chunk in enumerate(
+            self.synthesize(text, syn_config=syn_config)
+        ):
+            if (i > 0) and silence_bytes:
+                yield silence_bytes
+
+            yield audio_chunk.audio_int16_bytes
 
     def phoneme_ids_to_audio(
         self,
