@@ -142,6 +142,7 @@ def main() -> None:
                 if args.noise_w_scale is not None
                 else voice.config.noise_w_scale
             ),
+            "sentence_silence": args.sentence_silence,
         }
 
     def voice_speakers(voice: PiperVoice) -> List[Dict[str, Any]]:
@@ -343,6 +344,9 @@ def main() -> None:
             length_scale=float(data.get("length_scale", defaults["length_scale"])),
             noise_scale=float(data.get("noise_scale", defaults["noise_scale"])),
             noise_w_scale=float(data.get("noise_w_scale", defaults["noise_w_scale"])),
+            sentence_silence=float(
+                data.get("sentence_silence", defaults["sentence_silence"])
+            ),
         )
 
         _LOGGER.debug("Synthesizing text: '%s' with config=%s", text, syn_config)
@@ -353,6 +357,16 @@ def main() -> None:
             wav_file: wave.Wave_write = wave.open(wav_io, "wb")
             with wav_file:
                 wav_params_set = False
+                silence_bytes = (
+                    voice.get_silence_bytes(syn_config.sentence_silence)
+                    if syn_config.sentence_silence > 0
+                    else b""
+                )
+                silence_samples = (
+                    voice.get_silence_samples(syn_config.sentence_silence)
+                    if syn_config.sentence_silence > 0
+                    else 0
+                )
                 for i, audio_chunk in enumerate(
                     voice.synthesize(text, syn_config, include_alignments=True)
                 ):
@@ -362,13 +376,14 @@ def main() -> None:
                         wav_file.setnchannels(audio_chunk.sample_channels)
                         wav_params_set = True
 
-                    if i > 0:
-                        wav_file.writeframes(
-                            bytes(
-                                int(
-                                    voice.config.sample_rate * args.sentence_silence * 2
-                                )
-                            )
+                    if (i > 0) and silence_bytes:
+                        wav_file.writeframes(silence_bytes)
+                        alignments.append(
+                            {
+                                "phoneme": "",
+                                "seconds": silence_samples
+                                / audio_chunk.sample_rate,
+                            }
                         )
 
                     wav_file.writeframes(audio_chunk.audio_int16_bytes)
