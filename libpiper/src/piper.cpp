@@ -4,12 +4,18 @@
 
 #include "japanese_phonemizer.h"
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <filesystem>
 #include <fstream>
 #include <limits>
+#include <thread>
 #include <unordered_map>
+
+#ifdef __APPLE__
+#include <sys/sysctl.h>
+#endif
 
 #ifdef WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -27,6 +33,44 @@
 #include <espeak-ng/speak_lib.h>
 
 using json = nlohmann::json;
+
+// Decoder chunking for streaming. A context of STREAM_CONTEXT_FRAMES latent
+// frames on each side makes the chunked output identical to decoding the
+// whole sentence at once (the decoder's receptive field is smaller).
+// The first chunk is small for a fast first sound. Later chunks are sized so
+// that decoding them takes at most STREAM_BUFFER_SHARE of the audio that is
+// still buffered (assuming playback starts with the first chunk), which keeps
+// playback gapless while the per-chunk context overhead shrinks.
+static const int64_t STREAM_CONTEXT_FRAMES = 12;
+static const int64_t STREAM_FIRST_CHUNK_FRAMES = 32;
+static const int64_t STREAM_MIN_CHUNK_FRAMES = 24;
+static const int64_t STREAM_MAX_CHUNK_FRAMES = 256;
+static const double STREAM_BUFFER_SHARE = 0.5;
+static const int MAX_INTRA_OP_THREADS = 4;
+
+static auto default_intra_op_threads() -> int {
+  int cores = 0;
+#ifdef __APPLE__
+  // Performance cores only; efficiency cores slow down the whole run
+  int perf_cores = 0;
+  size_t size = sizeof(perf_cores);
+  if (sysctlbyname("hw.perflevel0.physicalcpu", &perf_cores, &size, nullptr,
+                   0) == 0) {
+    cores = perf_cores;
+  }
+#endif
+  if (cores <= 0) {
+    cores = static_cast<int>(std::thread::hardware_concurrency() / 2);
+  }
+  return std::max(1, std::min(cores, MAX_INTRA_OP_THREADS));
+}
+
+// <dir>/<stem>.<part>.onnx for <dir>/<stem>.onnx
+static auto split_model_path(const std::filesystem::path &model_path,
+                             const std::string &part) -> std::filesystem::path {
+  return model_path.parent_path() /
+         (model_path.stem().string() + "." + part + ".onnx");
+}
 
 auto piper_create_with_options(const piper_create_options *options)
     -> struct piper_synthesizer * {
@@ -321,7 +365,7 @@ auto piper_create_with_options(const piper_create_options *options)
   synth->session_options.DisableCpuMemArena();
   synth->session_options.DisableMemPattern();
   synth->session_options.DisableProfiling();
-  synth->session_options.SetIntraOpNumThreads(1);
+  synth->session_options.SetIntraOpNumThreads(default_intra_op_threads());
   synth->session_options.SetInterOpNumThreads(1);
   synth->session_options.SetGraphOptimizationLevel(
       GraphOptimizationLevel::ORT_ENABLE_BASIC);
@@ -335,8 +379,19 @@ auto piper_create_with_options(const piper_create_options *options)
   ::MultiByteToWideChar(CP_ACP, 0, model_path, -1, &model_path_wc[0], sz);
   auto model_path_ort = &model_path_wc[0];
 #endif
-  synth->session = std::make_unique<Ort::Session>(
-      Ort::Session(ort_env, model_path_ort, synth->session_options));
+  auto encoder_path = split_model_path(model_path, "encoder");
+  auto decoder_path = split_model_path(model_path, "decoder");
+  if (std::filesystem::exists(encoder_path) &&
+      std::filesystem::exists(decoder_path)) {
+    // The full model is not needed when the split model is available
+    synth->encoder_session = std::make_unique<Ort::Session>(
+        Ort::Session(ort_env, encoder_path.c_str(), synth->session_options));
+    synth->decoder_session = std::make_unique<Ort::Session>(
+        Ort::Session(ort_env, decoder_path.c_str(), synth->session_options));
+  } else {
+    synth->session = std::make_unique<Ort::Session>(
+        Ort::Session(ort_env, model_path_ort, synth->session_options));
+  }
 
   return synth;
 }
@@ -424,6 +479,11 @@ auto piper_synthesize_start(struct piper_synthesizer *synth, const char *text,
     synth->phoneme_id_queue.pop();
   }
   synth->chunk_samples.clear();
+  synth->stream_z.clear();
+  synth->stream_z_frames = 0;
+  synth->stream_z_pos = 0;
+  synth->stream_started = false;
+  synth->stream_audio_seconds = 0;
 
   std::unique_ptr<piper_synthesize_options> default_options;
   if (options == nullptr) {
@@ -677,6 +737,231 @@ auto piper_synthesize_start(struct piper_synthesizer *synth, const char *text,
   return PIPER_OK;
 }
 
+// Run the encoder on the next queued sentence and keep its latent frames.
+// Phonemes, phoneme ids, and alignments are reported with the first chunk.
+static auto stream_encode_next_sentence(struct piper_synthesizer *synth,
+                                        struct piper_audio_chunk *chunk)
+    -> int {
+  auto memoryInfo = Ort::MemoryInfo::CreateCpu(
+      OrtAllocatorType::OrtDeviceAllocator, OrtMemType::OrtMemTypeDefault);
+
+  auto [next_phonemes, next_ids] = std::move(synth->phoneme_id_queue.front());
+  synth->phoneme_id_queue.pop();
+
+  std::vector<int64_t> phoneme_id_lengths{
+      static_cast<int64_t>(next_ids.size())};
+  std::vector<float> scales{synth->noise_scale, synth->length_scale,
+                            synth->noise_w_scale};
+
+  std::vector<Ort::Value> input_tensors;
+  std::vector<int64_t> phoneme_ids_shape{1,
+                                         static_cast<int64_t>(next_ids.size())};
+  input_tensors.push_back(Ort::Value::CreateTensor<int64_t>(
+      memoryInfo, next_ids.data(), next_ids.size(), phoneme_ids_shape.data(),
+      phoneme_ids_shape.size()));
+
+  std::vector<int64_t> phoneme_id_lengths_shape{
+      static_cast<int64_t>(phoneme_id_lengths.size())};
+  input_tensors.push_back(Ort::Value::CreateTensor<int64_t>(
+      memoryInfo, phoneme_id_lengths.data(), phoneme_id_lengths.size(),
+      phoneme_id_lengths_shape.data(), phoneme_id_lengths_shape.size()));
+
+  std::vector<int64_t> scales_shape{static_cast<int64_t>(scales.size())};
+  input_tensors.push_back(Ort::Value::CreateTensor<float>(
+      memoryInfo, scales.data(), scales.size(), scales_shape.data(),
+      scales_shape.size()));
+
+  std::vector<int64_t> speaker_id{static_cast<int64_t>(synth->speaker_id)};
+  std::vector<int64_t> speaker_id_shape{
+      static_cast<int64_t>(speaker_id.size())};
+
+  if (synth->num_speakers > 1) {
+    input_tensors.push_back(Ort::Value::CreateTensor<int64_t>(
+        memoryInfo, speaker_id.data(), speaker_id.size(),
+        speaker_id_shape.data(), speaker_id_shape.size()));
+  }
+
+  std::array<const char *, 4> input_names = {"input", "input_lengths", "scales",
+                                             "sid"};
+
+  // "z" first, then optional alignments (see split_voice_for_streaming.py)
+  std::vector<std::string> output_names_strs =
+      synth->encoder_session->GetOutputNames();
+  std::vector<const char *> output_names;
+  output_names.reserve(output_names_strs.size());
+  for (const auto &name : output_names_strs) {
+    output_names.push_back(name.c_str());
+  }
+
+  auto output_tensors = synth->encoder_session->Run(
+      Ort::RunOptions{nullptr}, input_names.data(), input_tensors.data(),
+      input_tensors.size(), output_names.data(), output_names.size());
+
+  if ((output_tensors.empty()) || (!output_tensors.front().IsTensor())) {
+    return PIPER_ERR_GENERIC;
+  }
+
+  auto z_shape = output_tensors.front().GetTensorTypeAndShapeInfo().GetShape();
+  synth->stream_z_channels = z_shape[1];
+  synth->stream_z_frames = z_shape[2];
+  synth->stream_z_pos = 0;
+  const auto *z_data = output_tensors.front().GetTensorData<float>();
+  synth->stream_z.assign(
+      z_data, z_data + (synth->stream_z_channels * synth->stream_z_frames));
+
+  if (output_tensors.size() > 1) {
+    auto alignments_shape =
+        output_tensors[1].GetTensorTypeAndShapeInfo().GetShape();
+
+    chunk->num_alignments = alignments_shape[alignments_shape.size() - 1];
+    const auto *alignments_tensor_data =
+        output_tensors[1].GetTensorData<float>();
+
+    synth->chunk_alignments.resize(chunk->num_alignments);
+    for (std::size_t i = 0; i < chunk->num_alignments; i++) {
+      synth->chunk_alignments[i] = static_cast<int>(
+          alignments_tensor_data[i] * static_cast<float>(synth->hop_length));
+    }
+
+    chunk->alignments = synth->chunk_alignments.data();
+  }
+
+  synth->chunk_phonemes = std::move(next_phonemes);
+  for (auto phoneme_id : next_ids) {
+    if (phoneme_id < std::numeric_limits<int>::min() ||
+        phoneme_id > std::numeric_limits<int>::max()) {
+      continue;
+    }
+    synth->chunk_phoneme_ids.push_back(static_cast<int>(phoneme_id));
+  }
+  chunk->phonemes = synth->chunk_phonemes.data();
+  chunk->num_phonemes = synth->chunk_phonemes.size();
+  chunk->phoneme_ids = synth->chunk_phoneme_ids.data();
+  chunk->num_phoneme_ids = synth->chunk_phoneme_ids.size();
+
+  return PIPER_OK;
+}
+
+// Number of latent frames to decode next, see STREAM_BUFFER_SHARE
+static auto stream_next_chunk_frames(const struct piper_synthesizer *synth)
+    -> int64_t {
+  if (!synth->stream_started || synth->stream_seconds_per_frame <= 0) {
+    return STREAM_FIRST_CHUNK_FRAMES;
+  }
+
+  const double elapsed =
+      std::chrono::duration<double>(std::chrono::steady_clock::now() -
+                                    synth->stream_start_time)
+          .count();
+  const double buffered = synth->stream_audio_seconds - elapsed;
+  const double budget_frames =
+      STREAM_BUFFER_SHARE * buffered / synth->stream_seconds_per_frame;
+
+  return std::clamp<int64_t>(static_cast<int64_t>(budget_frames) -
+                                 (2 * STREAM_CONTEXT_FRAMES),
+                             STREAM_MIN_CHUNK_FRAMES, STREAM_MAX_CHUNK_FRAMES);
+}
+
+// Streaming variant of piper_synthesize_next for split models: the encoder
+// runs once per sentence, then each call decodes and returns the next chunk.
+static auto synthesize_next_streaming(struct piper_synthesizer *synth,
+                                      struct piper_audio_chunk *chunk) -> int {
+  chunk->phonemes = nullptr;
+  chunk->num_phonemes = 0;
+
+  if (synth->stream_z_pos >= synth->stream_z_frames) {
+    if (synth->phoneme_id_queue.empty()) {
+      chunk->is_last = true;
+      return PIPER_DONE;
+    }
+
+    if (stream_encode_next_sentence(synth, chunk) != PIPER_OK) {
+      return PIPER_ERR_GENERIC;
+    }
+
+    if (synth->stream_z_frames == 0) {
+      chunk->is_last = synth->phoneme_id_queue.empty();
+      return chunk->is_last ? PIPER_DONE : PIPER_OK;
+    }
+  }
+
+  // Decode the next chunk with context on both sides
+  const int64_t frames = synth->stream_z_frames;
+  const int64_t start = synth->stream_z_pos;
+  const int64_t end = std::min(frames, start + stream_next_chunk_frames(synth));
+  const int64_t ctx_start = std::max<int64_t>(0, start - STREAM_CONTEXT_FRAMES);
+  const int64_t ctx_end = std::min(frames, end + STREAM_CONTEXT_FRAMES);
+  const int64_t ctx_frames = ctx_end - ctx_start;
+
+  std::vector<float> z_chunk(synth->stream_z_channels * ctx_frames);
+  for (int64_t channel = 0; channel < synth->stream_z_channels; channel++) {
+    const auto *row = synth->stream_z.data() + (channel * frames);
+    std::copy(row + ctx_start, row + ctx_end,
+              z_chunk.begin() + (channel * ctx_frames));
+  }
+
+  auto memoryInfo = Ort::MemoryInfo::CreateCpu(
+      OrtAllocatorType::OrtDeviceAllocator, OrtMemType::OrtMemTypeDefault);
+
+  std::vector<Ort::Value> input_tensors;
+  std::vector<int64_t> z_shape{1, synth->stream_z_channels, ctx_frames};
+  input_tensors.push_back(Ort::Value::CreateTensor<float>(
+      memoryInfo, z_chunk.data(), z_chunk.size(), z_shape.data(),
+      z_shape.size()));
+
+  std::vector<int64_t> speaker_id{static_cast<int64_t>(synth->speaker_id)};
+  std::vector<int64_t> speaker_id_shape{
+      static_cast<int64_t>(speaker_id.size())};
+  if (synth->num_speakers > 1) {
+    input_tensors.push_back(Ort::Value::CreateTensor<int64_t>(
+        memoryInfo, speaker_id.data(), speaker_id.size(),
+        speaker_id_shape.data(), speaker_id_shape.size()));
+  }
+
+  std::array<const char *, 2> input_names = {"z", "sid"};
+  std::vector<std::string> output_names_strs =
+      synth->decoder_session->GetOutputNames();
+  std::array<const char *, 1> output_names = {output_names_strs[0].c_str()};
+
+  const auto decode_start = std::chrono::steady_clock::now();
+  auto output_tensors = synth->decoder_session->Run(
+      Ort::RunOptions{nullptr}, input_names.data(), input_tensors.data(),
+      input_tensors.size(), output_names.data(), output_names.size());
+  const auto decode_end = std::chrono::steady_clock::now();
+  synth->stream_seconds_per_frame =
+      std::chrono::duration<double>(decode_end - decode_start).count() /
+      static_cast<double>(ctx_frames);
+
+  if ((output_tensors.empty()) || (!output_tensors.front().IsTensor())) {
+    return PIPER_ERR_GENERIC;
+  }
+
+  auto audio_shape =
+      output_tensors.front().GetTensorTypeAndShapeInfo().GetShape();
+  const int64_t audio_len = audio_shape[audio_shape.size() - 1];
+  const auto *audio_data = output_tensors.front().GetTensorData<float>();
+
+  // Keep only the samples belonging to [start, end)
+  const int64_t offset =
+      std::min(audio_len, (start - ctx_start) * synth->hop_length);
+  const int64_t count =
+      std::min(audio_len - offset, (end - start) * synth->hop_length);
+  synth->chunk_samples.assign(audio_data + offset, audio_data + offset + count);
+  chunk->samples = synth->chunk_samples.data();
+  chunk->num_samples = synth->chunk_samples.size();
+
+  synth->stream_z_pos = end;
+  if (!synth->stream_started) {
+    synth->stream_started = true;
+    synth->stream_start_time = decode_end;
+  }
+  synth->stream_audio_seconds +=
+      static_cast<double>(count) / static_cast<double>(synth->sample_rate);
+
+  chunk->is_last = (end >= frames) && synth->phoneme_id_queue.empty();
+  return chunk->is_last ? PIPER_DONE : PIPER_OK;
+}
+
 auto piper_synthesize_next(struct piper_synthesizer *synth,
                            struct piper_audio_chunk *chunk) -> int {
   if (synth == nullptr) {
@@ -700,6 +985,10 @@ auto piper_synthesize_next(struct piper_synthesizer *synth,
   chunk->num_phoneme_ids = 0;
   chunk->alignments = nullptr;
   chunk->num_alignments = 0;
+
+  if (synth->encoder_session) {
+    return synthesize_next_streaming(synth, chunk);
+  }
 
   if (synth->phoneme_id_queue.empty()) {
     chunk->is_last = true;

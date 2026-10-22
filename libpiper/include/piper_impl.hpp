@@ -5,6 +5,7 @@
 #include "json.hpp"
 #include "uni_algo.h"
 
+#include <chrono>
 #include <cstdint>
 #include <map>
 #include <memory>
@@ -91,6 +92,22 @@ struct piper_synthesizer {
 
   // onnx
   std::unique_ptr<Ort::Session> session;
+
+  // Optional split model (<model>.encoder.onnx + <model>.decoder.onnx).
+  // When present, the decoder runs in chunks so audio can be streamed
+  // before the whole sentence is synthesized.
+  std::unique_ptr<Ort::Session> encoder_session;
+  std::unique_ptr<Ort::Session> decoder_session;
+  std::vector<float> stream_z; // [channels x frames], row-major
+  int64_t stream_z_channels = 0;
+  int64_t stream_z_frames = 0;
+  int64_t stream_z_pos = 0;
+  // Pacing: chunk sizes adapt to the measured decoder speed so the next
+  // chunk is ready before the audio already returned has been played.
+  bool stream_started = false;
+  std::chrono::steady_clock::time_point stream_start_time;
+  double stream_audio_seconds = 0;
+  double stream_seconds_per_frame = 0;
   Ort::AllocatorWithDefaultOptions session_allocator;
   Ort::SessionOptions session_options;
   Ort::Env session_env;

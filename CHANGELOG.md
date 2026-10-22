@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Stream audio from `libpiper` for voices split into an encoder and a decoder
+    - `piper_synthesize_next` returned one chunk per sentence, so the first sound of a long sentence came only after the whole sentence was synthesized (about 4 seconds for a 6 second sentence of a high voice used by VoiceOver on an Apple M3)
+    - `python3 -m piper.split_voice_for_streaming model.onnx` writes `model.encoder.onnx` and `model.decoder.onnx`; when both are next to the model, `piper_create` loads them instead of the full model and the decoder runs in chunks
+    - Chunks overlap by more than the decoder's receptive field, so the audio matches the unsplit voice; chunk sizes adapt to the measured decoder speed to keep playback gapless
+    - The first sound now comes after about 0.2 seconds regardless of the sentence length
+- Run `libpiper` inference on several threads
+    - The onnxruntime session used a single intra-op thread, which made synthesis about three times slower than the Python API on the same machine
+    - It now uses the number of performance cores on Apple platforms and half of the hardware threads elsewhere, at most 4
+
 - Phonemize Hebrew with `HebrewPhonemizer` in `piper.train.infer_torch`
     - The dispatch had no `HEBREW` branch, so a Hebrew checkpoint was inferred from raw espeak-ng output with no error
     - The espeak-ng fallback in `infer_torch` and in the training dataset now raises `ValueError` for any phoneme type other than `espeak`, as `PiperVoice.phonemize` already does, so a type without its own branch fails instead of training or inferring on the wrong phonemes
