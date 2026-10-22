@@ -388,6 +388,9 @@ auto piper_create_with_options(const piper_create_options *options)
         Ort::Session(ort_env, encoder_path.c_str(), synth->session_options));
     synth->decoder_session = std::make_unique<Ort::Session>(
         Ort::Session(ort_env, decoder_path.c_str(), synth->session_options));
+    synth->stream_z_type = synth->decoder_session->GetInputTypeInfo(0)
+                               .GetTensorTypeAndShapeInfo()
+                               .GetElementType();
   } else {
     synth->session = std::make_unique<Ort::Session>(
         Ort::Session(ort_env, model_path_ort, synth->session_options));
@@ -737,6 +740,26 @@ auto piper_synthesize_start(struct piper_synthesizer *synth, const char *text,
   return PIPER_OK;
 }
 
+// Copy a tensor's values into floats. Split fp16 voices produce a float16
+// latent (and may produce float16 alignments or audio), while split fp32
+// voices are float throughout; this reads either without assuming float.
+static auto tensor_as_floats(const Ort::Value &tensor) -> std::vector<float> {
+  const auto type_and_shape = tensor.GetTensorTypeAndShapeInfo();
+  const auto count = static_cast<std::size_t>(type_and_shape.GetElementCount());
+  std::vector<float> values(count);
+  if (type_and_shape.GetElementType() ==
+      ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16) {
+    const auto *data = tensor.GetTensorData<Ort::Float16_t>();
+    for (std::size_t i = 0; i < count; i++) {
+      values[i] = static_cast<float>(data[i]);
+    }
+  } else {
+    const auto *data = tensor.GetTensorData<float>();
+    std::copy(data, data + count, values.begin());
+  }
+  return values;
+}
+
 // Run the encoder on the next queued sentence and keep its latent frames.
 // Phonemes, phoneme ids, and alignments are reported with the first chunk.
 static auto stream_encode_next_sentence(struct piper_synthesizer *synth,
@@ -805,22 +828,19 @@ static auto stream_encode_next_sentence(struct piper_synthesizer *synth,
   synth->stream_z_channels = z_shape[1];
   synth->stream_z_frames = z_shape[2];
   synth->stream_z_pos = 0;
-  const auto *z_data = output_tensors.front().GetTensorData<float>();
-  synth->stream_z.assign(
-      z_data, z_data + (synth->stream_z_channels * synth->stream_z_frames));
+  synth->stream_z = tensor_as_floats(output_tensors.front());
 
   if (output_tensors.size() > 1) {
     auto alignments_shape =
         output_tensors[1].GetTensorTypeAndShapeInfo().GetShape();
 
     chunk->num_alignments = alignments_shape[alignments_shape.size() - 1];
-    const auto *alignments_tensor_data =
-        output_tensors[1].GetTensorData<float>();
+    const auto alignments_values = tensor_as_floats(output_tensors[1]);
 
     synth->chunk_alignments.resize(chunk->num_alignments);
     for (std::size_t i = 0; i < chunk->num_alignments; i++) {
       synth->chunk_alignments[i] = static_cast<int>(
-          alignments_tensor_data[i] * static_cast<float>(synth->hop_length));
+          alignments_values[i] * static_cast<float>(synth->hop_length));
     }
 
     chunk->alignments = synth->chunk_alignments.data();
@@ -905,9 +925,21 @@ static auto synthesize_next_streaming(struct piper_synthesizer *synth,
 
   std::vector<Ort::Value> input_tensors;
   std::vector<int64_t> z_shape{1, synth->stream_z_channels, ctx_frames};
-  input_tensors.push_back(Ort::Value::CreateTensor<float>(
-      memoryInfo, z_chunk.data(), z_chunk.size(), z_shape.data(),
-      z_shape.size()));
+  std::vector<Ort::Float16_t> z_chunk_f16;
+  if (synth->stream_z_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16) {
+    // Split fp16 voices: the decoder expects a float16 latent
+    z_chunk_f16.resize(z_chunk.size());
+    for (std::size_t i = 0; i < z_chunk.size(); i++) {
+      z_chunk_f16[i] = Ort::Float16_t(z_chunk[i]);
+    }
+    input_tensors.push_back(Ort::Value::CreateTensor<Ort::Float16_t>(
+        memoryInfo, z_chunk_f16.data(), z_chunk_f16.size(), z_shape.data(),
+        z_shape.size()));
+  } else {
+    input_tensors.push_back(Ort::Value::CreateTensor<float>(
+        memoryInfo, z_chunk.data(), z_chunk.size(), z_shape.data(),
+        z_shape.size()));
+  }
 
   std::vector<int64_t> speaker_id{static_cast<int64_t>(synth->speaker_id)};
   std::vector<int64_t> speaker_id_shape{
@@ -939,7 +971,8 @@ static auto synthesize_next_streaming(struct piper_synthesizer *synth,
   auto audio_shape =
       output_tensors.front().GetTensorTypeAndShapeInfo().GetShape();
   const int64_t audio_len = audio_shape[audio_shape.size() - 1];
-  const auto *audio_data = output_tensors.front().GetTensorData<float>();
+  const auto audio_values = tensor_as_floats(output_tensors.front());
+  const auto *audio_data = audio_values.data();
 
   // Keep only the samples belonging to [start, end)
   const int64_t offset =
