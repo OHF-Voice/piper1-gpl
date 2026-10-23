@@ -79,6 +79,16 @@ int main() {
 }
 ```
 
+## Streaming
+
+`piper_synthesize_next` returns one chunk of audio per sentence. To get audio before the whole sentence is synthesized, split the voice into an encoder and a decoder (see [STREAMING.md](../docs/STREAMING.md)):
+
+``` sh
+python3 -m piper.split_voice_for_streaming /path/to/voice.onnx
+```
+
+`piper_create` picks up `voice.encoder.onnx` and `voice.decoder.onnx` automatically and then returns several smaller chunks per sentence.
+
 <!-- Links -->
 [espeak-ng]: https://github.com/espeak-ng/espeak-ng
 [onnxruntime]: https://github.com/microsoft/onnxruntime
