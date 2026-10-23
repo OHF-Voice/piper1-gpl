@@ -102,8 +102,7 @@ struct piper_synthesizer {
   // decoder session at creation time. Split fp32 voices expect FLOAT;
   // split fp16 voices expect FLOAT16, and the streaming path converts
   // each latent chunk to this type before feeding the decoder.
-  ONNXTensorElementDataType stream_z_type =
-      ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT;
+  ONNXTensorElementDataType stream_z_type = ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT;
   std::vector<float> stream_z; // [channels x frames], row-major
   int64_t stream_z_channels = 0;
   int64_t stream_z_frames = 0;

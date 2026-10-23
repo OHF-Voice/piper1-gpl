@@ -762,9 +762,9 @@ static auto tensor_as_floats(const Ort::Value &tensor) -> std::vector<float> {
 
 // Run the encoder on the next queued sentence and keep its latent frames.
 // Phonemes, phoneme ids, and alignments are reported with the first chunk.
-static auto stream_encode_next_sentence(struct piper_synthesizer *synth,
-                                        struct piper_audio_chunk *chunk)
-    -> int {
+static auto
+stream_encode_next_sentence(struct piper_synthesizer *synth,
+                            struct piper_audio_chunk *chunk) -> int {
   auto memoryInfo = Ort::MemoryInfo::CreateCpu(
       OrtAllocatorType::OrtDeviceAllocator, OrtMemType::OrtMemTypeDefault);
 
@@ -863,8 +863,8 @@ static auto stream_encode_next_sentence(struct piper_synthesizer *synth,
 }
 
 // Number of latent frames to decode next, see STREAM_BUFFER_SHARE
-static auto stream_next_chunk_frames(const struct piper_synthesizer *synth)
-    -> int64_t {
+static auto
+stream_next_chunk_frames(const struct piper_synthesizer *synth) -> int64_t {
   if (!synth->stream_started || synth->stream_seconds_per_frame <= 0) {
     return STREAM_FIRST_CHUNK_FRAMES;
   }
