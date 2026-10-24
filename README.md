@@ -42,6 +42,7 @@ People/projects using Piper:
 * [POTaTOS](https://www.youtube.com/watch?v=Dz95q6XYjwY)
 * [Narration Studio](https://github.com/phyce/Narration-Studio)
 * [Basic TTS](https://basictts.com/) - Simple online text-to-speech converter.
+* [Tsubaki TTS Engine](https://github.com/MrHryhorii/SmartStack/tree/main/ONNX_Runner) - Local C#/.NET TTS server using Piper, with OpenVoice V2 voice cloning, real-time streaming, and an OpenAI-compatible API for Windows and Linux.
 
 Bindings to use Piper in programming languages other than Python and C/C++:
 
