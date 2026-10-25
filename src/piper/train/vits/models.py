@@ -77,7 +77,12 @@ class StochasticDurationPredictor(nn.Module):
             h_w = self.post_pre(w)
             h_w = self.post_convs(h_w, x_mask)
             h_w = self.post_proj(h_w) * x_mask
-            e_q = torch.randn(w.size(0), 2, w.size(2)).type_as(x) * x_mask
+            # Drawn on the GPU: drawing on the CPU and copying over made every
+            # training step wait for the GPU to drain.
+            e_q = (
+                torch.randn(w.size(0), 2, w.size(2), device=x.device, dtype=x.dtype)
+                * x_mask
+            )
             z_q = e_q
             for flow in self.post_flows:
                 z_q, logdet_q = flow(z_q, x_mask, g=(x + h_w))
