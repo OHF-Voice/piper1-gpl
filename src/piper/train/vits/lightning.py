@@ -33,6 +33,38 @@ _LOGGER = logging.getLogger(__name__)
 _UPSTREAM_LR_DECAY = 0.999875
 _UPSTREAM_LR_DECAY_D = 0.9999
 
+# Speaker conditioning enters the generator only through these projections of
+# the speaker embedding, each added to an activation: the text-to-flow and
+# posterior WaveNets' cond_layer (weight-normalized, so its scale is
+# weight_g), and the plain cond convs of the decoder and duration predictor.
+_SPEAKER_CONDITIONING_SUFFIXES = (
+    ".cond.weight",
+    ".cond.bias",
+    ".cond_layer.bias",
+    ".cond_layer.weight_g",
+    ".cond_layer.parametrizations.weight.original0",
+)
+
+
+def _zero_fresh_speaker_conditioning(state_dict: dict, fresh_keys: list) -> int:
+    """Zero speaker-conditioning projections the warmstart base did not have.
+
+    A single-speaker base (num_speakers=1, so gin_channels=0) has none of
+    these, and warmstarting a multi-speaker model from it would leave them
+    randomly initialized: about a quarter of the generator adding noise to
+    activations the copied weights were trained without, for every speaker.
+    At zero, each speaker's contribution starts at exactly nothing, so the
+    model begins as the base and learns the speakers apart from there. The
+    weight_v directions and the speaker embedding stay random so that the
+    gradient into the zeroed scales is non-zero from the first step.
+    """
+    zeroed = 0
+    for key in fresh_keys:
+        if key.endswith(_SPEAKER_CONDITIONING_SUFFIXES):
+            state_dict[key] = torch.zeros_like(state_dict[key])
+            zeroed += 1
+    return zeroed
+
 
 class VitsModel(L.LightningModule):
     def __init__(
@@ -817,6 +849,13 @@ class VitsModel(L.LightningModule):
             else:
                 skipped += 1
 
+        fresh = [
+            k
+            for k in new_sd
+            if (k not in old_sd) or (old_sd[k].shape != new_sd[k].shape)
+        ]
+        zeroed = _zero_fresh_speaker_conditioning(new_sd, fresh)
+
         self.load_state_dict(new_sd, strict=False)
         _LOGGER.info(
             "[warmstart] Copied %s parameters from %s (%s skipped; new modules "
@@ -825,6 +864,13 @@ class VitsModel(L.LightningModule):
             ckpt_path,
             skipped,
         )
+        if zeroed:
+            _LOGGER.info(
+                "[warmstart] The base has no speaker conditioning; zeroed %s "
+                "conditioning tensors so the model starts out as the base for "
+                "every speaker",
+                zeroed,
+            )
 
     def on_fit_start(self):
         # Called once at the start of fit()
