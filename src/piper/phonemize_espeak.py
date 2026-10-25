@@ -18,6 +18,25 @@ time (http_server serving Lithuanian beside another language, say) would race
 on the current voice. PiperVoice takes this lock for its own espeak calls, and
 any other phonemizer that talks to espeak-ng must take the same one."""
 
+_CLOSING_PUNCT = "\"'“”‘’«»›‹)]}"
+_ELLIPSIS_REPEATED_PATTERN = re.compile(r"((\.{2,}|…+)\s*)+")
+_ELLIPSIS_BEFORE_CLOSING_PATTERN = re.compile(
+    rf"(\.{{2,}}|…+)\s*(?=[{_CLOSING_PUNCT}])"
+)
+_ELLIPSIS_SENTENCE_PATTERN = re.compile(
+    rf"(\.{{2,}}|…+)\s*(?=[A-Z0-9\n]|$)", re.UNICODE
+)
+_ELLIPSIS_CLAUSE_PATTERN = re.compile(r"(\.{2,}|…+)\s*")
+
+
+def normalize_ellipsis(text: str) -> str:
+    """Normalize ellipses (... and …) into sentence or clause boundaries."""
+    text = _ELLIPSIS_REPEATED_PATTERN.sub("... ", text)
+    text = _ELLIPSIS_BEFORE_CLOSING_PATTERN.sub(".", text)
+    text = _ELLIPSIS_SENTENCE_PATTERN.sub(". ", text)
+    text = _ELLIPSIS_CLAUSE_PATTERN.sub(", ", text)
+    return text.strip()
+
 
 class EspeakPhonemizer:
     """Phonemizer that uses espeak-ng."""
@@ -42,6 +61,7 @@ class EspeakPhonemizer:
         all_phonemes: list[list[str]] = []
         sentence_phonemes: list[str] = []
 
+        text = normalize_ellipsis(text)
         clause_phonemes = espeakbridge.get_phonemes(text)
         for phonemes_str, terminator_str, end_of_sentence in clause_phonemes:
             # Filter out (lang) switch (flags).
