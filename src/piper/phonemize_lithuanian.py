@@ -55,7 +55,7 @@ ESPEAK_VOICE = "lt"
 LITHUANIAN_DIR = Path(__file__).parent / "lithuanian"
 DEFAULT_DICTIONARY_PATH = LITHUANIAN_DIR / "lt_kirciai.tsv"
 """Stress dictionary shipped with piper as package data, the way the Hebrew
-Nakdimon model is: word <TAB> vowel group index <TAB> pitch accent mark
+renikud model is: word <TAB> vowel group index <TAB> pitch accent mark
 [<TAB> IPA vowel group index]. Built from the liepa-tts corpus annotation and
 svogunas/g2p-lt-lexicon, both CC-BY-4.0; see LICENSE and SOURCE in that
 directory. The format is documented on load_dictionary()."""
