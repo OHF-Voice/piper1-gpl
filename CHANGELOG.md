@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Phonemize Hebrew with [renikud](https://github.com/renikud/renikud) instead of Nakdimon + rule-based G2P
+    - Nakdimon only restores niqqud, so stress came from a fixed "last syllable" rule and shva na / nach from heuristics; common words came out with the wrong stress or garbled (`ʔanˈaχnu` → `anaχnˈu`, `besˈeʁet` → `baseʁˈet`), and glottal stops and punctuation were dropped
+    - renikud predicts each letter's consonant, vowel and the word stress directly from unvocalized text (text → stressed IPA in one ~20 MB ONNX model, shipped as `piper/hebrew/renikud.onnx`, CC BY 4.0)
+    - Dotted input is stripped of niqqud before phonemization
+    - Existing `hebrew` voices were trained on the old G2P's phonemes and should be retrained
+
 - Stream audio from `libpiper` for voices split into an encoder and a decoder
     - `piper_synthesize_next` returned one chunk per sentence, so the first sound of a long sentence came only after the whole sentence was synthesized (about 4 seconds for a 6 second sentence of a high voice used by VoiceOver on an Apple M3)
     - `python3 -m piper.split_voice_for_streaming model.onnx` writes `model.encoder.onnx` and `model.decoder.onnx`; when both are next to the model, `piper_create` loads them instead of the full model and the decoder runs in chunks

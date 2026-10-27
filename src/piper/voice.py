@@ -226,7 +226,7 @@ class PiperVoice:
         if self.config.phoneme_type == PhonemeType.HEBREW:
             from .phonemize_hebrew import HebrewPhonemizer
 
-            # Nakdimon (niqqud) + rule-based IPA G2P
+            # renikud G2P (text -> stressed IPA)
             phonemizer = getattr(self, "_hebrew_phonemizer", None)
             if phonemizer is None:
                 phonemizer = HebrewPhonemizer()

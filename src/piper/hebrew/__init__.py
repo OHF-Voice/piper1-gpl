@@ -1,165 +1,165 @@
-"""Hebrew diacritization (niqqud) with Nakdimon.
+"""Hebrew grapheme-to-phoneme with renikud.
 
-Hebrew is normally written without niqqud (vowel points), but espeak-ng needs the
-points to produce correct phonemes. This module restores them with the Nakdimon
-model, mirroring the Arabic ``libtashkeel`` path in :mod:`piper.tashkeel`.
+renikud predicts a consonant, a vowel and the word stress for every letter of
+unvocalized Hebrew text, so it goes straight from text to stressed IPA without a
+niqqud step.
 
-Inference-only port of Nakdimon (https://github.com/elazarg/nakdimon, MIT).
-The character tables and merge logic are vendored from ``nakdimon/hebrew.py`` and
-``nakdimon/dataset.py`` so the package is self-contained (no upstream/TensorFlow
-dependency at runtime). See ``LICENSE`` and ``SOURCE`` in this directory.
+Inference-only port of ``renikud_onnx`` (https://github.com/renikud/renikud,
+CC BY 4.0). The vocabularies and letter constraints are read from the ONNX
+model's metadata, so the package is self-contained (no Hugging Face download at
+runtime). See ``LICENSE`` and ``SOURCE`` in this directory.
 """
 
+import json
 import re
+import unicodedata
 from pathlib import Path
-from typing import List, Optional, Union
+from typing import Dict, List, Set, Tuple, Union
 
 import numpy as np
 from onnxruntime import InferenceSession
 
 HEBREW_DIR = Path(__file__).parent
-DEFAULT_MODEL_PATH = HEBREW_DIR / "nakdimon.onnx"
+DEFAULT_MODEL_PATH = HEBREW_DIR / "renikud.onnx"
 
-# --- vendored from nakdimon/hebrew.py ---------------------------------------
-
-# "rafe": a letter that could have taken a diacritic but did not. Stripped from
-# the final output; kept only so the tables line up with the model's classes.
-RAFE = "ֿ"
-
-HEBREW_LETTERS = [chr(c) for c in range(0x05D0, 0x05EA + 1)]
-
-# 16 niqqud classes once the mask token is prepended (matches ONNX head "N").
-NIQQUD = [RAFE] + [chr(c) for c in range(0x05B0, 0x05BC + 1)] + ["ַ"]
-
-SHIN_YEMANIT = "ׁ"
-SHIN_SMALIT = "ׂ"
-NIQQUD_SIN = [RAFE, SHIN_YEMANIT, SHIN_SMALIT]  # -> ONNX head "S" (4 w/ mask)
-
-DAGESH_LETTER = "ּ"
-DAGESH = [RAFE, DAGESH_LETTER]  # -> ONNX head "D" (3 w/ mask)
-
-VALID_LETTERS = [
-    " ",
-    "!",
-    '"',
-    "'",
-    "(",
-    ")",
-    ",",
-    "-",
-    ".",
-    ":",
-    ";",
-    "?",
-] + HEBREW_LETTERS
-SPECIAL_TOKENS = ["H", "O", "5"]
-
-ENDINGS_TO_REGULAR = dict(zip("ךםןףץ", "כמנפצ"))
-
-_NIQQUD_PATTERN = re.compile("[ְ-ׇּֿׁׂ]")
+ALEF_ORD = ord("א")
+TAF_ORD = ord("ת")
+STRESS_MARK = "ˈ"
+ORTHOGRAPHIC_MARKERS = ("'", '"')
 
 
-def remove_niqqud(text: str) -> str:
-    """Strip any existing points so the model sees bare consonants."""
-    return _NIQQUD_PATTERN.sub("", text)
+def _is_hebrew(char: str) -> bool:
+    return ALEF_ORD <= ord(char) <= TAF_ORD
 
 
-def normalize(c: str) -> str:
-    """Map a character to the model's input alphabet."""
-    if c in VALID_LETTERS:
-        return c
-    if c in ENDINGS_TO_REGULAR:
-        return ENDINGS_TO_REGULAR[c]
-    if c in ("\n", "\t"):
-        return " "
-    if c in ("־", "‒", "–", "—", "―", "−"):
-        return "-"
-    if c == "[":
-        return "("
-    if c == "]":
-        return ")"
-    if c in ("´", "‘", "’"):
-        return "'"
-    if c in ("“", "”", "״"):
-        return '"'
-    if c.isdigit():
-        return "5"
-    if c == "…":
-        return ","
-    if c in ("ײ", "װ", "ױ"):
-        return "H"
-    return "O"
+def normalize_graphemes(text: str) -> str:
+    """Unify geresh / gershayim variants to ASCII ' and "."""
+    text = re.sub(r"[׳'`´]", "'", text)
+    text = re.sub(r'[״""]', '"', text)
+    return text
 
 
-def can_dagesh(letter: str) -> bool:
-    return letter in ("בגדהוזטיכלמנספצקשת" + "ךף")
-
-
-def can_sin(letter: str) -> bool:
-    return letter == "ש"
-
-
-def can_niqqud(letter: str) -> bool:
-    return letter in ("אבגדהוזחטיכלמנסעפצקרשת" + "ךן")
-
-
-# --- vendored from nakdimon/dataset.py (CharacterTable) ----------------------
-
-# Each table prepends the empty mask token at index 0, so head class index -> char
-# is a direct lookup. This is what makes the ONNX heads N=16, D=3, S=4.
-_LETTER_CHARS = [""] + SPECIAL_TOKENS + VALID_LETTERS
-_NIQQUD_CHARS = [""] + NIQQUD
-_DAGESH_CHARS = [""] + DAGESH
-_SIN_CHARS = [""] + NIQQUD_SIN
-
-_CHAR_TO_ID = {c: i for i, c in enumerate(_LETTER_CHARS)}
-
-
-class NakdimonDiacritizer:
-    """Add niqqud to Hebrew text with Nakdimon."""
+class RenikudG2P:
+    """Unvocalized Hebrew text -> IPA with stress marks."""
 
     def __init__(self, model_path: Union[str, Path] = DEFAULT_MODEL_PATH) -> None:
-        """Initialize diacritizer."""
         self.session = InferenceSession(
             str(model_path), providers=["CPUExecutionProvider"]
         )
-        self._input_name = self.session.get_inputs()[0].name
-
-    def __call__(self, text: str, taskeen_threshold: Optional[float] = None) -> str:
-        """Add niqqud (``taskeen_threshold`` accepted for API parity, unused)."""
-        return self.diacritize(text)
-
-    def diacritize(self, text: str) -> str:
-        """Return ``text`` with niqqud restored."""
-        text = remove_niqqud(text)
-        letters = list(text)
-        if not letters:
-            return text
-
-        # This model takes the character ids as float (embedding lookup is baked
-        # into the graph), unlike upstream Nakdimon which takes int32.
-        input_ids = np.array(
-            [[_CHAR_TO_ID[normalize(c)] for c in letters]], dtype=np.float32
+        meta = self.session.get_modelmeta().custom_metadata_map
+        self._vocab: Dict[str, int] = json.loads(meta["vocab"])
+        self._consonant_vocab: Dict[int, str] = {
+            int(k): v for k, v in json.loads(meta["consonant_vocab"]).items()
+        }
+        self._vowel_vocab: Dict[int, str] = {
+            int(k): v for k, v in json.loads(meta["vowel_vocab"]).items()
+        }
+        self._cls_id = int(meta["cls_token_id"])
+        self._sep_id = int(meta["sep_token_id"])
+        self._letter_constraints: Dict[str, List[int]] = json.loads(
+            meta["letter_consonant_constraints"]
         )
-        n_out, d_out, s_out = self.session.run(None, {self._input_name: input_ids})
+        self._geresh_map: Dict[str, str] = json.loads(meta.get("geresh_map", "{}"))
 
-        niqqud = np.argmax(n_out[0], axis=-1)
-        dagesh = np.argmax(d_out[0], axis=-1)
-        sin = np.argmax(s_out[0], axis=-1)
+    def _tokenize(
+        self, normalized: str
+    ) -> Tuple[List[int], List[int], List[Tuple[int, int]]]:
+        """One token per character, plus CLS/SEP; returns ids, mask, offsets."""
+        unk_id = self._vocab.get("[UNK]", 0)
+        ids = [self._cls_id]
+        offsets = [(0, 0)]
+        for i, c in enumerate(normalized):
+            ids.append(self._vocab.get(c, unk_id))
+            offsets.append((i, i + 1))
+        ids.append(self._sep_id)
+        offsets.append((0, 0))
+        return ids, [1] * len(ids), offsets
 
-        out: List[str] = []
-        for letter, n_id, d_id, s_id in zip(letters, niqqud, dagesh, sin):
-            out.append(letter)
-            # Order matches Nakdimon's merge: dagesh, sin, niqqud.
-            if can_dagesh(letter):
-                out.append(_DAGESH_CHARS[d_id])
-            if can_sin(letter):
-                out.append(_SIN_CHARS[s_id])
-            if can_niqqud(letter):
-                out.append(_NIQQUD_CHARS[n_id])
+    @staticmethod
+    def _best_stress_per_word(
+        offsets: List[Tuple[int, int]], text: str, stress_logits: np.ndarray
+    ) -> Set[int]:
+        """Exactly one stressed letter per whitespace-separated word."""
+        word_spans = [(m.start(), m.end()) for m in re.finditer(r"\S+", text)]
+        words: Dict[int, List[int]] = {i: [] for i in range(len(word_spans))}
+        for tok_idx, (start, end) in enumerate(offsets):
+            if end - start != 1:
+                continue
+            for word_idx, (ws, we) in enumerate(word_spans):
+                if ws <= start < we:
+                    words[word_idx].append(tok_idx)
+                    break
+        return {
+            max(toks, key=lambda t: stress_logits[t, 1])
+            for toks in words.values()
+            if toks
+        }
 
-        # Marks are emitted in Nakdimon's order (dagesh, sin/shin dot, vowel),
-        # which is the traditional Hebrew storage order espeak-ng expects. Do NOT
-        # NFC-normalize: that reorders the vowel before the shin dot and makes
-        # espeak-ng fall back to spelling out letter names.
-        return "".join(out).replace(RAFE, "")
+    def __call__(self, text: str) -> str:
+        normalized = unicodedata.normalize("NFD", normalize_graphemes(text))
+        ids, mask, offsets = self._tokenize(normalized)
+        consonant_logits, vowel_logits, stress_logits = self.session.run(
+            ["consonant_logits", "vowel_logits", "stress_logits"],
+            {
+                "input_ids": np.array([ids], dtype=np.int64),
+                "attention_mask": np.array([mask], dtype=np.int64),
+            },
+        )
+        consonant_preds = consonant_logits[0].argmax(axis=-1)
+        vowel_preds = vowel_logits[0].argmax(axis=-1)
+        stressed = self._best_stress_per_word(offsets, normalized, stress_logits[0])
+
+        result: List[str] = []
+        prev_end = 0
+        for tok_idx, (start, end) in enumerate(offsets):
+            if end - start != 1:  # CLS / SEP
+                if end > start:
+                    prev_end = end
+                continue
+
+            if start > prev_end:  # characters the tokenizer skipped
+                result.append(normalized[prev_end:start])
+
+            char = normalized[start:end]
+            prev_end = end
+
+            if not _is_hebrew(char):
+                if char not in ORTHOGRAPHIC_MARKERS:
+                    result.append(char)  # passthrough
+                continue
+
+            cid = int(consonant_preds[tok_idx])
+            allowed = self._letter_constraints.get(char)
+            if (allowed is not None) and (cid not in allowed):
+                cid = allowed[int(np.argmax(consonant_logits[0][tok_idx, allowed]))]
+            consonant = self._consonant_vocab.get(cid, "∅")
+
+            # Geresh: a following apostrophe forces the geresh consonant variant
+            if (
+                (char in self._geresh_map)
+                and (end < len(normalized))
+                and (normalized[end] == "'")
+            ):
+                consonant = self._geresh_map[char]
+
+            vowel = self._vowel_vocab.get(int(vowel_preds[tok_idx]), "∅")
+            stress = tok_idx in stressed
+
+            # Word-final ח with /a/ is a furtive patah: [ˈ]aχ, vowel first
+            word_final = (end >= len(normalized)) or (not normalized[end].isalpha())
+            chunk = ""
+            if (char == "ח") and word_final and (vowel == "a"):
+                chunk = (STRESS_MARK if stress else "") + "aχ"
+            else:
+                if consonant != "∅":
+                    chunk += consonant
+                if stress:
+                    chunk += STRESS_MARK
+                if vowel != "∅":
+                    chunk += vowel
+            result.append(chunk)
+
+        if prev_end < len(normalized):
+            result.append(normalized[prev_end:])
+
+        return "".join(result)

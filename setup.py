@@ -25,7 +25,7 @@ HEBREW_DATA_DIR = MODULE_DIR / "hebrew"
 HEBREW_DATA_FILES = [
     (HEBREW_DATA_DIR / f_name).relative_to(MODULE_DIR)
     for f_name in (
-        "nakdimon.onnx",
+        "renikud.onnx",
         "LICENSE",
         "SOURCE",
     )
