@@ -3,6 +3,7 @@
 import ast
 import logging
 import operator
+import os
 from functools import reduce
 from typing import Optional
 
@@ -31,6 +32,38 @@ _LOGGER = logging.getLogger(__name__)
 # length to anneal over.
 _UPSTREAM_LR_DECAY = 0.999875
 _UPSTREAM_LR_DECAY_D = 0.9999
+
+# Speaker conditioning enters the generator only through these projections of
+# the speaker embedding, each added to an activation: the text-to-flow and
+# posterior WaveNets' cond_layer (weight-normalized, so its scale is
+# weight_g), and the plain cond convs of the decoder and duration predictor.
+_SPEAKER_CONDITIONING_SUFFIXES = (
+    ".cond.weight",
+    ".cond.bias",
+    ".cond_layer.bias",
+    ".cond_layer.weight_g",
+    ".cond_layer.parametrizations.weight.original0",
+)
+
+
+def _zero_fresh_speaker_conditioning(state_dict: dict, fresh_keys: list) -> int:
+    """Zero speaker-conditioning projections the warmstart base did not have.
+
+    A single-speaker base (num_speakers=1, so gin_channels=0) has none of
+    these, and warmstarting a multi-speaker model from it would leave them
+    randomly initialized: about a quarter of the generator adding noise to
+    activations the copied weights were trained without, for every speaker.
+    At zero, each speaker's contribution starts at exactly nothing, so the
+    model begins as the base and learns the speakers apart from there. The
+    weight_v directions and the speaker embedding stay random so that the
+    gradient into the zeroed scales is non-zero from the first step.
+    """
+    zeroed = 0
+    for key in fresh_keys:
+        if key.endswith(_SPEAKER_CONDITIONING_SUFFIXES):
+            state_dict[key] = torch.zeros_like(state_dict[key])
+            zeroed += 1
+    return zeroed
 
 
 class VitsModel(L.LightningModule):
@@ -148,6 +181,20 @@ class VitsModel(L.LightningModule):
             # Default gin_channels for multi-speaker model
             self.hparams.gin_channels = 512
 
+        if (self.hparams.num_speakers <= 1) and (self.hparams.gin_channels > 0):
+            # The speaker embedding is only built when n_speakers > 1, so g is
+            # always None here and every conditioning layer this would allocate
+            # (flow, enc_q, dec, dp -- about a quarter of the generator) is
+            # dead weight that can never be called. Fail rather than train a
+            # model whose conditioning silently does nothing.
+            raise ValueError(
+                f"gin_channels={self.hparams.gin_channels} requires "
+                f"num_speakers > 1, got {self.hparams.num_speakers}. Speaker "
+                "conditioning cannot run without a speaker embedding. Use "
+                "gin_channels=0 for a single-speaker model, or train with at "
+                "least two speakers."
+            )
+
         # Used to partially load the state dict from a checkpoint.
         # Only the text/phoneme agnostic portions are loaded.
         self._vocoder_warmstart_ckpt = vocoder_warmstart_ckpt
@@ -156,6 +203,10 @@ class VitsModel(L.LightningModule):
         # Gammas resolved in configure_optimizers, re-asserted in
         # on_train_start after any checkpoint restore.
         self._resolved_gammas: list[float] = []
+
+        # Transcript last written for each validation clip tag, so the text is
+        # logged once rather than every epoch. See _log_audio_text.
+        self._logged_audio_text: dict[str, str] = {}
 
         # Set up models
         self.model_g = SynthesizerTrn(
@@ -329,10 +380,26 @@ class VitsModel(L.LightningModule):
 
         return loss_gen_all, loss_disc_all, metrics
 
+    @property
+    def true_global_step(self) -> int:
+        """Training iterations, as distinct from Lightning's `global_step`.
+
+        Under manual optimization Lightning increments `global_step` once per
+        `optimizer.step()`, and `training_step` steps both the generator and
+        the discriminator. So `global_step` -- the number in every log line and
+        every checkpoint filename -- is twice the number of batches the model
+        has actually seen. Budget against this instead.
+        """
+        optimizers = getattr(getattr(self, "_trainer", None), "optimizers", None)
+        return self.global_step // max(1, len(optimizers or [None]))
+
     def training_step(self, batch: Batch, batch_idx: int):
         opt_g, opt_d = self.optimizers()
         loss_g, loss_d, metrics = self._compute_loss(batch)
 
+        # Logged so the real iteration count is visible next to the losses,
+        # rather than only the doubled global_step -- see true_global_step.
+        self.log("iters", float(self.true_global_step), batch_size=self.batch_size)
         self.log("loss_g", loss_g, batch_size=self.batch_size)
         self.log_dict(
             {f"train_{name}": value for name, value in metrics.items()},
@@ -351,6 +418,15 @@ class VitsModel(L.LightningModule):
         opt_d.step()
 
     def on_train_start(self) -> None:
+        self._reassert_scheduler_gammas()
+
+        # Never let a diagnostic take down a run that was about to start.
+        try:
+            self._log_training_budget()
+        except Exception:  # pragma: no cover - reporting only
+            _LOGGER.debug("Could not report the training budget", exc_info=True)
+
+    def _reassert_scheduler_gammas(self) -> None:
         # ExponentialLR.state_dict() includes gamma, and load_state_dict()
         # does a plain __dict__.update() -- so resuming with --ckpt_path
         # overwrites whatever configure_optimizers just resolved with the
@@ -374,6 +450,79 @@ class VitsModel(L.LightningModule):
                     gamma,
                 )
                 scheduler.gamma = gamma
+
+    # torch.save() wraps the tensor in a small zip container. Subtracted so the
+    # byte size of a cached audio tensor converts to a sample count; it is a
+    # rounding error next to any real utterance, and only a mean is wanted.
+    _CACHE_HEADER_BYTES = 768
+
+    def _mean_audio_samples(self, limit: int = 256) -> Optional[float]:
+        """Mean cached audio length, from file sizes rather than tensor loads.
+
+        Cached audio is a 1-D float32 tensor, so os.stat is a good enough proxy
+        for its length and costs nothing next to loading hundreds of them.
+        """
+        dataset = getattr(self.trainer, "datamodule", None)
+        dataset = getattr(dataset, "train_dataset", None)
+        if dataset is None:
+            return None
+
+        utterances = getattr(getattr(dataset, "dataset", None), "utts", None)
+        if utterances is None:
+            utterances = getattr(dataset, "utts", None)
+        if not utterances:
+            return None
+
+        step = max(1, len(utterances) // limit)
+        sizes = []
+        for utt in utterances[::step][:limit]:
+            try:
+                sizes.append(os.path.getsize(utt.audio_norm_path))
+            except OSError:
+                continue
+        if not sizes:
+            return None
+        return max(1.0, (sum(sizes) / len(sizes) - self._CACHE_HEADER_BYTES) / 4)
+
+    def _log_training_budget(self) -> None:
+        """Report how much training the decoder and duration predictor will get.
+
+        Run length is normally chosen as a step count, but the decoder only
+        sees one random `segment_size` window per utterance per epoch. Its real
+        exposure is therefore passes over the waveform, which scales with
+        epochs -- so growing the corpus at a fixed step budget silently starves
+        it. A model can finish its full learning-rate anneal having shown the
+        vocoder a fraction of the training the same step count would have given
+        it on a smaller corpus, and nothing in the segment-scoped losses says
+        so. Reference points: the LJSpeech VITS recipe is ~220 passes and the
+        Piper Lessac checkpoint ~163, against ~18 for a 290 h run that finished
+        its schedule with an audibly underfit vocoder.
+        """
+        max_epochs = getattr(self.trainer, "max_epochs", None)
+        if not max_epochs or max_epochs <= 0:
+            return
+
+        mean_samples = self._mean_audio_samples()
+        if mean_samples is None:
+            return
+
+        passes = max_epochs * self.hparams.segment_size / mean_samples
+        _LOGGER.info(
+            "Vocoder coverage: ~%.0f passes over the training waveform "
+            "(%s epochs x %s samples / %.0f mean samples per utterance).",
+            passes,
+            max_epochs,
+            self.hparams.segment_size,
+            mean_samples,
+        )
+        if passes < 150:
+            _LOGGER.warning(
+                "Only ~%.0f vocoder passes. Below ~150 the decoder and "
+                "duration predictor tend to underfit no matter how many steps "
+                "this runs, because both scale with epochs rather than steps. "
+                "Train fewer hours, raise segment_size, or raise max_epochs.",
+                passes,
+            )
 
     def on_train_epoch_end(self) -> None:
         # Step the LR schedulers ourselves. automatic_optimization is False,
@@ -412,6 +561,94 @@ class VitsModel(L.LightningModule):
         )
         return val_loss
 
+    def _log_audio_text(self, tag: str, text: Optional[str]) -> None:
+        """Record which transcript a validation clip belongs to.
+
+        The clip tags are positional now, so the text goes to the Text
+        dashboard instead. Written only when it changes, since the test split
+        is fixed for the life of a process and re-logging it every epoch would
+        be 168 identical entries on a run like the en_GB one.
+        """
+        if not text:
+            return
+
+        experiment = getattr(self.logger, "experiment", None)
+        if not hasattr(experiment, "add_text"):
+            return
+
+        if self._logged_audio_text.get(tag) == text:
+            return
+
+        self._logged_audio_text[tag] = text
+        experiment.add_text(tag, text, global_step=self.global_step)
+
+    def _log_vocoder_mel(self) -> None:
+        """Log "val_vocoder_mel": full-utterance, teacher-forced decoder error.
+
+        "val_mel" is an L1 over the same random `segment_size` window the
+        generator trains on -- about 0.37 s at the default settings. It
+        measures local spectral match on a fraction of a second, saturates
+        early, and cannot distinguish a converged decoder from one that has
+        only seen each waveform a handful of times.
+
+        This runs the posterior encoder and decoder over whole utterances and
+        compares the result against the real audio. No text encoder, alignment
+        or duration predictor is involved, and the lengths line up by
+        construction, so the number moves with vocoder fit alone. Monitor it
+        with mode="min" alongside val_mel.
+        """
+        dataset = getattr(self.trainer, "datamodule", None)
+        dataset = getattr(dataset, "test_dataset", None)
+        if not dataset:
+            return
+
+        errors = []
+        for utt in dataset:
+            if utt.spectrogram is None or utt.audio_norm is None:
+                continue
+
+            spec = utt.spectrogram.unsqueeze(0).to(self.device)
+            spec_lengths = torch.LongTensor([utt.spectrogram.size(1)]).to(self.device)
+            sid = utt.speaker_id.to(self.device) if utt.speaker_id is not None else None
+
+            with torch.inference_mode():
+                audio_hat, _mask = self.model_g.reconstruct(spec, spec_lengths, sid=sid)
+
+            # fp32 for the mel: cuFFT has no bf16 support, and the comparison
+            # wants full precision regardless.
+            with autocast(self.device.type, enabled=False):
+                real = utt.audio_norm.to(self.device).float()
+                fake = audio_hat.squeeze(1).squeeze(0).float()
+                # The decoder emits hop_length-aligned frames, so its output can
+                # overrun the source by a fraction of a frame. Compare the
+                # common span rather than padding either side with silence.
+                length = min(real.size(-1), fake.size(-1))
+                if length <= self.hparams.filter_length:
+                    continue
+
+                mels = [
+                    mel_spectrogram_torch(
+                        wav[:length].unsqueeze(0),
+                        self.hparams.filter_length,
+                        self.hparams.mel_channels,
+                        self.hparams.sample_rate,
+                        self.hparams.hop_length,
+                        self.hparams.win_length,
+                        self.hparams.mel_fmin,
+                        self.hparams.mel_fmax,
+                    )
+                    for wav in (real, fake)
+                ]
+                errors.append(F.l1_loss(mels[0], mels[1]).item())
+
+        if errors:
+            self.log(
+                "val_vocoder_mel",
+                sum(errors) / len(errors),
+                prog_bar=True,
+                sync_dist=True,
+            )
+
     def on_validation_epoch_end(self) -> None:
         # Generate audio examples after validation, but not during sanity check.
         # Done in on_validation_epoch_end (not on_validation_end) so that
@@ -419,6 +656,13 @@ class VitsModel(L.LightningModule):
         # read it.
         if self.trainer.sanity_checking:
             return
+
+        # Logged before the audio/MOS block and independently of it: this is a
+        # ModelCheckpoint-monitorable metric, not a nice-to-have.
+        try:
+            self._log_vocoder_mel()
+        except Exception:  # pragma: no cover - metric only
+            _LOGGER.debug("Could not compute val_vocoder_mel", exc_info=True)
 
         has_audio_logger = bool(
             getattr(self, "logger", None)
@@ -452,7 +696,21 @@ class VitsModel(L.LightningModule):
             if has_audio_logger:
                 # Requires tensorboard. Scale to make louder in [-1, 1].
                 norm_audio = test_audio * (1.0 / max(0.01, abs(test_audio).max()))
-                tag = test_utt.text or str(utt_idx)
+
+                # A fixed, URL-safe tag rather than the transcript. The audio
+                # dashboard fetches each clip's bytes through a request keyed
+                # by the tag, and transcripts carry the characters that need
+                # escaping there -- quotes, question marks, ampersands. Runs
+                # whose test set came from prose (LibriTTS-R, Hi-Fi TTS) had
+                # half their tags affected and rendered those clips as zero
+                # length, while a run with plain prompts had none. The written
+                # audio was intact in both cases; only the fetch was not.
+                #
+                # It also keeps clips comparable across restarts: the test
+                # split is drawn randomly, so transcript tags changed whenever
+                # a run was resumed, scattering the history across new tags.
+                tag = f"val/{utt_idx:02d}"
+
                 # Pass global_step so each validation epoch's clip lands on its
                 # own step. Without it, every epoch's audio is written at step 0,
                 # and TensorBoard's audio dashboard can't scrub across epochs --
@@ -463,6 +721,7 @@ class VitsModel(L.LightningModule):
                     sample_rate=self.hparams.sample_rate,
                     global_step=self.global_step,
                 )
+                self._log_audio_text(tag, test_utt.text)
 
         if mos_scores:
             val_mos = sum(mos_scores) / len(mos_scores)
@@ -590,6 +849,13 @@ class VitsModel(L.LightningModule):
             else:
                 skipped += 1
 
+        fresh = [
+            k
+            for k in new_sd
+            if (k not in old_sd) or (old_sd[k].shape != new_sd[k].shape)
+        ]
+        zeroed = _zero_fresh_speaker_conditioning(new_sd, fresh)
+
         self.load_state_dict(new_sd, strict=False)
         _LOGGER.info(
             "[warmstart] Copied %s parameters from %s (%s skipped; new modules "
@@ -598,6 +864,13 @@ class VitsModel(L.LightningModule):
             ckpt_path,
             skipped,
         )
+        if zeroed:
+            _LOGGER.info(
+                "[warmstart] The base has no speaker conditioning; zeroed %s "
+                "conditioning tensors so the model starts out as the base for "
+                "every speaker",
+                zeroed,
+            )
 
     def on_fit_start(self):
         # Called once at the start of fit()

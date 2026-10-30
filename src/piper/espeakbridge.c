@@ -3,6 +3,8 @@
 #define Py_LIMITED_API 0x03090000
 #include <Python.h>
 #include <espeak-ng/speak_lib.h>
+#include <stdlib.h>
+#include <string.h>
 
 #define CLAUSE_INTONATION_FULL_STOP 0x00000000
 #define CLAUSE_INTONATION_COMMA 0x00001000
@@ -20,17 +22,45 @@
 #define CLAUSE_COLON (30 | CLAUSE_INTONATION_FULL_STOP | CLAUSE_TYPE_CLAUSE)
 #define CLAUSE_SEMICOLON (30 | CLAUSE_INTONATION_COMMA | CLAUSE_TYPE_CLAUSE)
 
+// Data directory espeak-ng was initialized with, or NULL before the first
+// initialize(). Guarded by the GIL, which every call here holds.
+static char *initialized_data_dir = NULL;
+
 static PyObject *py_initialize(PyObject *self, PyObject *args) {
     const char *data_dir;
     if (!PyArg_ParseTuple(args, "s", &data_dir)) {
         return NULL;
     }
 
+    // espeak_Initialize must not run twice. A second call frees and reloads
+    // the phoneme tables while the current voice still points into the old
+    // ones, so the next get_phonemes() reads freed memory. Every
+    // EspeakPhonemizer() calls this, so initialize once per data directory,
+    // and tear the old state down before switching to another.
+    if (initialized_data_dir != NULL) {
+        if (strcmp(initialized_data_dir, data_dir) == 0) {
+            Py_RETURN_NONE;
+        }
+
+        espeak_Terminate();
+        free(initialized_data_dir);
+        initialized_data_dir = NULL;
+    }
+
+    size_t data_dir_size = strlen(data_dir) + 1;
+    char *data_dir_copy = malloc(data_dir_size);
+    if (data_dir_copy == NULL) {
+        return PyErr_NoMemory();
+    }
+    memcpy(data_dir_copy, data_dir, data_dir_size);
+
     if (espeak_Initialize(AUDIO_OUTPUT_SYNCHRONOUS, 0, data_dir, 0) < 0) {
+        free(data_dir_copy);
         PyErr_SetString(PyExc_RuntimeError, "Failed to initialize espeak-ng");
         return NULL;
     }
 
+    initialized_data_dir = data_dir_copy;
     Py_RETURN_NONE;
 }
 
