@@ -3,6 +3,9 @@ name: Test
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
   pull_request:
     branches:
       - main
@@ -13,18 +16,20 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest]
+        # Pinned, like Python and the packages in .github/constraints.txt, so
+        # a run only changes when a commit does.
+        os: [ubuntu-26.04]
 
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.12.15"
 
       - name: Install Piper
         run: |
-          script/setup --dev --train --zh --ja --th --torch-cpu
+          script/setup --dev --train --zh --ja --th --torch-cpu --constraint .github/constraints.txt
           script/dev_build
 
       - name: Run tests

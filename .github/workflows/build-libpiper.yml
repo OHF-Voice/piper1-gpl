@@ -3,6 +3,12 @@ name: Build libpiper
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'libpiper/**'
+      - '.github/workflows/build-libpiper.yml'
   pull_request:
     branches:
       - main
@@ -17,7 +23,10 @@ defaults:
 jobs:
   format-check:
     name: Check Formatting
-    runs-on: ubuntu-latest
+    # Runner images are pinned. clang-format and clang-tidy come from the
+    # image's apt, and the code is formatted with clang-format 18, the version
+    # in Ubuntu 24.04.
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: libpiper
@@ -36,7 +45,7 @@ jobs:
 
   clang-tidy:
     name: Static Analysis (clang-tidy)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: libpiper
@@ -64,7 +73,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-24.04, macos-26, windows-2025-vs2026]
     defaults:
       run:
         working-directory: libpiper
