@@ -42,6 +42,8 @@ People/projects using Piper:
 * [POTaTOS](https://www.youtube.com/watch?v=Dz95q6XYjwY)
 * [Narration Studio](https://github.com/phyce/Narration-Studio)
 * [Basic TTS](https://basictts.com/) - Simple online text-to-speech converter.
+* [asterisk-ai-voice-agent](https://github.com/ictinnovations/asterisk-ai-voice-agent) - Self-hosted AI voice agent for Asterisk phone calls, with Piper as the default local voice
+* [piper-tts-server](https://github.com/ictinnovations/piper-tts-server) - Paced, streaming Piper output for real-time voice pipelines (Asterisk AudioSocket, RTP, WebSocket)
 
 Bindings to use Piper in programming languages other than Python and C/C++:
 
