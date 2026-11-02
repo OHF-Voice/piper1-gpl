@@ -303,7 +303,9 @@ def main() -> None:
                 maybe_model_path = Path(data_dir) / f"{model_id}.onnx"
                 if maybe_model_path.exists():
                     _LOGGER.debug("Loading voice %s", model_id)
-                    voice = PiperVoice.load(maybe_model_path, use_cuda=args.cuda)
+                    voice = PiperVoice.load(
+                        maybe_model_path, use_cuda=args.cuda, include_alignments=True
+                    )
                     loaded_voices[model_id] = voice
                     break
 
