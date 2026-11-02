@@ -49,7 +49,10 @@ def main() -> None:
     # Phonemizer is created lazily depending on phoneme type
     espeak_phonemizer = None
     chinese_phonemizer = None
+    hebrew_phonemizer = None
     japanese_phonemizer = None
+    thai_phonemizer = None
+    lithuanian_phonemizer = None
 
     model = VitsModel.load_from_checkpoint(args.checkpoint, map_location="cpu")
 
@@ -83,6 +86,13 @@ def main() -> None:
                 chinese_phonemizer = ChinesePhonemizer(Path.cwd() / "g2pW")
 
             sentence_phonemes = chinese_phonemizer.phonemize(text)
+        elif config.phoneme_type == PhonemeType.HEBREW:
+            from ..phonemize_hebrew import HebrewPhonemizer
+
+            if hebrew_phonemizer is None:
+                hebrew_phonemizer = HebrewPhonemizer()
+
+            sentence_phonemes = hebrew_phonemizer.phonemize(text)
         elif config.phoneme_type == PhonemeType.JAPANESE:
             from ..phonemize_japanese import JapanesePhonemizer
 
@@ -90,7 +100,24 @@ def main() -> None:
                 japanese_phonemizer = JapanesePhonemizer()
 
             sentence_phonemes = japanese_phonemizer.phonemize(text)
+        elif config.phoneme_type == PhonemeType.THAI:
+            from ..phonemize_thai import ThaiPhonemizer
+
+            if thai_phonemizer is None:
+                thai_phonemizer = ThaiPhonemizer()
+
+            sentence_phonemes = thai_phonemizer.phonemize(text)
+        elif config.phoneme_type == PhonemeType.LITHUANIAN:
+            from ..phonemize_lithuanian import LithuanianPhonemizer
+
+            if lithuanian_phonemizer is None:
+                lithuanian_phonemizer = LithuanianPhonemizer()
+
+            sentence_phonemes = lithuanian_phonemizer.phonemize(text)
         else:
+            if config.phoneme_type != PhonemeType.ESPEAK:
+                raise ValueError(f"Unexpected phoneme type: {config.phoneme_type}")
+
             if espeak_phonemizer is None:
                 espeak_phonemizer = EspeakPhonemizer()
 

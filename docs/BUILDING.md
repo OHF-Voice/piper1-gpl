@@ -36,6 +36,14 @@ You can manually build wheels with:
 python3 -m build
 ```
 
+CI tests with the exact package versions in `.github/constraints.txt`. To reproduce a CI run, use Python 3.12 and let `script/setup` create `.venv` with those versions:
+
+``` sh
+script/setup --dev --train --zh --ja --th --torch-cpu --constraint .github/constraints.txt
+script/dev_build
+script/test
+```
+
 ## Design Decisions
 
 [espeak-ng][] is used via a small Python bridge in `espeakbridge.c` which uses Python's [limited API][limited-api]. This allows the use of Python's [stable ABI][stable-abi], which means Piper wheels only need to be built once for each platform (Linux, Mac, Windows) instead of for each platform **and** Python version.

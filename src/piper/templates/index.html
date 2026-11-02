@@ -56,6 +56,26 @@
           font-size: 1.25em;
       }
 
+      /* Synthesis settings form: a borderless table, unlike the info tables */
+      #settingsTable th, #settingsTable td {
+          border: none;
+          padding: 3px 10px 3px 0;
+          font-weight: normal;
+      }
+
+      #settingsTable input[type="range"] {
+          width: 14em;
+          vertical-align: middle;
+      }
+
+      #settingsTable input[type="number"] {
+          width: 5em;
+      }
+
+      #buttonResetSettings {
+          margin-top: 8px;
+      }
+
       .muted {
           color: #888;
       }
@@ -143,6 +163,36 @@
       <audio id="audioTTS" controls></audio>
     </div>
 
+    <section id="sectionSettings">
+      <h2>Settings</h2>
+      <table id="settingsTable">
+        <tr id="rowSpeaker" style="display: none;">
+          <th><label for="speakerId">Speaker</label></th>
+          <td colspan="2"><select id="speakerId"></select></td>
+          <td class="muted">Speaker for multi-speaker voices</td>
+        </tr>
+        <tr>
+          <th><label for="lengthScale">Length scale</label></th>
+          <td><input type="range" id="lengthScaleRange" min="0.25" max="3" step="0.05"></td>
+          <td><input type="number" id="lengthScale" min="0.1" max="10" step="0.05"></td>
+          <td class="muted">Phoneme length (higher is slower)</td>
+        </tr>
+        <tr>
+          <th><label for="noiseScale">Noise scale</label></th>
+          <td><input type="range" id="noiseScaleRange" min="0" max="2" step="0.01"></td>
+          <td><input type="number" id="noiseScale" min="0" max="10" step="0.01"></td>
+          <td class="muted">Generator noise (audio variation)</td>
+        </tr>
+        <tr>
+          <th><label for="noiseWScale">Noise W scale</label></th>
+          <td><input type="range" id="noiseWScaleRange" min="0" max="2" step="0.01"></td>
+          <td><input type="number" id="noiseWScale" min="0" max="10" step="0.01"></td>
+          <td class="muted">Phoneme width noise (speaking variation)</td>
+        </tr>
+      </table>
+      <button id="buttonResetSettings">Reset to voice defaults</button>
+    </section>
+
     <section id="sectionFrog" style="display: none;">
       <svg id="frog" viewBox="0 0 220 210" xmlns="http://www.w3.org/2000/svg">
         <!-- Head -->
@@ -205,6 +255,76 @@
       const buttonSpeak = document.getElementById("buttonSpeak");
       const audioTTS = document.getElementById("audioTTS");
       const timeline = document.getElementById("timeline");
+      const speakerSelect = document.getElementById("speakerId");
+
+      // Scale settings, each with a slider and a number box that mirror each
+      // other. The ids are "<name>" (number) and "<name>Range" (slider), and
+      // the field sent to /synthesize.
+      const SCALES = {
+          lengthScale: "length_scale",
+          noiseScale: "noise_scale",
+          noiseWScale: "noise_w_scale",
+      };
+
+      // Defaults reported by /info, for the reset button
+      let voiceDefaults = null;
+
+      // /info is re-fetched after every synthesis; only apply its defaults the
+      // first time, or we'd throw away whatever the user has changed.
+      let settingsLoaded = false;
+
+      function setScale(name, value) {
+          document.getElementById(name).value = value;
+          document.getElementById(name + "Range").value = value;
+      }
+
+      function getScale(name) {
+          return parseFloat(document.getElementById(name).value);
+      }
+
+      for (const name of Object.keys(SCALES)) {
+          const number = document.getElementById(name);
+          const range = document.getElementById(name + "Range");
+          number.addEventListener("input", () => { range.value = number.value; });
+          range.addEventListener("input", () => { number.value = range.value; });
+      }
+
+      function applyDefaults() {
+          if (!voiceDefaults) {
+              return;
+          }
+
+          for (const name of Object.keys(SCALES)) {
+              setScale(name, voiceDefaults[SCALES[name]]);
+          }
+
+          speakerSelect.value = voiceDefaults.speaker_id;
+      }
+
+      function loadSettings(voice) {
+          if (settingsLoaded) {
+              return;
+          }
+          settingsLoaded = true;
+
+          voiceDefaults = voice.defaults;
+
+          // Single-speaker voices have nothing to choose from
+          if (voice.num_speakers > 1) {
+              for (const speaker of voice.speakers) {
+                  const option = document.createElement("option");
+                  option.value = speaker.id;
+                  option.textContent = speaker.name;
+                  speakerSelect.appendChild(option);
+              }
+              document.getElementById("rowSpeaker").style.display = "";
+          }
+
+          applyDefaults();
+      }
+
+      document.getElementById("buttonResetSettings")
+          .addEventListener("click", applyDefaults);
 
       // Segment DOM elements + their [start, end) times, for playback highlighting
       let segments = [];
@@ -469,6 +589,8 @@
 
           const info = await response.json();
 
+          loadSettings(info.voice);
+
           // Voice section
           document.getElementById("voiceName").textContent = info.voice.name;
           document.getElementById("voiceLanguage").textContent = info.voice.language;
@@ -511,6 +633,20 @@
               return;
           }
 
+          // Leave a setting out of the request if its box has been emptied, so
+          // the server falls back to the voice default instead of NaN.
+          const body = { text: text };
+          for (const [name, field] of Object.entries(SCALES)) {
+              const value = getScale(name);
+              if (Number.isFinite(value)) {
+                  body[field] = value;
+              }
+          }
+
+          if (speakerSelect.value !== "") {
+              body.speaker_id = parseInt(speakerSelect.value, 10);
+          }
+
           buttonSpeak.disabled = true;
           buttonSpeak.textContent = "Synthesizing...";
 
@@ -518,7 +654,7 @@
               const response = await fetch("synthesize", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ text: text }),
+                  body: JSON.stringify(body),
               });
 
               if (!response.ok) {

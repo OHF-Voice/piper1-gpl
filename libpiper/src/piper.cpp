@@ -2,9 +2,20 @@
 #include "piper.h"
 #include "piper_impl.hpp"
 
+#include "japanese_phonemizer.h"
+
+#include <algorithm>
 #include <array>
+#include <cstddef>
+#include <filesystem>
 #include <fstream>
 #include <limits>
+#include <thread>
+#include <unordered_map>
+
+#ifdef __APPLE__
+#include <sys/sysctl.h>
+#endif
 
 #ifdef WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -22,6 +33,44 @@
 #include <espeak-ng/speak_lib.h>
 
 using json = nlohmann::json;
+
+// Decoder chunking for streaming. A context of STREAM_CONTEXT_FRAMES latent
+// frames on each side makes the chunked output identical to decoding the
+// whole sentence at once (the decoder's receptive field is smaller).
+// The first chunk is small for a fast first sound. Later chunks are sized so
+// that decoding them takes at most STREAM_BUFFER_SHARE of the audio that is
+// still buffered (assuming playback starts with the first chunk), which keeps
+// playback gapless while the per-chunk context overhead shrinks.
+static const int64_t STREAM_CONTEXT_FRAMES = 12;
+static const int64_t STREAM_FIRST_CHUNK_FRAMES = 32;
+static const int64_t STREAM_MIN_CHUNK_FRAMES = 24;
+static const int64_t STREAM_MAX_CHUNK_FRAMES = 256;
+static const double STREAM_BUFFER_SHARE = 0.5;
+static const int MAX_INTRA_OP_THREADS = 4;
+
+static auto default_intra_op_threads() -> int {
+  int cores = 0;
+#ifdef __APPLE__
+  // Performance cores only; efficiency cores slow down the whole run
+  int perf_cores = 0;
+  size_t size = sizeof(perf_cores);
+  if (sysctlbyname("hw.perflevel0.physicalcpu", &perf_cores, &size, nullptr,
+                   0) == 0) {
+    cores = perf_cores;
+  }
+#endif
+  if (cores <= 0) {
+    cores = static_cast<int>(std::thread::hardware_concurrency() / 2);
+  }
+  return std::max(1, std::min(cores, MAX_INTRA_OP_THREADS));
+}
+
+// <dir>/<stem>.<part>.onnx for <dir>/<stem>.onnx
+static auto split_model_path(const std::filesystem::path &model_path,
+                             const std::string &part) -> std::filesystem::path {
+  return model_path.parent_path() /
+         (model_path.stem().string() + "." + part + ".onnx");
+}
 
 auto piper_create_with_options(const piper_create_options *options)
     -> struct piper_synthesizer * {
@@ -42,6 +91,42 @@ auto piper_create_with_options(const piper_create_options *options)
   const char *model_path = options->model_path;
   const char *config_path = options->config_path;
   const char *espeak_data_path = options->espeak_data_path;
+  const char *g2pw_model_dir_opt = nullptr;
+  const char *data_dir_opt = nullptr;
+  const char *openjtalk_dict_dir_opt = nullptr;
+
+  // Read newer fields if struct is large enough
+  if (options->struct_size >= offsetof(piper_create_options, g2pw_model_dir) +
+                                  sizeof(options->g2pw_model_dir)) {
+    g2pw_model_dir_opt = options->g2pw_model_dir;
+  }
+  if (options->struct_size >=
+      offsetof(piper_create_options, data_dir) + sizeof(options->data_dir)) {
+    data_dir_opt = options->data_dir;
+  }
+  if (options->struct_size >=
+      offsetof(piper_create_options, openjtalk_dict_dir) +
+          sizeof(options->openjtalk_dict_dir)) {
+    openjtalk_dict_dir_opt = options->openjtalk_dict_dir;
+  }
+
+  // Resolve espeak_data_path via data_dir fallback
+  std::string resolved_espeak_data;
+  const char *final_espeak_data_path = espeak_data_path;
+  if (!final_espeak_data_path && data_dir_opt) {
+    std::string cand = std::string(data_dir_opt) + "/espeak-ng-data";
+    resolved_espeak_data = cand;
+    final_espeak_data_path = resolved_espeak_data.c_str();
+  }
+
+  // Resolve g2pw_model_dir via data_dir fallback (for later use)
+  // NOTE: Do NOT auto-set final_g2pw_model_dir to <data_dir>/g2pw here.
+  // Let effective_g2pw_dir logic below probe both <data_dir>/g2pw and
+  // <data_dir> based on dict existence (MONOPHONIC_CHARS.txt /
+  // char_bopomofo_dict.json). Setting it eagerly made root fallback
+  // unreachable.
+  std::string resolved_g2pw_dir;
+  const char *final_g2pw_model_dir = g2pw_model_dir_opt;
 
   if (model_path == nullptr) {
     return nullptr;
@@ -63,7 +148,8 @@ auto piper_create_with_options(const piper_create_options *options)
   }
 
   if (phoneme_type == PhonemeType::Espeak &&
-      espeak_Initialize(AUDIO_OUTPUT_SYNCHRONOUS, 0, espeak_data_path, 0) < 0) {
+      espeak_Initialize(AUDIO_OUTPUT_SYNCHRONOUS, 0, final_espeak_data_path,
+                        0) < 0) {
     return nullptr;
   }
 
@@ -82,45 +168,196 @@ auto piper_create_with_options(const piper_create_options *options)
   if (config.contains("audio")) {
     auto &audio_obj = config["audio"];
     if (audio_obj.contains("sample_rate")) {
-      // Sample rate of generated audio in hertz
       synth->sample_rate = audio_obj["sample_rate"].get<int>();
     }
   }
 
-  // phoneme to [id] map
-  // Maps phonemes to one or more phoneme ids (required).
-  if (config.contains("phoneme_id_map")) {
-    auto &phoneme_id_map_value = config["phoneme_id_map"];
-    for (const auto &from_phoneme_item : phoneme_id_map_value.items()) {
-      const std::string &from_phoneme = from_phoneme_item.key();
-      auto from_codepoint = get_codepoint(from_phoneme);
-      if (!from_codepoint) {
-        // No codepoint
-        continue;
+  if (phoneme_type == PhonemeType::Pinyin) {
+    // pinyin_id_map : string -> ids
+    if (config.contains("phoneme_id_map")) {
+      auto &m = config["phoneme_id_map"];
+      for (auto &kv : m.items()) {
+        std::string key = kv.key();
+        std::vector<PhonemeId> ids;
+        for (auto &v : kv.value()) {
+          ids.push_back(v.get<PhonemeId>());
+        }
+        synth->pinyin_id_map[key] = ids;
+        // also keep compatibility single char mapping if key length ==1
+        if (key.size() == 1) {
+          auto cp = get_codepoint(key);
+          if (cp) {
+            synth->phoneme_id_map[*cp] = ids;
+          }
+        } else if (key == "Ø") { // U+00D8 char from json \u00d8
+          // multi byte char length 2 in utf8, get_codepoint will handle
+          auto cp = get_codepoint(key);
+          if (cp)
+            synth->phoneme_id_map[*cp] = ids;
+        }
       }
-
-      for (auto &to_id_value : from_phoneme_item.value()) {
-        PhonemeId to_id = to_id_value.get<PhonemeId>();
-        synth->phoneme_id_map[*from_codepoint].push_back(to_id);
+    }
+  } else {
+    // phoneme to [id] map for espeak/text
+    if (config.contains("phoneme_id_map")) {
+      auto &phoneme_id_map_value = config["phoneme_id_map"];
+      for (const auto &from_phoneme_item : phoneme_id_map_value.items()) {
+        const std::string &from_phoneme = from_phoneme_item.key();
+        auto from_codepoint = get_codepoint(from_phoneme);
+        if (!from_codepoint) {
+          continue;
+        }
+        for (auto &to_id_value : from_phoneme_item.value()) {
+          PhonemeId to_id = to_id_value.get<PhonemeId>();
+          synth->phoneme_id_map[*from_codepoint].push_back(to_id);
+        }
       }
     }
   }
-  // NOLINTNEXTLINE(bugprone-narrowing-conversions)
+
   synth->num_speakers = config["num_speakers"].get<SpeakerId>();
 
   if (config.contains("inference")) {
-    // Overrides default inference settings
     auto inference_value = config["inference"];
     if (inference_value.contains("noise_scale")) {
       synth->synth_noise_scale = inference_value["noise_scale"].get<float>();
     }
-
     if (inference_value.contains("length_scale")) {
       synth->synth_length_scale = inference_value["length_scale"].get<float>();
     }
-
     if (inference_value.contains("noise_w")) {
       synth->synth_noise_w_scale = inference_value["noise_w"].get<float>();
+    }
+  }
+
+  std::string effective_g2pw_dir;
+  if (final_g2pw_model_dir && final_g2pw_model_dir[0] != '\0') {
+    effective_g2pw_dir = final_g2pw_model_dir;
+  }
+  if (effective_g2pw_dir.empty() && data_dir_opt) {
+    // Phase 1: check for mono dicts, not g2pw.onnx (deferred to Phase 2)
+    // Readiness requires a pronunciation source (MONOPHONIC_CHARS.txt or
+    // char_bopomofo_dict.json) AND bopomofo_to_pinyin_wo_tune_dict.json.
+    // Try <data_dir>/g2pw first, then <data_dir> root as fallback (documented)
+    std::filesystem::path cand1 = std::filesystem::path(data_dir_opt) / "g2pw";
+    std::filesystem::path cand2 = std::filesystem::path(data_dir_opt);
+    auto has_dicts = [](const std::filesystem::path &d) {
+      bool has_source = std::filesystem::exists(d / "MONOPHONIC_CHARS.txt") ||
+                        std::filesystem::exists(d / "char_bopomofo_dict.json");
+      bool has_b2p =
+          std::filesystem::exists(d / "bopomofo_to_pinyin_wo_tune_dict.json");
+      return has_source && has_b2p;
+    };
+    if (has_dicts(cand1)) {
+      effective_g2pw_dir = cand1.string();
+    } else if (has_dicts(cand2)) {
+      effective_g2pw_dir = cand2.string();
+    } else if (std::filesystem::exists(cand1)) {
+      // cand1 exists but without complete dicts - still prefer it for
+      // backward compat if it at least has a source (load() will verify
+      // completeness and report failure)
+      if (std::filesystem::exists(cand1 / "MONOPHONIC_CHARS.txt") ||
+          std::filesystem::exists(cand1 / "char_bopomofo_dict.json")) {
+        effective_g2pw_dir = cand1.string();
+      } else {
+        effective_g2pw_dir = cand1.string();
+      }
+    } else {
+      // default to <data_dir>/g2pw even if not existing yet - will be
+      // non-fatal and phonemizer will load what it can, keeping direct pinyin
+      // path working
+      effective_g2pw_dir = cand1.string();
+    }
+  }
+  if (effective_g2pw_dir.empty() && phoneme_type == PhonemeType::Pinyin) {
+    std::filesystem::path model_path_fs(model_path);
+    std::filesystem::path model_dir = model_path_fs.parent_path();
+    std::vector<std::filesystem::path> fallbacks = {
+        model_dir / "g2pw",
+        std::filesystem::path("./g2pw"),
+        std::filesystem::path("./local/g2pw"),
+        std::filesystem::path("local/g2pw"),
+    };
+    for (auto &p : fallbacks) {
+      bool has_source = std::filesystem::exists(p / "MONOPHONIC_CHARS.txt") ||
+                        std::filesystem::exists(p / "char_bopomofo_dict.json");
+      bool has_b2p =
+          std::filesystem::exists(p / "bopomofo_to_pinyin_wo_tune_dict.json");
+      if (has_source && has_b2p) {
+        effective_g2pw_dir = p.string();
+        break;
+      }
+    }
+    if (effective_g2pw_dir.empty()) {
+      effective_g2pw_dir = (model_dir / "g2pw").string();
+    }
+  }
+  synth->g2pw_model_dir = effective_g2pw_dir;
+
+  if (phoneme_type == PhonemeType::Pinyin) {
+    // attempt to load chinese phonemizer dicts (non-fatal)
+    // Phase 1: monophonic fallback only; g2pw BERT deferred
+    try {
+      if (!synth->g2pw_model_dir.empty()) {
+        auto ph = std::make_unique<piper::ChinesePhonemizer>();
+        if (ph->load(synth->g2pw_model_dir)) {
+          synth->chinese_phonemizer = std::move(ph);
+        } else {
+          // still keep instance for pinyin direct
+          synth->chinese_phonemizer = std::move(ph);
+        }
+      }
+    } catch (...) {
+    }
+  }
+
+  // ---- OpenJTalk dictionary dir (Japanese) ----
+  // Resolution order: explicit openjtalk_dict_dir option, <data_dir>/openjtalk,
+  // <data_dir>, <model_dir>/openjtalk. A candidate wins when it contains the
+  // MeCab system dictionary (sys.dic).
+  std::string effective_openjtalk_dir;
+  if (openjtalk_dict_dir_opt && openjtalk_dict_dir_opt[0] != '\0') {
+    effective_openjtalk_dir = openjtalk_dict_dir_opt;
+  }
+  auto openjtalk_has_dict = [](const std::filesystem::path &d) {
+    return std::filesystem::exists(d / "sys.dic");
+  };
+  if (effective_openjtalk_dir.empty() && data_dir_opt) {
+    std::filesystem::path cand1 =
+        std::filesystem::path(data_dir_opt) / "openjtalk";
+    std::filesystem::path cand2 = std::filesystem::path(data_dir_opt);
+    if (openjtalk_has_dict(cand1)) {
+      effective_openjtalk_dir = cand1.string();
+    } else if (openjtalk_has_dict(cand2)) {
+      effective_openjtalk_dir = cand2.string();
+    }
+  }
+  if (effective_openjtalk_dir.empty() &&
+      phoneme_type == PhonemeType::Japanese) {
+    std::filesystem::path model_dir =
+        std::filesystem::path(model_path).parent_path();
+    std::filesystem::path cand = model_dir / "openjtalk";
+    if (openjtalk_has_dict(cand)) {
+      effective_openjtalk_dir = cand.string();
+    }
+  }
+  synth->openjtalk_dict_dir = effective_openjtalk_dir;
+
+  if (phoneme_type == PhonemeType::Japanese) {
+    // The dictionary is required: without it every sentence phonemizes to
+    // nothing, which would be a silent training/inference mismatch. Fail
+    // creation instead so the caller can trigger the on-demand download.
+    try {
+      auto ph = std::make_unique<piper::JapanesePhonemizer>();
+      if (ph->load(synth->openjtalk_dict_dir)) {
+        synth->japanese_phonemizer = std::move(ph);
+      } else {
+        piper_free(synth);
+        return nullptr;
+      }
+    } catch (...) {
+      piper_free(synth);
+      return nullptr;
     }
   }
 
@@ -128,14 +365,13 @@ auto piper_create_with_options(const piper_create_options *options)
   synth->session_options.DisableCpuMemArena();
   synth->session_options.DisableMemPattern();
   synth->session_options.DisableProfiling();
-
-  synth->session_options.SetIntraOpNumThreads(1);
+  synth->session_options.SetIntraOpNumThreads(default_intra_op_threads());
   synth->session_options.SetInterOpNumThreads(1);
   synth->session_options.SetGraphOptimizationLevel(
       GraphOptimizationLevel::ORT_ENABLE_BASIC);
   synth->session_options.SetExecutionMode(ExecutionMode::ORT_SEQUENTIAL);
 
-#if !defined(WIN32) // ort on WIN32 uses wchar_t
+#if !defined(WIN32)
   const auto *model_path_ort = model_path;
 #else
   auto sz = ::MultiByteToWideChar(CP_ACP, 0, model_path, -1, 0, 0);
@@ -143,8 +379,22 @@ auto piper_create_with_options(const piper_create_options *options)
   ::MultiByteToWideChar(CP_ACP, 0, model_path, -1, &model_path_wc[0], sz);
   auto model_path_ort = &model_path_wc[0];
 #endif
-  synth->session = std::make_unique<Ort::Session>(
-      Ort::Session(ort_env, model_path_ort, synth->session_options));
+  auto encoder_path = split_model_path(model_path, "encoder");
+  auto decoder_path = split_model_path(model_path, "decoder");
+  if (std::filesystem::exists(encoder_path) &&
+      std::filesystem::exists(decoder_path)) {
+    // The full model is not needed when the split model is available
+    synth->encoder_session = std::make_unique<Ort::Session>(
+        Ort::Session(ort_env, encoder_path.c_str(), synth->session_options));
+    synth->decoder_session = std::make_unique<Ort::Session>(
+        Ort::Session(ort_env, decoder_path.c_str(), synth->session_options));
+    synth->stream_z_type = synth->decoder_session->GetInputTypeInfo(0)
+                               .GetTensorTypeAndShapeInfo()
+                               .GetElementType();
+  } else {
+    synth->session = std::make_unique<Ort::Session>(
+        Ort::Session(ort_env, model_path_ort, synth->session_options));
+  }
 
   return synth;
 }
@@ -163,11 +413,9 @@ void piper_free(struct piper_synthesizer *synth) {
   if (synth == nullptr) {
     return;
   }
-
   if (synth->phoneme_type == PhonemeType::Espeak) {
     espeak_Terminate();
   }
-
   delete synth;
 }
 
@@ -188,7 +436,36 @@ auto piper_default_synthesize_options(piper_synthesizer *synth)
   return options;
 }
 
-// NOLINTNEXTLINE(readability-function-cognitive-complexity)
+// helper for pinyin fake codepoints
+static Phoneme
+fake_cp_for_pinyin(const std::string &s,
+                   std::unordered_map<std::string, Phoneme> &cache,
+                   Phoneme &next_private) {
+  auto it = cache.find(s);
+  if (it != cache.end())
+    return it->second;
+  Phoneme cp = 0;
+  if (s == "^")
+    cp = U'^';
+  else if (s == "_")
+    cp = U'_';
+  else if (s == "$")
+    cp = U'$';
+  else if (s == " ")
+    cp = U' ';
+  else if (s.size() == 1) {
+    cp = static_cast<Phoneme>(static_cast<unsigned char>(s[0]));
+  } else if (s == "Ø" || s == "\xC3\x98") {
+    cp = 0x00D8;
+  } else {
+    cp = next_private++;
+    if (next_private > 0xF8FF)
+      next_private = 0xE000;
+  }
+  cache[s] = cp;
+  return cp;
+}
+
 auto piper_synthesize_start(struct piper_synthesizer *synth, const char *text,
                             const piper_synthesize_options *options) -> int {
   if (synth == nullptr) {
@@ -205,6 +482,11 @@ auto piper_synthesize_start(struct piper_synthesizer *synth, const char *text,
     synth->phoneme_id_queue.pop();
   }
   synth->chunk_samples.clear();
+  synth->stream_z.clear();
+  synth->stream_z_frames = 0;
+  synth->stream_z_pos = 0;
+  synth->stream_started = false;
+  synth->stream_audio_seconds = 0;
 
   std::unique_ptr<piper_synthesize_options> default_options;
   if (options == nullptr) {
@@ -218,9 +500,134 @@ auto piper_synthesize_start(struct piper_synthesizer *synth, const char *text,
   synth->noise_w_scale = options->noise_w_scale;
   synth->speaker_id = options->speaker_id;
 
-  // phonemize
+  // phonemize (single dispatch)
   std::vector<std::string> sentence_phonemes{""};
   switch (synth->phoneme_type) {
+  case PhonemeType::Pinyin: {
+    if (synth->pinyin_id_map.empty()) {
+      return PIPER_ERR_GENERIC;
+    }
+
+    std::vector<std::vector<std::string>> sentences_str;
+
+    if (synth->chinese_phonemizer) {
+      try {
+        auto s = synth->chinese_phonemizer->phonemize(text);
+        if (!s.empty()) {
+          sentences_str = std::move(s);
+        } else {
+          sentences_str = piper::ChinesePhonemizer::phonemize_pinyin_text(text);
+        }
+      } catch (...) {
+        sentences_str = piper::ChinesePhonemizer::phonemize_pinyin_text(text);
+      }
+    } else {
+      sentences_str = piper::ChinesePhonemizer::phonemize_pinyin_text(text);
+    }
+
+    if (sentences_str.empty()) {
+      return PIPER_ERR_GENERIC;
+    }
+
+    std::unordered_map<std::string, Phoneme> cp_cache;
+    Phoneme next_private = 0xE000;
+
+    for (auto &ph_seq : sentences_str) {
+      if (ph_seq.empty())
+        continue;
+
+      std::vector<Phoneme> sent_cps;
+      std::vector<PhonemeId> sent_ids;
+      sent_cps.reserve(ph_seq.size() * 3 + 4);
+      sent_ids.reserve(ph_seq.size() * 2 + 4);
+
+      // BOS block
+      {
+        std::string bos = "^";
+        auto it = synth->pinyin_id_map.find(bos);
+        if (it != synth->pinyin_id_map.end()) {
+          for (auto idv : it->second) {
+            sent_cps.push_back(fake_cp_for_pinyin(bos, cp_cache, next_private));
+            sent_ids.push_back(idv);
+          }
+        } else {
+          sent_cps.push_back(U'^');
+          sent_ids.push_back(ID_BOS);
+        }
+        sent_cps.push_back(0); // separator
+      }
+
+      for (auto &ph : ph_seq) {
+        auto it = synth->pinyin_id_map.find(ph);
+        if (it == synth->pinyin_id_map.end()) {
+          // skip unknown but allow space/punct fallback: if ph length 1 char
+          // maybe?
+          continue;
+        }
+        Phoneme cp = fake_cp_for_pinyin(ph, cp_cache, next_private);
+        for (auto idv : it->second) {
+          sent_cps.push_back(cp);
+          sent_ids.push_back(idv);
+        }
+        // Pad after GROUP_END phonemes
+        if (piper::GROUP_END_PHONEMES.find(ph) !=
+            piper::GROUP_END_PHONEMES.end()) {
+          auto it_pad = synth->pinyin_id_map.find("_");
+          if (it_pad != synth->pinyin_id_map.end()) {
+            for (auto pid : it_pad->second) {
+              sent_cps.push_back(cp); // reuse ph cp for pad representation
+              sent_ids.push_back(pid);
+            }
+          } else {
+            sent_cps.push_back(cp);
+            sent_ids.push_back(ID_PAD);
+          }
+        }
+        sent_cps.push_back(0); // separator after each phoneme block
+      }
+
+      // EOS
+      {
+        std::string eos = "$";
+        auto it = synth->pinyin_id_map.find(eos);
+        if (it != synth->pinyin_id_map.end()) {
+          for (auto idv : it->second) {
+            sent_cps.push_back(fake_cp_for_pinyin(eos, cp_cache, next_private));
+            sent_ids.push_back(idv);
+          }
+        } else {
+          sent_cps.push_back(U'$');
+          sent_ids.push_back(ID_EOS);
+        }
+        sent_cps.push_back(0);
+      }
+
+      if (!sent_ids.empty()) {
+        synth->phoneme_id_queue.emplace(std::move(sent_cps),
+                                        std::move(sent_ids));
+      }
+    }
+
+    return synth->phoneme_id_queue.empty() ? PIPER_ERR_GENERIC : PIPER_OK;
+  }
+  case PhonemeType::Japanese: {
+    // OpenJTalk frontend produces one IPA+prosody string per sentence; the
+    // shared phoneme->id tail below handles the rest, exactly like Espeak.
+    if (!synth->japanese_phonemizer) {
+      return PIPER_ERR_GENERIC;
+    }
+    try {
+      sentence_phonemes.clear();
+      for (auto &s : synth->japanese_phonemizer->phonemize(text)) {
+        if (!s.empty()) {
+          sentence_phonemes.push_back(s);
+        }
+      }
+    } catch (...) {
+      return PIPER_ERR_GENERIC;
+    }
+    break;
+  }
   case PhonemeType::Espeak: {
     std::size_t current_idx = 0;
     const void *text_ptr = text;
@@ -235,8 +642,6 @@ auto piper_synthesize_start(struct piper_synthesizer *synth, const char *text,
         sentence_phonemes[current_idx] += phonemes;
       }
 
-      // Categorize terminator
-      // NOLINTNEXTLINE(readability-magic-numbers)
       terminator &= 0x000FFFFF;
 
       if (terminator == CLAUSE_PERIOD) {
@@ -269,14 +674,12 @@ auto piper_synthesize_start(struct piper_synthesizer *synth, const char *text,
     sentence_phonemes.push_back(nfd_text);
     break;
   }
-  // Pinyin it not supported at this moment
-  case PhonemeType::Pinyin:
   case PhonemeType::Invalid: {
     return PIPER_ERR_GENERIC;
   }
   }
 
-  // phonemes to ids
+  // phonemes to ids for Espeak/Text
   std::vector<Phoneme> sentence_codepoints;
   std::vector<PhonemeId> sentence_ids;
   for (auto &phonemes_str : sentence_phonemes) {
@@ -297,22 +700,17 @@ auto piper_synthesize_start(struct piper_synthesizer *synth, const char *text,
     auto phonemes_iter = phonemes_range.begin();
     auto phonemes_end = phonemes_range.end();
 
-    // Filter out (lang) switch (flags).
-    // These surround words from languages other than the current voice.
     bool in_lang_flag = false;
     while (phonemes_iter != phonemes_end) {
       auto phoneme = *phonemes_iter;
 
       if (in_lang_flag) {
         if (phoneme == U')') {
-          // End of (lang) switch
           in_lang_flag = false;
         }
       } else if (phoneme == U'(') {
-        // Start of (lang) switch
         in_lang_flag = true;
       } else {
-        // Look up ids
         auto ids_for_phoneme = synth->phoneme_id_map.find(phoneme);
         if (ids_for_phoneme != synth->phoneme_id_map.end()) {
           for (auto identifier : ids_for_phoneme->second) {
@@ -342,45 +740,37 @@ auto piper_synthesize_start(struct piper_synthesizer *synth, const char *text,
   return PIPER_OK;
 }
 
-auto piper_synthesize_next(struct piper_synthesizer *synth,
-                           struct piper_audio_chunk *chunk) -> int {
-  if (synth == nullptr) {
-    return PIPER_ERR_GENERIC;
+// Copy a tensor's values into floats. Split fp16 voices produce a float16
+// latent (and may produce float16 alignments or audio), while split fp32
+// voices are float throughout; this reads either without assuming float.
+static auto tensor_as_floats(const Ort::Value &tensor) -> std::vector<float> {
+  const auto type_and_shape = tensor.GetTensorTypeAndShapeInfo();
+  const auto count = static_cast<std::size_t>(type_and_shape.GetElementCount());
+  std::vector<float> values(count);
+  if (type_and_shape.GetElementType() ==
+      ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16) {
+    const auto *data = tensor.GetTensorData<Ort::Float16_t>();
+    for (std::size_t i = 0; i < count; i++) {
+      values[i] = static_cast<float>(data[i]);
+    }
+  } else {
+    const auto *data = tensor.GetTensorData<float>();
+    std::copy(data, data + count, values.begin());
   }
+  return values;
+}
 
-  if (chunk == nullptr) {
-    return PIPER_ERR_GENERIC;
-  }
-
-  // Clear data from previous call
-  synth->chunk_samples.clear();
-  synth->chunk_phonemes.clear();
-  synth->chunk_phoneme_ids.clear();
-  synth->chunk_alignments.clear();
-
-  chunk->sample_rate = synth->sample_rate;
-  chunk->samples = nullptr;
-  chunk->num_samples = 0;
-  chunk->is_last = false;
-  chunk->phoneme_ids = nullptr;
-  chunk->num_phoneme_ids = 0;
-  chunk->alignments = nullptr;
-  chunk->num_alignments = 0;
-
-  if (synth->phoneme_id_queue.empty()) {
-    // Empty final chunk
-    chunk->is_last = true;
-    return PIPER_DONE;
-  }
-
-  // Process next list of phoneme ids
-  auto [next_phonemes, next_ids] = std::move(synth->phoneme_id_queue.front());
-  synth->phoneme_id_queue.pop();
-
+// Run the encoder on the next queued sentence and keep its latent frames.
+// Phonemes, phoneme ids, and alignments are reported with the first chunk.
+static auto
+stream_encode_next_sentence(struct piper_synthesizer *synth,
+                            struct piper_audio_chunk *chunk) -> int {
   auto memoryInfo = Ort::MemoryInfo::CreateCpu(
       OrtAllocatorType::OrtDeviceAllocator, OrtMemType::OrtMemTypeDefault);
 
-  // Allocate
+  auto [next_phonemes, next_ids] = std::move(synth->phoneme_id_queue.front());
+  synth->phoneme_id_queue.pop();
+
   std::vector<int64_t> phoneme_id_lengths{
       static_cast<int64_t>(next_ids.size())};
   std::vector<float> scales{synth->noise_scale, synth->length_scale,
@@ -404,9 +794,6 @@ auto piper_synthesize_next(struct piper_synthesizer *synth,
       memoryInfo, scales.data(), scales.size(), scales_shape.data(),
       scales_shape.size()));
 
-  // Add speaker id.
-  // NOTE: These must be kept outside the "if" below to avoid being
-  // deallocated.
   std::vector<int64_t> speaker_id{static_cast<int64_t>(synth->speaker_id)};
   std::vector<int64_t> speaker_id_shape{
       static_cast<int64_t>(speaker_id.size())};
@@ -417,11 +804,272 @@ auto piper_synthesize_next(struct piper_synthesizer *synth,
         speaker_id_shape.data(), speaker_id_shape.size()));
   }
 
-  // From export_onnx.py
   std::array<const char *, 4> input_names = {"input", "input_lengths", "scales",
                                              "sid"};
 
-  // Get all output names
+  // "z" first, then optional alignments (see split_voice_for_streaming.py)
+  std::vector<std::string> output_names_strs =
+      synth->encoder_session->GetOutputNames();
+  std::vector<const char *> output_names;
+  output_names.reserve(output_names_strs.size());
+  for (const auto &name : output_names_strs) {
+    output_names.push_back(name.c_str());
+  }
+
+  auto output_tensors = synth->encoder_session->Run(
+      Ort::RunOptions{nullptr}, input_names.data(), input_tensors.data(),
+      input_tensors.size(), output_names.data(), output_names.size());
+
+  if ((output_tensors.empty()) || (!output_tensors.front().IsTensor())) {
+    return PIPER_ERR_GENERIC;
+  }
+
+  auto z_shape = output_tensors.front().GetTensorTypeAndShapeInfo().GetShape();
+  synth->stream_z_channels = z_shape[1];
+  synth->stream_z_frames = z_shape[2];
+  synth->stream_z_pos = 0;
+  synth->stream_z = tensor_as_floats(output_tensors.front());
+
+  if (output_tensors.size() > 1) {
+    auto alignments_shape =
+        output_tensors[1].GetTensorTypeAndShapeInfo().GetShape();
+
+    chunk->num_alignments = alignments_shape[alignments_shape.size() - 1];
+    const auto alignments_values = tensor_as_floats(output_tensors[1]);
+
+    synth->chunk_alignments.resize(chunk->num_alignments);
+    for (std::size_t i = 0; i < chunk->num_alignments; i++) {
+      synth->chunk_alignments[i] = static_cast<int>(
+          alignments_values[i] * static_cast<float>(synth->hop_length));
+    }
+
+    chunk->alignments = synth->chunk_alignments.data();
+  }
+
+  synth->chunk_phonemes = std::move(next_phonemes);
+  for (auto phoneme_id : next_ids) {
+    if (phoneme_id < std::numeric_limits<int>::min() ||
+        phoneme_id > std::numeric_limits<int>::max()) {
+      continue;
+    }
+    synth->chunk_phoneme_ids.push_back(static_cast<int>(phoneme_id));
+  }
+  chunk->phonemes = synth->chunk_phonemes.data();
+  chunk->num_phonemes = synth->chunk_phonemes.size();
+  chunk->phoneme_ids = synth->chunk_phoneme_ids.data();
+  chunk->num_phoneme_ids = synth->chunk_phoneme_ids.size();
+
+  return PIPER_OK;
+}
+
+// Number of latent frames to decode next, see STREAM_BUFFER_SHARE
+static auto
+stream_next_chunk_frames(const struct piper_synthesizer *synth) -> int64_t {
+  if (!synth->stream_started || synth->stream_seconds_per_frame <= 0) {
+    return STREAM_FIRST_CHUNK_FRAMES;
+  }
+
+  const double elapsed =
+      std::chrono::duration<double>(std::chrono::steady_clock::now() -
+                                    synth->stream_start_time)
+          .count();
+  const double buffered = synth->stream_audio_seconds - elapsed;
+  const double budget_frames =
+      STREAM_BUFFER_SHARE * buffered / synth->stream_seconds_per_frame;
+
+  return std::clamp<int64_t>(static_cast<int64_t>(budget_frames) -
+                                 (2 * STREAM_CONTEXT_FRAMES),
+                             STREAM_MIN_CHUNK_FRAMES, STREAM_MAX_CHUNK_FRAMES);
+}
+
+// Streaming variant of piper_synthesize_next for split models: the encoder
+// runs once per sentence, then each call decodes and returns the next chunk.
+static auto synthesize_next_streaming(struct piper_synthesizer *synth,
+                                      struct piper_audio_chunk *chunk) -> int {
+  chunk->phonemes = nullptr;
+  chunk->num_phonemes = 0;
+
+  if (synth->stream_z_pos >= synth->stream_z_frames) {
+    if (synth->phoneme_id_queue.empty()) {
+      chunk->is_last = true;
+      return PIPER_DONE;
+    }
+
+    if (stream_encode_next_sentence(synth, chunk) != PIPER_OK) {
+      return PIPER_ERR_GENERIC;
+    }
+
+    if (synth->stream_z_frames == 0) {
+      chunk->is_last = synth->phoneme_id_queue.empty();
+      return chunk->is_last ? PIPER_DONE : PIPER_OK;
+    }
+  }
+
+  // Decode the next chunk with context on both sides
+  const int64_t frames = synth->stream_z_frames;
+  const int64_t start = synth->stream_z_pos;
+  const int64_t end = std::min(frames, start + stream_next_chunk_frames(synth));
+  const int64_t ctx_start = std::max<int64_t>(0, start - STREAM_CONTEXT_FRAMES);
+  const int64_t ctx_end = std::min(frames, end + STREAM_CONTEXT_FRAMES);
+  const int64_t ctx_frames = ctx_end - ctx_start;
+
+  std::vector<float> z_chunk(synth->stream_z_channels * ctx_frames);
+  for (int64_t channel = 0; channel < synth->stream_z_channels; channel++) {
+    const auto *row = synth->stream_z.data() + (channel * frames);
+    std::copy(row + ctx_start, row + ctx_end,
+              z_chunk.begin() + (channel * ctx_frames));
+  }
+
+  auto memoryInfo = Ort::MemoryInfo::CreateCpu(
+      OrtAllocatorType::OrtDeviceAllocator, OrtMemType::OrtMemTypeDefault);
+
+  std::vector<Ort::Value> input_tensors;
+  std::vector<int64_t> z_shape{1, synth->stream_z_channels, ctx_frames};
+  std::vector<Ort::Float16_t> z_chunk_f16;
+  if (synth->stream_z_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16) {
+    // Split fp16 voices: the decoder expects a float16 latent
+    z_chunk_f16.resize(z_chunk.size());
+    for (std::size_t i = 0; i < z_chunk.size(); i++) {
+      z_chunk_f16[i] = Ort::Float16_t(z_chunk[i]);
+    }
+    input_tensors.push_back(Ort::Value::CreateTensor<Ort::Float16_t>(
+        memoryInfo, z_chunk_f16.data(), z_chunk_f16.size(), z_shape.data(),
+        z_shape.size()));
+  } else {
+    input_tensors.push_back(Ort::Value::CreateTensor<float>(
+        memoryInfo, z_chunk.data(), z_chunk.size(), z_shape.data(),
+        z_shape.size()));
+  }
+
+  std::vector<int64_t> speaker_id{static_cast<int64_t>(synth->speaker_id)};
+  std::vector<int64_t> speaker_id_shape{
+      static_cast<int64_t>(speaker_id.size())};
+  if (synth->num_speakers > 1) {
+    input_tensors.push_back(Ort::Value::CreateTensor<int64_t>(
+        memoryInfo, speaker_id.data(), speaker_id.size(),
+        speaker_id_shape.data(), speaker_id_shape.size()));
+  }
+
+  std::array<const char *, 2> input_names = {"z", "sid"};
+  std::vector<std::string> output_names_strs =
+      synth->decoder_session->GetOutputNames();
+  std::array<const char *, 1> output_names = {output_names_strs[0].c_str()};
+
+  const auto decode_start = std::chrono::steady_clock::now();
+  auto output_tensors = synth->decoder_session->Run(
+      Ort::RunOptions{nullptr}, input_names.data(), input_tensors.data(),
+      input_tensors.size(), output_names.data(), output_names.size());
+  const auto decode_end = std::chrono::steady_clock::now();
+  synth->stream_seconds_per_frame =
+      std::chrono::duration<double>(decode_end - decode_start).count() /
+      static_cast<double>(ctx_frames);
+
+  if ((output_tensors.empty()) || (!output_tensors.front().IsTensor())) {
+    return PIPER_ERR_GENERIC;
+  }
+
+  auto audio_shape =
+      output_tensors.front().GetTensorTypeAndShapeInfo().GetShape();
+  const int64_t audio_len = audio_shape[audio_shape.size() - 1];
+  const auto audio_values = tensor_as_floats(output_tensors.front());
+  const auto *audio_data = audio_values.data();
+
+  // Keep only the samples belonging to [start, end)
+  const int64_t offset =
+      std::min(audio_len, (start - ctx_start) * synth->hop_length);
+  const int64_t count =
+      std::min(audio_len - offset, (end - start) * synth->hop_length);
+  synth->chunk_samples.assign(audio_data + offset, audio_data + offset + count);
+  chunk->samples = synth->chunk_samples.data();
+  chunk->num_samples = synth->chunk_samples.size();
+
+  synth->stream_z_pos = end;
+  if (!synth->stream_started) {
+    synth->stream_started = true;
+    synth->stream_start_time = decode_end;
+  }
+  synth->stream_audio_seconds +=
+      static_cast<double>(count) / static_cast<double>(synth->sample_rate);
+
+  chunk->is_last = (end >= frames) && synth->phoneme_id_queue.empty();
+  return chunk->is_last ? PIPER_DONE : PIPER_OK;
+}
+
+auto piper_synthesize_next(struct piper_synthesizer *synth,
+                           struct piper_audio_chunk *chunk) -> int {
+  if (synth == nullptr) {
+    return PIPER_ERR_GENERIC;
+  }
+
+  if (chunk == nullptr) {
+    return PIPER_ERR_GENERIC;
+  }
+
+  synth->chunk_samples.clear();
+  synth->chunk_phonemes.clear();
+  synth->chunk_phoneme_ids.clear();
+  synth->chunk_alignments.clear();
+
+  chunk->sample_rate = synth->sample_rate;
+  chunk->samples = nullptr;
+  chunk->num_samples = 0;
+  chunk->is_last = false;
+  chunk->phoneme_ids = nullptr;
+  chunk->num_phoneme_ids = 0;
+  chunk->alignments = nullptr;
+  chunk->num_alignments = 0;
+
+  if (synth->encoder_session) {
+    return synthesize_next_streaming(synth, chunk);
+  }
+
+  if (synth->phoneme_id_queue.empty()) {
+    chunk->is_last = true;
+    return PIPER_DONE;
+  }
+
+  auto [next_phonemes, next_ids] = std::move(synth->phoneme_id_queue.front());
+  synth->phoneme_id_queue.pop();
+
+  auto memoryInfo = Ort::MemoryInfo::CreateCpu(
+      OrtAllocatorType::OrtDeviceAllocator, OrtMemType::OrtMemTypeDefault);
+
+  std::vector<int64_t> phoneme_id_lengths{
+      static_cast<int64_t>(next_ids.size())};
+  std::vector<float> scales{synth->noise_scale, synth->length_scale,
+                            synth->noise_w_scale};
+
+  std::vector<Ort::Value> input_tensors;
+  std::vector<int64_t> phoneme_ids_shape{1,
+                                         static_cast<int64_t>(next_ids.size())};
+  input_tensors.push_back(Ort::Value::CreateTensor<int64_t>(
+      memoryInfo, next_ids.data(), next_ids.size(), phoneme_ids_shape.data(),
+      phoneme_ids_shape.size()));
+
+  std::vector<int64_t> phoneme_id_lengths_shape{
+      static_cast<int64_t>(phoneme_id_lengths.size())};
+  input_tensors.push_back(Ort::Value::CreateTensor<int64_t>(
+      memoryInfo, phoneme_id_lengths.data(), phoneme_id_lengths.size(),
+      phoneme_id_lengths_shape.data(), phoneme_id_lengths_shape.size()));
+
+  std::vector<int64_t> scales_shape{static_cast<int64_t>(scales.size())};
+  input_tensors.push_back(Ort::Value::CreateTensor<float>(
+      memoryInfo, scales.data(), scales.size(), scales_shape.data(),
+      scales_shape.size()));
+
+  std::vector<int64_t> speaker_id{static_cast<int64_t>(synth->speaker_id)};
+  std::vector<int64_t> speaker_id_shape{
+      static_cast<int64_t>(speaker_id.size())};
+
+  if (synth->num_speakers > 1) {
+    input_tensors.push_back(Ort::Value::CreateTensor<int64_t>(
+        memoryInfo, speaker_id.data(), speaker_id.size(),
+        speaker_id_shape.data(), speaker_id_shape.size()));
+  }
+
+  std::array<const char *, 4> input_names = {"input", "input_lengths", "scales",
+                                             "sid"};
+
   std::vector<std::string> output_names_strs = synth->session->GetOutputNames();
   std::vector<const char *> output_names;
   output_names.reserve(output_names_strs.size());
@@ -429,7 +1077,6 @@ auto piper_synthesize_next(struct piper_synthesizer *synth,
     output_names.push_back(name.c_str());
   }
 
-  // Infer
   auto output_tensors = synth->session->Run(
       Ort::RunOptions{nullptr}, input_names.data(), input_tensors.data(),
       input_tensors.size(), output_names.data(), output_names.size());
@@ -450,12 +1097,10 @@ auto piper_synthesize_next(struct piper_synthesizer *synth,
 
   chunk->is_last = synth->phoneme_id_queue.empty();
 
-  // Copy phonemes
   synth->chunk_phonemes = std::move(next_phonemes);
   chunk->phonemes = synth->chunk_phonemes.data();
   chunk->num_phonemes = synth->chunk_phonemes.size();
 
-  // Copy phoneme ids
   for (auto phoneme_id : next_ids) {
     if (phoneme_id < std::numeric_limits<int>::min() ||
         phoneme_id > std::numeric_limits<int>::max()) {
@@ -467,7 +1112,6 @@ auto piper_synthesize_next(struct piper_synthesizer *synth,
   chunk->phoneme_ids = synth->chunk_phoneme_ids.data();
   chunk->num_phoneme_ids = synth->chunk_phoneme_ids.size();
 
-  // Check for alignments
   if (output_tensors.size() > 1) {
     auto alignments_shape =
         output_tensors[1].GetTensorTypeAndShapeInfo().GetShape();
@@ -479,14 +1123,12 @@ auto piper_synthesize_next(struct piper_synthesizer *synth,
     synth->chunk_alignments.resize(chunk->num_alignments);
     for (std::size_t i = 0; i < chunk->num_alignments; i++) {
       synth->chunk_alignments[i] =
-          // NOLINTNEXTLINE(bugprone-narrowing-conversions)
           static_cast<int>(alignments_tensor_data[i] * synth->hop_length);
     }
 
     chunk->alignments = synth->chunk_alignments.data();
   }
 
-  // Clean up
   for (auto &output_tensor : output_tensors) {
     Ort::detail::OrtRelease(output_tensor.release());
   }
