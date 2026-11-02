@@ -6,8 +6,9 @@ import logging
 import re
 import shutil
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Any, Dict, Optional
-from urllib.error import HTTPError
+from urllib.error import ContentTooShortError, HTTPError
 from urllib.request import urlopen
 
 URL_FORMAT = "https://huggingface.co/rhasspy/piper-voices/resolve/main/{lang_family}/{lang_code}/{voice_name}/{voice_quality}/{lang_code}-{voice_name}-{voice_quality}{extension}?download=true"
@@ -163,27 +164,47 @@ def _download_voice(
         "voice_quality": voice_quality,
     }
 
-    model_path = download_dir / f"{voice_code}.onnx"
-    if force_redownload or _needs_download(model_path):
-        model_url = URL_FORMAT.format(extension=".onnx", **format_args)
-        _LOGGER.debug("Downloading model from '%s' to '%s'", model_url, model_path)
-        with urlopen(model_url) as response:
-            with open(model_path, "wb") as model_file:
-                shutil.copyfileobj(response, model_file)
+    files_to_download = []
+    for extension in (".onnx", ".onnx.json"):
+        path = download_dir / f"{voice_code}{extension}"
+        if force_redownload or _needs_download(path):
+            files_to_download.append((extension, path))
 
-        _LOGGER.debug("Downloaded: '%s'", model_path)
+    if files_to_download:
+        # Download into the destination directory so the final rename stays on
+        # one filesystem, and keep existing files intact until every download
+        # has succeeded.
+        with TemporaryDirectory(
+            prefix=".piper-download-", dir=download_dir
+        ) as temp_dir_str:
+            temp_dir = Path(temp_dir_str)
+            for extension, path in files_to_download:
+                url = URL_FORMAT.format(extension=extension, **format_args)
+                _LOGGER.debug("Downloading '%s' to '%s'", url, path)
+                _download_file(url, temp_dir / path.name)
 
-    config_path = download_dir / f"{voice_code}.onnx.json"
-    if force_redownload or _needs_download(config_path):
-        config_url = URL_FORMAT.format(extension=".onnx.json", **format_args)
-        _LOGGER.debug("Downloading config from '%s' to '%s'", config_url, config_path)
-        with urlopen(config_url) as response:
-            with open(config_path, "wb") as config_file:
-                shutil.copyfileobj(response, config_file)
-
-        _LOGGER.debug("Downloaded: '%s'", config_path)
+            for _, path in files_to_download:
+                (temp_dir / path.name).replace(path)
+                _LOGGER.debug("Downloaded: '%s'", path)
 
     _LOGGER.info("Downloaded: %s", voice)
+
+
+def _download_file(url: str, path: Path) -> None:
+    """Download a URL to a file, failing if the response is cut short."""
+    with urlopen(url) as response:
+        with open(path, "wb") as output_file:
+            shutil.copyfileobj(response, output_file)
+            num_bytes = output_file.tell()
+
+        # urlopen stops quietly when the connection drops, so a truncated
+        # response would otherwise look like a complete (and cached) file.
+        content_length = response.headers.get("Content-Length")
+        if (content_length is not None) and (num_bytes < int(content_length)):
+            raise ContentTooShortError(
+                f"Downloaded {num_bytes} of {content_length} byte(s) from '{url}'",
+                None,  # type: ignore[arg-type]
+            )
 
 
 def _needs_download(path: Path) -> bool:
