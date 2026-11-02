@@ -77,7 +77,12 @@ class StochasticDurationPredictor(nn.Module):
             h_w = self.post_pre(w)
             h_w = self.post_convs(h_w, x_mask)
             h_w = self.post_proj(h_w) * x_mask
-            e_q = torch.randn(w.size(0), 2, w.size(2)).type_as(x) * x_mask
+            # Drawn on the GPU: drawing on the CPU and copying over made every
+            # training step wait for the GPU to drain.
+            e_q = (
+                torch.randn(w.size(0), 2, w.size(2), device=x.device, dtype=x.dtype)
+                * x_mask
+            )
             z_q = e_q
             for flow in self.post_flows:
                 z_q, logdet_q = flow(z_q, x_mask, g=(x + h_w))
@@ -813,6 +818,24 @@ class SynthesizerTrn(nn.Module):
         o = self.dec((z * y_mask)[:, :, :max_len], g=g)
 
         return o, attn, y_mask, (z, z_p, m_p, logs_p)
+
+    def reconstruct(self, y, y_lengths, sid=None):
+        """Decode the posterior latent for a whole utterance (teacher forced).
+
+        This is the training path with the random segment slice removed: the
+        posterior encoder produces z from the ground-truth spectrogram and the
+        decoder renders all of it, rather than one `segment_size` window. The
+        text encoder, alignment and duration predictor are not involved, so
+        comparing the result against the real waveform isolates the vocoder.
+
+        Training only ever shows the decoder a ~0.37 s slice per utterance per
+        epoch, so the segment-scoped mel loss saturates long before the decoder
+        has actually converged. This is what makes that visible -- see
+        "val_vocoder_mel" in VitsModel.
+        """
+        g = self.emb_g(sid).unsqueeze(-1) if self.n_speakers > 1 else None
+        z, _m_q, _logs_q, y_mask = self.enc_q(y, y_lengths, g=g)
+        return self.dec(z * y_mask, g=g), y_mask
 
     def voice_conversion(self, y, y_lengths, sid_src, sid_tgt):
         assert self.n_speakers > 1, "n_speakers have to be larger than 1."

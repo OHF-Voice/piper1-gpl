@@ -19,7 +19,15 @@ parser.add_argument("--th", action="store_true", help="Install Thai requirements
 parser.add_argument(
     "--torch-cpu", action="store_true", help="Install CPU-only version of PyTorch"
 )
+parser.add_argument(
+    "--constraint",
+    help="pip constraints file with exact versions, such as .github/constraints.txt",
+)
 args = parser.parse_args()
+
+constraint = []
+if args.constraint:
+    constraint = ["--constraint", str(Path(args.constraint).absolute())]
 
 # Create virtual environment
 builder = venv.EnvBuilder(with_pip=True)
@@ -28,8 +36,10 @@ builder.create(_VENV_DIR)
 
 # Upgrade dependencies
 pip = [context.env_exe, "-m", "pip"]
-subprocess.check_call(pip + ["install", "--upgrade", "pip"])
-subprocess.check_call(pip + ["install", "--upgrade", "setuptools", "wheel"])
+subprocess.check_call(pip + ["install", "--upgrade", "pip"] + constraint)
+subprocess.check_call(
+    pip + ["install", "--upgrade", "setuptools", "wheel"] + constraint
+)
 
 # PyTorch
 if args.torch_cpu:
@@ -41,6 +51,7 @@ if args.torch_cpu:
             "--extra-index-url",
             "https://download.pytorch.org/whl/cpu",
         ]
+        + constraint
     )
 
 # Install requirements
@@ -64,4 +75,16 @@ extras_str = ""
 if extras:
     extras_str = "[" + ",".join(extras) + "]"
 
-subprocess.check_call(pip + ["install", "-e", str(_PROGRAM_DIR) + extras_str])
+# The constraints also pin the build dependencies (cmake, scikit-build, ...)
+# that pip installs to build Piper itself. The pip that came with the venv may
+# predate --build-constraint, so this waits until pip has been upgraded.
+build_constraint = []
+if args.constraint:
+    build_constraint = ["--build-constraint", str(Path(args.constraint).absolute())]
+
+subprocess.check_call(
+    pip
+    + ["install", "-e", str(_PROGRAM_DIR) + extras_str]
+    + constraint
+    + build_constraint
+)

@@ -1,7 +1,66 @@
 # Changelog
 
+## Unreleased
+
+- Stream audio from `libpiper` for voices split into an encoder and a decoder
+    - `piper_synthesize_next` returned one chunk per sentence, so the first sound of a long sentence came only after the whole sentence was synthesized (about 4 seconds for a 6 second sentence of a high voice used by VoiceOver on an Apple M3)
+    - `python3 -m piper.split_voice_for_streaming model.onnx` writes `model.encoder.onnx` and `model.decoder.onnx`; when both are next to the model, `piper_create` loads them instead of the full model and the decoder runs in chunks
+    - Chunks overlap by more than the decoder's receptive field, so the audio matches the unsplit voice; chunk sizes adapt to the measured decoder speed to keep playback gapless
+    - The first sound now comes after about 0.2 seconds regardless of the sentence length
+- Run `libpiper` inference on several threads
+    - The onnxruntime session used a single intra-op thread, which made synthesis about three times slower than the Python API on the same machine
+    - It now uses the number of performance cores on Apple platforms and half of the hardware threads elsewhere, at most 4
+
+- Phonemize Hebrew with `HebrewPhonemizer` in `piper.train.infer_torch`
+    - The dispatch had no `HEBREW` branch, so a Hebrew checkpoint was inferred from raw espeak-ng output with no error
+    - The espeak-ng fallback in `infer_torch` and in the training dataset now raises `ValueError` for any phoneme type other than `espeak`, as `PiperVoice.phonemize` already does, so a type without its own branch fails instead of training or inferring on the wrong phonemes
+- Add synthesis settings and a speaker picker to the web page of `piper.http_server`
+    - `/synthesize` has always accepted `length_scale`, `noise_scale`, `noise_w_scale`, and `speaker`/`speaker_id`, but the page sent nothing but `text`, so the only way to hear a voice's other speakers or a different speaking rate was to leave the browser and use `curl`
+    - The page now has a **Settings** section with a slider and a number box per scale, plus a speaker drop-down for multi-speaker voices; **Reset to voice defaults** restores the starting values
+    - The settings start at the voice's defaults and survive each synthesis - only the first `/info` fetch loads them, so the values a user picked are not thrown away when the page refreshes the alignment timeline
+    - Emptying a number box drops that field from the request rather than sending `NaN`, so the server falls back to its own default
+- Report the speakers and default synthesis settings of the current voice from `/info`
+    - The page needs them to populate its new controls, and nothing else exposed them: `/voices` has the whole config of every downloaded voice, but not which voice the server is serving or what `--length-scale` and friends were set to on the command line
+    - `voice.speakers` lists `{"id", "name"}` ordered by id, naming speakers the voice does not name itself (`speaker_id_map` is empty on some multi-speaker voices) as `Speaker <id>`
+    - `voice.defaults` gives the `speaker_id`/`length_scale`/`noise_scale`/`noise_w_scale` a request gets when it leaves them out, with the command-line arguments applied over the voice config
+- Fix `/synthesize` accepting a speaker id one past the last speaker
+    - The bounds check was `speaker_id > num_speakers`, so an id equal to `num_speakers` passed through to onnxruntime; negative ids were not checked at all
+    - Out-of-range ids now fall back to speaker 0 with a warning, and a `speaker_id` sent as a string is accepted
+- Stop warning that speaker `None` was not found
+    - Every request to a multi-speaker voice that did not name a speaker logged a "Speaker not found" warning before falling back to the default speaker, which is the documented behavior, not a problem; the warning is now logged only when a `speaker` name was actually given and did not match
+
+- Resolve renamed voices in `piper.download_voices` using the `aliases` list in voices.json
+    - A voice that has been renamed keeps its old name in the `aliases` list of its voices.json entry, but nothing honored it: the downloader builds its URL from the voice name alone and never reads voices.json, so every pre-1.0 name (`de-karlsson-low`, `zh-cn-huayan-x-low`, ...) failed - those names do not even match the `<language>-<name>-<quality>` pattern, so they raised before any download was attempted
+    - A name that does not parse, or that parses but 404s, is now looked up in the `aliases` lists and downloaded under its current name, with a warning saying what it was renamed to
+    - voices.json is only downloaded when a name actually has to be resolved, so a current name still costs the same two requests it always did
+- Add Lithuanian phonemizer using espeak-ng plus a pitch accent dictionary
+    - `--data.phoneme_type lithuanian` for training; `"phoneme_type": "lithuanian"` in a voice config for synthesis
+    - espeak-ng's Lithuanian voice phonemizes well but places stress incorrectly in roughly half of the words, and it cannot express the three Lithuanian pitch accents at all: it collapses them into one primary-stress mark, so kártas ("a time") and kar̃tas ("bitter") come out identical
+    - The phonemizer keeps espeak-ng as the phoneme source and moves the stress mark to the accented syllable using a dictionary built from the LIEPA corpus and the g2p-lt-lexicon, both CC-BY-4.0; words that are missing keep espeak-ng's own placement
+    - Accents reuse ˈ and ˌ and add ˋ (U+02CB) - one symbol appended to the default IPA map, so Lithuanian voices stay compatible with the IPA-based (espeak) warmstart
+    - The stress dictionary (3 MB, CC-BY-4.0) and the letter-name table ship with piper as package data, like the Hebrew model: pip install, download the voice, it works - no extra files and no new dependency; a voice may pass its own files to `LithuanianPhonemizer` instead
+    - Lithuanian also has a vocative case spelled like the nominative but accented differently (mamà "mother" vs mãma "mum!"); a dictionary holding one entry per spelling cannot express it, so a short list of nouns that occur as address ships alongside, and a word on that list fenced off by commas is accented on the first syllable
+    - The shipped letter-name table also separates z and ž, which espeak-ng names identically (ʑˈee), so the initials of "Zigmas" and "Žygimantas" are no longer read the same, and names Š "šė" rather than "eš"
+
 ## 1.8.0
 
+- Fix the training learning rate never decaying
+    - `VitsModel` sets `automatic_optimization = False`, and under manual optimization Lightning does not step the schedulers returned by `configure_optimizers` — nothing else did either, so the learning rate stayed pinned at its initial value for the whole run
+    - Every checkpoint written before this reports `lr_schedulers` `last_epoch=0` no matter how many epochs it trained
+    - `on_train_epoch_end` now steps both schedulers, and logs `lr_g`/`lr_d`
+- Derive `--model.lr_decay`/`--model.lr_decay_d` from `--trainer.max_epochs` when they are not set explicitly
+    - The old default (`0.999875`, from upstream VITS) assumes a ~20,000-epoch schedule and decays the learning rate by only ~1% per 100 epochs, so simply stepping the scheduler would have changed almost nothing
+    - The derived decay anneals to `--model.lr_final_ratio` (default `0.05`) of the initial learning rate over the run; `--model.lr_final_ratio 1.0` keeps it constant
+    - Open-ended runs (`max_epochs=-1`, the default) have no run length to anneal over and still fall back to the upstream constants, with a warning
+    - Resuming with `--ckpt_path` re-asserts the configured decay: `ExponentialLR.state_dict()` carries `gamma`, so the restored value would otherwise silently replace it
+- Fix a resume silently reverting to the warmstart checkpoint
+    - `LightningCLI._parse_ckpt_path` merges a resumed checkpoint's saved `hyper_parameters` back over the parsed config, so `--model.warmstart_ckpt` comes back even when it is absent from the command line
+    - Trainer restores model weights before `on_fit_start` and the optimizer/loop state after it, so the warmstart overwrote the resumed weights with the base model while keeping the restored epoch — discarding every epoch trained so far
+    - `on_fit_start` now skips both warmstart paths whenever `trainer.ckpt_path` is set, and logs that it did
+- Add `script/libritts_r_to_csv`, which converts extracted LibriTTS-R splits to Piper's metadata CSV
+    - Writes through `csv.writer(delimiter="|")` so quoting round-trips through the `csv.reader` the trainer uses — a hand-rolled `"|".join()` silently drops the quotation marks that LibriTTS dialogue is full of
+    - Falls back from `.normalized.txt` to the chapter `.trans.tsv` to `.original.txt`, and skips utterances whose audio has no transcript
+    - Optional `--min-seconds`/`--max-seconds` filtering and a `--stats` duration histogram
 - Add Thai phonemizer using TLTK in the new `th` extra
     - `--data.phoneme_type thai` for training; `"phoneme_type": "thai"` in a voice config for synthesis
     - espeak-ng's Thai voice is a placeholder: its `th_dict` holds no lexicon, so unspaced Thai is never segmented; the leading vowels เ แ โ ใ ไ are not reordered; and a tone mark deletes the syllable's vowel, collapsing ป่า/ป้า/ป๊า/ป๋า to the same phonemes

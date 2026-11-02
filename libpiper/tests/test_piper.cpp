@@ -334,6 +334,7 @@ TEST_F(PiperTest, CreateLegacyVsOptionsParity) {
 TEST(ChinesePhonemizerUnit, NormalizeG2pw) {
   using namespace piper;
   EXPECT_EQ(normalize_g2pw_syllable("nu:3"), "nv3");
+  EXPECT_EQ(normalize_g2pw_syllable(u8"l\u00fc4"), "lv4");
   EXPECT_EQ(normalize_g2pw_syllable("lve4"), "lve4");
   EXPECT_EQ(normalize_g2pw_syllable("ni3"), "ni3");
   EXPECT_EQ(normalize_g2pw_syllable("hao3"), "hao3");

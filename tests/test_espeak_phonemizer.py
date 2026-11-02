@@ -1,4 +1,6 @@
-from piper.phonemize_espeak import EspeakPhonemizer
+import os
+
+from piper.phonemize_espeak import ESPEAK_DATA_DIR, EspeakPhonemizer
 
 from . import EN_US_VOWEL_CLUSTERS
 
@@ -70,3 +72,29 @@ def test_vowel_clusters_without_terminator() -> None:
     assert phonemizer.phonemize("en-us", "my", vowel_clusters=EN_US_VOWEL_CLUSTERS) == [
         ["m", "ˈ", "aɪ"],
     ]
+
+
+def test_phonemizers_share_one_initialization() -> None:
+    """Creating another phonemizer must not re-initialize espeak-ng under the
+    first. Re-initializing freed the phoneme tables the current voice pointed
+    into, so the next phonemize() read freed memory; under valgrind that was
+    hundreds of invalid reads, and on CI a segfault."""
+    first = EspeakPhonemizer()
+    expected = first.phonemize("lt", "Labas, mama.")
+
+    for _ in range(3):
+        assert EspeakPhonemizer().phonemize("lt", "Labas, mama.") == expected
+
+    assert first.phonemize("lt", "Labas, mama.") == expected
+
+
+def test_switching_data_directory() -> None:
+    """A different data directory tears espeak-ng down before initializing it
+    again, rather than reloading over live state."""
+    expected = EspeakPhonemizer().phonemize("en-us", "test")
+
+    # Same directory, spelled differently, so the bridge sees a new one.
+    other = EspeakPhonemizer(str(ESPEAK_DATA_DIR) + os.sep)
+    assert other.phonemize("en-us", "test") == expected
+
+    assert EspeakPhonemizer().phonemize("en-us", "test") == expected

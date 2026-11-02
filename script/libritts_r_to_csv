@@ -1,0 +1,285 @@
+#!/usr/bin/env python3
+"""Convert extracted LibriTTS-R splits into Piper's metadata.csv format.
+
+LibriTTS-R (https://www.openslr.org/141/) extracts to a tree of
+
+    <root>/train-clean-360/<speaker>/<chapter>/<speaker>_<chapter>_<seg>_<utt>.wav
+    <root>/train-clean-360/<speaker>/<chapter>/<speaker>_<chapter>_<seg>_<utt>.normalized.txt
+    <root>/train-clean-360/<speaker>/<chapter>/<speaker>_<chapter>.trans.tsv
+
+and this writes the multi-speaker CSV the trainer wants:
+
+    train-clean-360/2167/149880/2167_149880_000012_000002.wav|2167|Some text.
+
+Usage:
+
+    script/libritts_r_to_csv /path/to/libritts_r -o metadata.csv
+
+Then train against the printed --data.audio_dir, which is the directory the
+paths in column 1 are relative to.
+"""
+
+import argparse
+import csv
+import logging
+import random
+import sys
+import wave
+from collections import Counter
+from pathlib import Path
+from typing import Iterator, NamedTuple, Optional
+
+_LOGGER = logging.getLogger("libritts_r_to_csv")
+
+DEFAULT_SPLITS = ("train-clean-100", "train-clean-360", "train-other-500")
+
+# LibriTTS ships the transcript three ways. The per-utterance .normalized.txt is
+# the one you want for TTS (numbers and abbreviations expanded), but it is not
+# guaranteed to be present, so fall back to the chapter-level .trans.tsv --
+# utt_id <TAB> original <TAB> normalized -- and then to .original.txt.
+TRANS_TSV_COLUMN = {"original": 1, "normalized": 2}
+
+
+class Utterance(NamedTuple):
+    rel_path: str  # relative to audio_root, forward slashes
+    speaker: str
+    text: str
+
+
+def find_audio_root(root: Path, splits: list[str]) -> tuple[Path, list[Path]]:
+    """Locate the directory the split folders actually live in.
+
+    Handles both `<root>/train-clean-100` and the `<root>/LibriTTS_R/...` layout
+    the official tarballs produce.
+    """
+    candidates = [root, root / "LibriTTS_R", root / "LibriTTS"]
+    for candidate in candidates:
+        found = [candidate / split for split in splits if (candidate / split).is_dir()]
+        if found:
+            missing = set(splits) - {path.name for path in found}
+            if missing:
+                _LOGGER.warning(
+                    "Split(s) not found under %s: %s",
+                    candidate,
+                    ", ".join(sorted(missing)),
+                )
+            return candidate, found
+
+    sys.exit(
+        f"No LibriTTS-R splits found under {root}. Looked for "
+        f"{', '.join(splits)} in: {', '.join(str(c) for c in candidates)}"
+    )
+
+
+def read_trans_tsv(tsv_path: Path, column: int) -> dict[str, str]:
+    """Parse a chapter-level .trans.tsv into {utt_id: text}."""
+    texts: dict[str, str] = {}
+    with open(tsv_path, "r", encoding="utf-8") as tsv_file:
+        for line in tsv_file:
+            fields = line.rstrip("\n").split("\t")
+            if len(fields) > column:
+                texts[fields[0]] = fields[column]
+
+    return texts
+
+
+def utterance_duration(wav_path: Path) -> Optional[float]:
+    """Seconds, read from the header only. None if unreadable."""
+    try:
+        with wave.open(str(wav_path), "rb") as wav_file:
+            frame_rate = wav_file.getframerate()
+            if frame_rate > 0:
+                return wav_file.getnframes() / frame_rate
+    except Exception:  # noqa: BLE001 - a bad file is skipped, not fatal
+        pass
+
+    try:
+        import soundfile  # only needed for non-PCM wavs
+
+        info = soundfile.info(str(wav_path))
+        return info.frames / info.samplerate
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def iter_utterances(
+    audio_root: Path, split_dirs: list[Path], text_kind: str, counts: Counter
+) -> Iterator[Utterance]:
+    per_utt_suffix = f".{text_kind}.txt"
+    trans_column = TRANS_TSV_COLUMN[text_kind]
+
+    for split_dir in sorted(split_dirs):
+        for speaker_dir in sorted(split_dir.iterdir()):
+            if not speaker_dir.is_dir():
+                continue
+
+            speaker = speaker_dir.name
+            for chapter_dir in sorted(speaker_dir.iterdir()):
+                if not chapter_dir.is_dir():
+                    continue
+
+                # Loaded lazily: only chapters missing a per-utterance text file
+                # need it, and most chapters have them.
+                trans_texts: Optional[dict[str, str]] = None
+
+                for wav_path in sorted(chapter_dir.glob("*.wav")):
+                    counts["wav files"] += 1
+                    utt_id = wav_path.stem
+
+                    text_path = chapter_dir / f"{utt_id}{per_utt_suffix}"
+                    text = ""
+                    if text_path.exists():
+                        text = text_path.read_text(encoding="utf-8")
+                    else:
+                        if trans_texts is None:
+                            tsv_path = (
+                                chapter_dir / f"{speaker}_{chapter_dir.name}.trans.tsv"
+                            )
+                            trans_texts = (
+                                read_trans_tsv(tsv_path, trans_column)
+                                if tsv_path.exists()
+                                else {}
+                            )
+                            if trans_texts:
+                                counts["chapters read from .trans.tsv"] += 1
+
+                        text = trans_texts.get(utt_id, "")
+                        if not text:
+                            fallback = chapter_dir / f"{utt_id}.original.txt"
+                            if fallback.exists():
+                                text = fallback.read_text(encoding="utf-8")
+                                counts["fell back to .original.txt"] += 1
+
+                    # Collapse whitespace: the trainer expects one line per row.
+                    text = " ".join(text.split())
+                    if not text:
+                        counts["skipped: no transcript"] += 1
+                        continue
+
+                    yield Utterance(
+                        rel_path=wav_path.relative_to(audio_root).as_posix(),
+                        speaker=speaker,
+                        text=text,
+                    )
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument("root", type=Path, help="Directory with the extracted splits")
+    parser.add_argument(
+        "-o", "--output", type=Path, default=Path("metadata.csv"), help="CSV to write"
+    )
+    parser.add_argument(
+        "--splits",
+        nargs="+",
+        default=list(DEFAULT_SPLITS),
+        help=f"Splits to include (default: {' '.join(DEFAULT_SPLITS)})",
+    )
+    parser.add_argument(
+        "--text",
+        choices=sorted(TRANS_TSV_COLUMN),
+        default="normalized",
+        help="Which transcript to use (default: normalized)",
+    )
+    parser.add_argument(
+        "--min-seconds",
+        type=float,
+        help="Drop utterances shorter than this. Audio below the 8192-sample "
+        "segment size (0.37s at 22.05kHz) is zero-padded during training, so "
+        "0.5 is a reasonable floor.",
+    )
+    parser.add_argument(
+        "--max-seconds",
+        type=float,
+        help="Drop utterances longer than this. LibriTTS-R runs past 30s, and "
+        "long utterances drive peak VRAM; 15-20 is a common cap.",
+    )
+    parser.add_argument(
+        "--stats",
+        action="store_true",
+        help="Read every wav header and report a duration histogram. Implied by "
+        "--min-seconds/--max-seconds.",
+    )
+    parser.add_argument("--shuffle", action="store_true", help="Shuffle rows")
+    parser.add_argument("--seed", type=int, default=1234, help="Shuffle seed")
+    parser.add_argument("--debug", action="store_true")
+    args = parser.parse_args()
+
+    logging.basicConfig(
+        level=logging.DEBUG if args.debug else logging.INFO,
+        format="%(levelname)s: %(message)s",
+    )
+
+    audio_root, split_dirs = find_audio_root(args.root, args.splits)
+    _LOGGER.info(
+        "Reading %s from %s", ", ".join(p.name for p in sorted(split_dirs)), audio_root
+    )
+
+    need_durations = (
+        args.stats or (args.min_seconds is not None) or (args.max_seconds is not None)
+    )
+    counts: Counter = Counter()
+    histogram: Counter = Counter()
+    total_seconds = 0.0
+
+    rows: list[Utterance] = []
+    for utterance in iter_utterances(audio_root, split_dirs, args.text, counts):
+        if need_durations:
+            seconds = utterance_duration(audio_root / utterance.rel_path)
+            if seconds is None:
+                counts["skipped: unreadable wav"] += 1
+                continue
+
+            if (args.min_seconds is not None) and (seconds < args.min_seconds):
+                counts["skipped: shorter than --min-seconds"] += 1
+                continue
+
+            if (args.max_seconds is not None) and (seconds > args.max_seconds):
+                counts["skipped: longer than --max-seconds"] += 1
+                continue
+
+            total_seconds += seconds
+            histogram[min(int(seconds // 5) * 5, 30)] += 1
+
+        rows.append(utterance)
+
+    if not rows:
+        sys.exit("No utterances found -- check --root and --splits")
+
+    if args.shuffle:
+        random.Random(args.seed).shuffle(rows)
+
+    # Write through csv so quoting matches the csv.reader(delimiter="|") the
+    # trainer uses. LibriTTS text is full of dialogue, and a hand-rolled
+    # "|".join() silently loses the quotation marks around it.
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    with open(args.output, "w", encoding="utf-8", newline="") as csv_file:
+        writer = csv.writer(csv_file, delimiter="|", lineterminator="\n")
+        for utterance in rows:
+            writer.writerow([utterance.rel_path, utterance.speaker, utterance.text])
+
+    speakers = {utterance.speaker for utterance in rows}
+    print(
+        f"\nWrote {len(rows):,} utterances from {len(speakers):,} speakers to {args.output}"
+    )
+
+    for label, count in sorted(counts.items()):
+        print(f"  {label}: {count:,}")
+
+    if need_durations:
+        print(f"  total audio: {total_seconds / 3600:.1f} hours")
+        print("  duration histogram:")
+        for bucket in sorted(histogram):
+            label = f"{bucket}-{bucket + 5}s" if bucket < 30 else "30s+"
+            print(f"    {label:>8}: {histogram[bucket]:,}")
+
+    print("\nTrain with:")
+    print(f"  --data.csv_path {args.output}")
+    print(f"  --data.audio_dir {audio_root}")
+    print(f"  --model.num_speakers {len(speakers)}")
+
+
+if __name__ == "__main__":
+    main()

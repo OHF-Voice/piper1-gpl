@@ -45,12 +45,20 @@ def rand_gumbel_like(x):
 
 
 def slice_segments(x, ids_str, segment_size=4):
-    ret = torch.zeros_like(x[:, :, :segment_size])
-    for i in range(x.size(0)):
-        idx_str = max(0, ids_str[i])
-        idx_end = idx_str + segment_size
-        ret[i] = x[i, :, idx_str:idx_end]
-    return ret
+    """x[i, :, ids_str[i] : ids_str[i] + segment_size] for every i, as one gather.
+
+    Slicing per utterance turned each start offset into a Python int, and every
+    one of those conversions waits for the GPU to drain its queue. This runs
+    three times per training step, so that was ~3 x batch_size stalls per step.
+    Negative starts clamp to 0, and positions past the end of x read as zeros.
+    """
+    b, d, t = x.size()
+    segment_size = min(segment_size, t)
+    starts = ids_str.to(device=x.device, dtype=torch.long).clamp(min=0)
+    positions = starts.unsqueeze(1) + torch.arange(segment_size, device=x.device)
+    in_range = (positions < t).unsqueeze(1)
+    positions = positions.clamp(max=t - 1).unsqueeze(1).expand(b, d, segment_size)
+    return torch.gather(x, 2, positions).masked_fill(~in_range, 0)
 
 
 def rand_slice_segments(x, x_lengths=None, segment_size=4):
@@ -58,7 +66,9 @@ def rand_slice_segments(x, x_lengths=None, segment_size=4):
     if x_lengths is None:
         x_lengths = t
     ids_str_max = x_lengths - segment_size + 1
-    ids_str = (torch.rand([b]).to(device=x.device) * ids_str_max).to(dtype=torch.long)
+    # Drawn on x's device: a CPU tensor copied over is a pageable host-to-device
+    # copy, which also waits for the GPU.
+    ids_str = (torch.rand([b], device=x.device) * ids_str_max).to(dtype=torch.long)
     ret = slice_segments(x, ids_str, segment_size)
     return ret, ids_str
 
