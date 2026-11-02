@@ -2,10 +2,12 @@
 
 import io
 import json
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Iterator, List, Optional, Set
 from unittest.mock import patch
-from urllib.error import HTTPError
+from urllib.error import ContentTooShortError, HTTPError
 
 import pytest
 
@@ -16,6 +18,15 @@ _VOICES_JSON = {
     "en_US-lessac-medium": {"aliases": []},
     "ja_JP-hi_fi_captain-medium": {"aliases": ["ja_JA-hi_fi_captain-medium"]},
 }
+
+
+class FakeResponse(io.BytesIO):
+    """Response body with the headers that urlopen's responses have."""
+
+    def __init__(self, data: bytes) -> None:
+        """Serve `data` with a matching Content-Length."""
+        super().__init__(data)
+        self.headers = {"Content-Length": str(len(data))}
 
 
 class FakeUrlopen:
@@ -31,11 +42,11 @@ class FakeUrlopen:
         self.requested.append(url)
 
         if url == download_voices.VOICES_JSON:
-            return io.BytesIO(json.dumps(_VOICES_JSON).encode("utf-8"))
+            return FakeResponse(json.dumps(_VOICES_JSON).encode("utf-8"))
 
         for url_part, data in self.available.items():
             if url_part in url:
-                return io.BytesIO(data)
+                return FakeResponse(data)
 
         raise HTTPError(url, 404, "Not Found", {}, None)  # type: ignore[arg-type]
 
@@ -105,3 +116,133 @@ def test_missing_voice(tmp_path: Path) -> None:
             download_voices.download_voice("en_US-nonexistent-medium", tmp_path)
 
     assert not list(tmp_path.iterdir())
+
+
+# -----------------------------------------------------------------------------
+# Interrupted downloads, served over a real HTTP connection since urlopen's own
+# handling of a dropped connection is what's under test.
+
+_VOICE = "en_US-lessac-medium"
+_PAYLOADS = {".onnx": b"complete model data", ".onnx.json": b'{"audio": {}}'}
+
+
+class VoiceServer:
+    """Records requests and which file extensions to cut short."""
+
+    def __init__(self) -> None:
+        """Start with every response complete."""
+        self.short_extensions: Set[str] = set()
+        self.requested: List[str] = []
+
+
+@pytest.fixture(name="voice_server")
+def fixture_voice_server(monkeypatch: pytest.MonkeyPatch) -> Iterator[VoiceServer]:
+    """Serve voice files, closing early for extensions in short_extensions."""
+    voice_server = VoiceServer()
+
+    class VoiceRequestHandler(BaseHTTPRequestHandler):
+        """Serve complete or truncated voice files."""
+
+        def do_GET(self) -> None:  # pylint: disable=invalid-name
+            """Send the requested file."""
+            extension = self.path.lstrip("/")
+            voice_server.requested.append(extension)
+            payload = _PAYLOADS[extension]
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            if extension in voice_server.short_extensions:
+                payload = payload[: len(payload) // 2]
+            self.wfile.write(payload)
+
+        def log_message(self, *args) -> None:  # pylint: disable=arguments-differ
+            """Keep request logs out of test output."""
+
+    with ThreadingHTTPServer(("127.0.0.1", 0), VoiceRequestHandler) as server:
+        monkeypatch.setattr(
+            download_voices,
+            "URL_FORMAT",
+            f"http://127.0.0.1:{server.server_port}/{{extension}}",
+        )
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            yield voice_server
+        finally:
+            server.shutdown()
+            thread.join()
+
+
+def _dir_contents(path: Path) -> Dict[str, bytes]:
+    """Return the name and contents of every entry in a directory."""
+    return {p.name: p.read_bytes() for p in path.iterdir()}
+
+
+@pytest.mark.parametrize("short_extension", _PAYLOADS)
+@pytest.mark.parametrize("force_redownload", [False, True])
+def test_interrupted_download(
+    tmp_path: Path,
+    voice_server: VoiceServer,
+    short_extension: str,
+    force_redownload: bool,
+) -> None:
+    """Test that a truncated download leaves no partial files behind."""
+    original_files: Dict[str, bytes] = {}
+    if force_redownload:
+        # A working voice must survive a failed redownload
+        for extension in _PAYLOADS:
+            name = f"{_VOICE}{extension}"
+            original_files[name] = b"original " + extension.encode()
+            (tmp_path / name).write_bytes(original_files[name])
+
+    voice_server.short_extensions.add(short_extension)
+    with pytest.raises(ContentTooShortError):
+        download_voices.download_voice(_VOICE, tmp_path, force_redownload)
+
+    assert _dir_contents(tmp_path) == original_files
+
+    # Retrying after the failure downloads the complete voice
+    voice_server.short_extensions.clear()
+    download_voices.download_voice(_VOICE, tmp_path, force_redownload)
+    assert _dir_contents(tmp_path) == {
+        f"{_VOICE}{extension}": payload for extension, payload in _PAYLOADS.items()
+    }
+
+
+@pytest.mark.parametrize("existing_extension", _PAYLOADS)
+@pytest.mark.parametrize("existing_data", [b"", b"cached file"])
+def test_download_missing_or_empty(
+    tmp_path: Path,
+    voice_server: VoiceServer,
+    existing_extension: str,
+    existing_data: bytes,
+) -> None:
+    """Test that only missing or empty files are downloaded."""
+    (tmp_path / f"{_VOICE}{existing_extension}").write_bytes(existing_data)
+
+    download_voices.download_voice(_VOICE, tmp_path)
+
+    is_cached = bool(existing_data)
+    assert voice_server.requested == [
+        extension
+        for extension in _PAYLOADS
+        if (extension != existing_extension) or (not is_cached)
+    ]
+    assert _dir_contents(tmp_path) == {
+        f"{_VOICE}{extension}": (
+            existing_data
+            if is_cached and (extension == existing_extension)
+            else payload
+        )
+        for extension, payload in _PAYLOADS.items()
+    }
+
+
+def test_download_cached_voice(tmp_path: Path, voice_server: VoiceServer) -> None:
+    """Test that a fully downloaded voice is not requested again."""
+    for extension, payload in _PAYLOADS.items():
+        (tmp_path / f"{_VOICE}{extension}").write_bytes(payload)
+
+    download_voices.download_voice(_VOICE, tmp_path)
+
+    assert not voice_server.requested
