@@ -16,7 +16,12 @@ import onnxruntime
 from .config import PhonemeType, PiperConfig, SynthesisConfig
 from .const import BOS, EOS, PAD
 from .phoneme_ids import phonemes_to_ids
-from .phonemize_espeak import ESPEAK_DATA_DIR, ESPEAK_LOCK, EspeakPhonemizer
+from .phonemize_espeak import (
+    ESPEAK_DATA_DIR,
+    ESPEAK_LOCK,
+    EspeakPhonemizer,
+    split_raw_phonemes,
+)
 from .tashkeel import TashkeelDiacritizer
 
 _ESPEAK_PHONEMIZER: Optional[EspeakPhonemizer] = None
@@ -285,7 +290,12 @@ class PiperVoice:
                 if (i > 0) and (text_parts[i - 1].endswith(" ")):
                     phonemes[-1].append(" ")
 
-                phonemes[-1].extend(text_part[2:-2].strip())
+                phonemes[-1].extend(
+                    split_raw_phonemes(
+                        text_part[2:-2].strip(),
+                        vowel_clusters=self.config.vowel_clusters,
+                    )
+                )
 
                 if (i < (len(text_parts)) - 1) and (text_parts[i + 1].startswith(" ")):
                     phonemes[-1].append(" ")
