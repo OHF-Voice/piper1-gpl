@@ -95,7 +95,7 @@ def main() -> None:
             f"Unable to find voice: {model_path} (use piper.download_voices)"
         )
 
-    default_model_id = model_path.name.rstrip(".onnx")
+    default_model_id = model_path.stem
 
     # Load voice
     default_voice = PiperVoice.load(
@@ -226,7 +226,7 @@ def main() -> None:
                     config_paths.append(config_path)
 
         for config_path in config_paths:
-            model_id = config_path.name.rstrip(".onnx.json")
+            model_id = config_path.name.removesuffix(".onnx.json")
             if model_id in voices_dict:
                 continue
 
