@@ -76,6 +76,12 @@ bˈætmæn
 
 ## Binary Releases
 
+The binaries expect text via stdin. For example:
+
+```sh
+echo "hello world" | ./piper -m model/en_GB-alan-medium.onnx -f test.wav
+```
+
 * [amd64](https://github.com/rhasspy/piper/releases/download/v1.2.0/piper_amd64.tar.gz) (64-bit desktop Linux)
 * [arm64](https://github.com/rhasspy/piper/releases/download/v1.2.0/piper_arm64.tar.gz) (64-bit Raspberry Pi 4)
 * [armv7](https://github.com/rhasspy/piper/releases/download/v1.2.0/piper_armv7.tar.gz) (32-bit Raspberry Pi 3/4)
