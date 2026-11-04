@@ -15,7 +15,7 @@ class PhonemeType(str, Enum):
     ESPEAK = "espeak"
     TEXT = "text"
     PINYIN = "pinyin"  # zh-CN
-    HEBREW = "hebrew"  # he-IL: Nakdimon niqqud + IPA G2P
+    HEBREW = "hebrew"  # he-IL: renikud G2P (text -> stressed IPA)
     JAPANESE = "japanese"  # ja-JP: OpenJTalk + pitch accent -> IPA
     THAI = "thai"  # th-TH: TLTK segmentation + G2P -> IPA + tone digits
     LITHUANIAN = "lithuanian"  # lt-LT: espeak-ng IPA + pitch accent dictionary
