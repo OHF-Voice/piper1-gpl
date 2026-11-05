@@ -219,6 +219,168 @@ def test_sentence_silence_even_byte_count(
     assert data_size == expected_bytes
 
 
+def test_python_api_sentence_silence_synthesize_wav() -> None:
+    """Test setting sentence_silence via SynthesisConfig and synthesize_wav."""
+    from piper.config import SynthesisConfig
+
+    voice = PiperVoice.load(_TEST_VOICE)
+    syn_config = SynthesisConfig(sentence_silence=0.25)
+
+    with io.BytesIO() as wav_io:
+        wav_output: wave.Wave_write = wave.open(wav_io, "wb")
+        with wav_output:
+            voice.synthesize_wav("This is a test. This is another test.", wav_output, syn_config=syn_config)
+
+        wav_bytes = wav_io.getvalue()
+        data_idx = wav_bytes.find(b"data")
+        data_size = struct.unpack("<I", wav_bytes[data_idx + 4 : data_idx + 8])[0]
+
+        # 16-bit mono must have even byte count
+        assert data_size % 2 == 0
+
+        # Test voice produces 1s per sentence (22050 samples)
+        # Two sentences (44100 samples) + 0.25s silence (5512 samples) = 49612 samples = 99224 bytes
+        sample_rate = voice.config.sample_rate
+        silence_samples = int(sample_rate * 0.25)
+        expected_bytes = (sample_rate * 2 * 2) + (silence_samples * 2)
+        assert data_size == expected_bytes
+
+
+def test_python_api_sentence_silence_override() -> None:
+    """Test overriding sentence_silence as a parameter in synthesize_wav."""
+    from piper.config import SynthesisConfig
+
+    voice = PiperVoice.load(_TEST_VOICE)
+    syn_config = SynthesisConfig(sentence_silence=0.1)
+
+    with io.BytesIO() as wav_io:
+        wav_output: wave.Wave_write = wave.open(wav_io, "wb")
+        with wav_output:
+            # Override with 0.5s silence
+            voice.synthesize_wav(
+                "This is a test. This is another test.",
+                wav_output,
+                syn_config=syn_config,
+                sentence_silence=0.5,
+            )
+
+        wav_bytes = wav_io.getvalue()
+        data_idx = wav_bytes.find(b"data")
+        data_size = struct.unpack("<I", wav_bytes[data_idx + 4 : data_idx + 8])[0]
+
+        sample_rate = voice.config.sample_rate
+        silence_samples = int(sample_rate * 0.5)
+        expected_bytes = (sample_rate * 2 * 2) + (silence_samples * 2)
+        assert data_size == expected_bytes
+
+
+def test_python_api_synthesize_stream_raw() -> None:
+    """Test synthesize_stream_raw yields PCM chunks with sentence silence interleaved."""
+    from piper.config import SynthesisConfig
+
+    voice = PiperVoice.load(_TEST_VOICE)
+    syn_config = SynthesisConfig(sentence_silence=0.3)
+
+    chunks = list(
+        voice.synthesize_stream_raw("This is a test. This is another test.", syn_config=syn_config)
+    )
+
+    # 3 chunks: sentence 1, silence, sentence 2
+    assert len(chunks) == 3
+
+    sample_rate = voice.config.sample_rate
+    expected_sentence_bytes = sample_rate * 2
+    expected_silence_bytes = int(sample_rate * 0.3) * 2
+
+    assert len(chunks[0]) == expected_sentence_bytes
+    assert len(chunks[1]) == expected_silence_bytes
+    assert len(chunks[2]) == expected_sentence_bytes
+
+    # Chunk 1 is pure silence (all zero bytes)
+    assert chunks[1] == bytes(expected_silence_bytes)
+
+
+def test_python_api_synthesize_wav_alignments_with_silence() -> None:
+    """Test that synthesize_wav tracks silence in alignments so audio and timeline stay synced."""
+    from piper.config import SynthesisConfig
+
+    voice = PiperVoice.load(_TEST_VOICE)
+    syn_config = SynthesisConfig(sentence_silence=0.2)
+
+    with io.BytesIO() as wav_io:
+        wav_output: wave.Wave_write = wave.open(wav_io, "wb")
+        with wav_output:
+            alignments = voice.synthesize_wav(
+                "Test 1. Test 2.",
+                wav_output,
+                syn_config=syn_config,
+                include_alignments=True,
+            )
+
+        # When include_alignments is True, silence must be recorded
+        assert alignments is not None
+        # Check that there is an empty phoneme alignment representing the silence
+        silence_alignments = [a for a in alignments if a.phoneme == ""]
+        assert len(silence_alignments) == 1
+        assert silence_alignments[0].num_samples == int(voice.config.sample_rate * 0.2)
+
+
+def test_http_server_sentence_silence(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test HTTP server accepts sentence_silence in JSON payload and sets silence correctly."""
+    import json
+    from piper.http_server import main
+
+    # Mock sys.argv to start server with test voice
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "piper.http_server",
+            "-m",
+            str(_TEST_VOICE),
+            "--sentence-silence",
+            "0.1",
+        ],
+    )
+
+    captured_app = None
+
+    def fake_run(self, *args, **kwargs):
+        nonlocal captured_app
+        captured_app = self
+
+    from flask import Flask
+    monkeypatch.setattr(Flask, "run", fake_run)
+
+    main()
+    assert captured_app is not None
+
+    client = captured_app.test_client()
+
+    # Request with sentence_silence in JSON overriding default
+    response = client.post(
+        "/synthesize",
+        data=json.dumps({
+            "text": "This is sentence one. This is sentence two.",
+            "sentence_silence": 0.25,
+        }),
+        content_type="application/json",
+    )
+    assert response.status_code == 200
+
+    wav_bytes = response.data
+    data_idx = wav_bytes.find(b"data")
+    data_size = struct.unpack("<I", wav_bytes[data_idx + 4 : data_idx + 8])[0]
+
+    # Verify even byte count
+    assert data_size % 2 == 0
+
+    sample_rate = 22050
+    silence_samples = int(sample_rate * 0.25)
+    expected_bytes = (sample_rate * 2 * 2) + (silence_samples * 2)
+    assert data_size == expected_bytes
+
+
 def test_ar_tashkeel() -> None:
     """Test Arabic diacritization."""
     voice = PiperVoice.load(_TEST_VOICE)
