@@ -219,6 +219,92 @@ def test_sentence_silence_even_byte_count(
     assert data_size == expected_bytes
 
 
+def test_ellipsis_sentence_split_and_silence() -> None:
+    """Test that ellipses (... and …) split sentences and trigger sentence pauses (issue #291)."""
+    voice = PiperVoice.load(_TEST_VOICE)
+
+    # Issue #291 example
+    text = "Lisa shrunk under his stare. “Um, Hannelore, she’s still… Anna is watching, but…”"
+    sentences = voice.phonemize(text)
+
+    # Must be 3 distinct sentences, not merged into "stillAnna"
+    assert len(sentences) == 3
+    s0 = "".join(sentences[0])
+    s1 = "".join(sentences[1])
+    s2 = "".join(sentences[2])
+
+    assert "stˈɛɹ." in s0
+    assert "stˈɪl." in s1
+    assert "ˈænə" in s2
+    # Ensure words are not mashed together
+    assert "stˈɪlˈænə" not in s1 and "stˈɪlˈænə" not in s2
+
+
+def test_ellipsis_variations() -> None:
+    """Test multiple dots, unicode ellipsis, and mid-sentence hesitation."""
+    voice = PiperVoice.load(_TEST_VOICE)
+
+    # 1. Three dots before capital letter -> sentence split
+    s_three = voice.phonemize("Wait... What did you say?")
+    assert len(s_three) == 2
+
+    # 2. Unicode horizontal ellipsis before capital letter -> sentence split
+    s_unicode = voice.phonemize("Wait… What did you say?")
+    assert len(s_unicode) == 2
+
+    # 3. Many dots (e.g. 7 dots) -> sentence split
+    s_many = voice.phonemize("Wait....... What did you say?")
+    assert len(s_many) == 2
+
+    # 4. Repeated spaced ellipses -> sentence split
+    s_spaced = voice.phonemize("Wait... ... ... What did you say?")
+    assert len(s_spaced) == 2
+
+    # 5. Mid-sentence hesitation (before lowercase) -> clause pause, 1 sentence, no word mashing
+    s_hesitation = voice.phonemize("Thinking of... maybe ordering pizza.")
+    assert len(s_hesitation) == 1
+    hesitation_str = "".join(s_hesitation[0])
+    # Ensure "of" and "maybe" have punctuation / space and are not concatenated
+    assert "ʌv, mˈeɪbi" in hesitation_str or "ʌv, " in hesitation_str
+
+
+def test_ellipsis_cli_sentence_silence(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test that CLI --sentence-silence inserts silence at ellipsis boundaries (issue #291)."""
+    from piper.__main__ import main
+
+    output_path = tmp_path / "ellipsis_out.wav"
+    text = "Lisa shrunk under his stare. “Um, Hannelore, she’s still… Anna is watching, but…”"
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "piper",
+            "-m",
+            str(_TEST_VOICE),
+            "-f",
+            str(output_path),
+            "--sentence-silence",
+            "0.5",
+        ],
+    )
+    monkeypatch.setattr(sys, "stdin", io.StringIO(text))
+
+    main()
+
+    with wave.open(str(output_path), "rb") as wav_input:
+        sample_rate = wav_input.getframerate()
+        frames = wav_input.getnframes()
+        assert wav_input.getsampwidth() == 2
+        assert wav_input.getnchannels() == 1
+
+    # 3 sentences (1s each at 22050 Hz = 66150 frames)
+    # 2 inter-sentence pauses of 0.5s each (2 * 11025 = 22050 frames)
+    # Total frames = 66150 + 22050 = 88200
+    expected_frames = (sample_rate * 3) + (int(sample_rate * 0.5) * 2)
+    assert frames == expected_frames
+
+
 def test_ar_tashkeel() -> None:
     """Test Arabic diacritization."""
     voice = PiperVoice.load(_TEST_VOICE)
