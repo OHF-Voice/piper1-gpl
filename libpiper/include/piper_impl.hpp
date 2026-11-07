@@ -18,10 +18,17 @@
 typedef char32_t Phoneme;
 typedef int64_t PhonemeId;
 typedef int64_t SpeakerId;
-// Phoneme to ids, keyed by the full phoneme (a sequence of codepoints).
-// Multi-codepoint phonemes such as diphthongs ("aɪ") keep their own entry
-// instead of folding onto their first codepoint.
-typedef std::map<std::vector<Phoneme>, std::vector<PhonemeId>> PhonemeIdMap;
+// Phoneme to ids, keyed by a single codepoint. This is the fast path used
+// for the common single-codepoint lookup (integer comparison, no
+// allocation), unchanged from before the diphthong fix.
+typedef std::map<Phoneme, std::vector<PhonemeId>> PhonemeIdMap;
+// Multi-codepoint phonemes (e.g. diphthongs such as "aɪ") to ids, keyed by
+// the full phoneme. Kept separate so a multi-codepoint phoneme can never
+// fold onto its first codepoint and corrupt a vowel's entry. Only consulted
+// when a vowel cluster matches, so voices without diphthongs never touch
+// this map.
+typedef std::map<std::vector<Phoneme>, std::vector<PhonemeId>>
+    MultiPhonemeIdMap;
 typedef std::map<std::string, std::vector<PhonemeId>> PinyinIdMap;
 
 const PhonemeId ID_PAD = 0; // interleaved
@@ -83,6 +90,10 @@ struct piper_synthesizer {
   int sample_rate;
   int num_speakers;
   PhonemeIdMap phoneme_id_map;
+  // Multi-codepoint phonemes from the voice config (e.g. diphthongs).
+  // Only consulted when a vowel cluster matches, so voices without
+  // diphthongs never touch this map.
+  MultiPhonemeIdMap multi_phoneme_id_map;
   // Known multi-codepoint phonemes (e.g. diphthongs) from the voice config.
   // Adjacent codepoints matching a cluster are merged into one phoneme
   // token before id lookup, mirroring Python's vowel_clusters handling.

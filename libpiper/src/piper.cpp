@@ -197,16 +197,18 @@ auto piper_create_with_options(const piper_create_options *options)
         // a single codepoint (covers multi-byte codepoints such as "Ø")
         auto key_codepoints = utf8_to_codepoints(key);
         if (key_codepoints.size() == 1) {
-          synth->phoneme_id_map[key_codepoints] = ids;
+          synth->phoneme_id_map[key_codepoints[0]] = ids;
         }
       }
     }
   } else {
-    // phoneme to [id] map for espeak/text, keyed by the full phoneme.
-    // Multi-codepoint phonemes (e.g. diphthongs such as "aɪ") keep their
-    // own entry. Previously the map was keyed by the first codepoint only,
-    // so a diphthong's ids were appended to its vowel ("a" -> [14, 161,
-    // 162]) and every "a" in the text fed the model spurious ids.
+    // phoneme to [id] maps for espeak/text. Single-codepoint phonemes go
+    // in phoneme_id_map (the fast integer-keyed map, as before);
+    // multi-codepoint phonemes (e.g. diphthongs such as "aɪ") go in
+    // multi_phoneme_id_map so their ids can never fold onto a vowel.
+    // Previously the single map was keyed by the first codepoint only, so
+    // a diphthong's ids were appended to its vowel ("a" -> [14, 161, 162])
+    // and every "a" in the text fed the model spurious ids.
     if (config.contains("phoneme_id_map")) {
       auto &phoneme_id_map_value = config["phoneme_id_map"];
       for (const auto &from_phoneme_item : phoneme_id_map_value.items()) {
@@ -215,7 +217,12 @@ auto piper_create_with_options(const piper_create_options *options)
         for (auto &to_id_value : from_phoneme_item.value()) {
           ids.push_back(to_id_value.get<PhonemeId>());
         }
-        synth->phoneme_id_map[utf8_to_codepoints(from_phoneme)] = ids;
+        auto key_codepoints = utf8_to_codepoints(from_phoneme);
+        if (key_codepoints.size() == 1) {
+          synth->phoneme_id_map[key_codepoints[0]] = ids;
+        } else if (key_codepoints.size() >= 2) {
+          synth->multi_phoneme_id_map[std::move(key_codepoints)] = ids;
+        }
       }
     }
 
@@ -724,55 +731,103 @@ auto piper_synthesize_start(struct piper_synthesizer *synth, const char *text,
     sentence_codepoints.push_back(PHONEME_SEPARATOR);
 
     auto phonemes_norm = una::norm::to_nfd_utf8(phonemes_str);
-    auto codepoints = utf8_to_codepoints(phonemes_norm);
+
+    // Emit the ids for one phoneme token, using its first codepoint as the
+    // representative in sentence_codepoints (matches the Pinyin precedent
+    // of one codepoint per phoneme).
+    auto emit_ids = [&](Phoneme phoneme, const std::vector<PhonemeId> &ids) {
+      for (auto identifier : ids) {
+        sentence_codepoints.push_back(phoneme);
+        sentence_ids.push_back(identifier);
+
+        sentence_codepoints.push_back(phoneme);
+        sentence_ids.push_back(ID_PAD);
+
+        sentence_codepoints.push_back(PHONEME_SEPARATOR);
+      }
+    };
 
     bool in_lang_flag = false;
-    std::size_t i = 0;
-    while (i < codepoints.size()) {
-      auto phoneme = codepoints[i];
+    if (synth->vowel_clusters.empty()) {
+      // Fast path: the config defines no clusters, so every codepoint is
+      // looked up on its own. This is the original code, unchanged:
+      // integer map lookup, no allocation, no cluster work. Voices
+      // without diphthongs pay zero extra cost for the fix.
+      auto phonemes_range = una::ranges::utf8_view{phonemes_norm};
+      auto phonemes_iter = phonemes_range.begin();
+      auto phonemes_end = phonemes_range.end();
+      while (phonemes_iter != phonemes_end) {
+        auto phoneme = *phonemes_iter;
 
-      if (in_lang_flag) {
-        if (phoneme == U')') {
-          in_lang_flag = false;
+        if (in_lang_flag) {
+          if (phoneme == U')') {
+            in_lang_flag = false;
+          }
+        } else if (phoneme == U'(') {
+          in_lang_flag = true;
+        } else {
+          auto ids_for_phoneme = synth->phoneme_id_map.find(phoneme);
+          if (ids_for_phoneme != synth->phoneme_id_map.end()) {
+            emit_ids(phoneme, ids_for_phoneme->second);
+          }
+          // Unknown phonemes are skipped, as before (and as in Python,
+          // which warns and skips a token missing from the id map).
         }
-        i++;
-      } else if (phoneme == U'(') {
-        in_lang_flag = true;
-        i++;
-      } else {
-        // Try to merge a vowel cluster (e.g. a diphthong) starting here,
-        // longest match first, exactly like Python's
-        // _merge_known_vowel_clusters. A merged token is looked up as one
-        // phoneme; when the config defines no clusters, nothing matches
-        // and every codepoint is looked up on its own.
-        std::vector<Phoneme> token{phoneme};
-        std::size_t token_len = 1;
-        for (auto &cluster : synth->vowel_clusters) {
-          if (cluster.size() > token_len &&
-              i + cluster.size() <= codepoints.size() &&
-              std::equal(cluster.begin(), cluster.end(),
-                         codepoints.begin() + static_cast<std::ptrdiff_t>(i))) {
-            token = cluster;
-            token_len = cluster.size();
+
+        ++phonemes_iter;
+      }
+    } else {
+      // Cluster path: the config defines vowel_clusters, so adjacent
+      // codepoints matching a cluster are merged into one phoneme token
+      // (longest match first, exactly like Python's
+      // _merge_known_vowel_clusters) and looked up in
+      // multi_phoneme_id_map. Codepoints that do not start a cluster fall
+      // back to the fast single-codepoint map.
+      auto codepoints = utf8_to_codepoints(phonemes_norm);
+      std::size_t i = 0;
+      while (i < codepoints.size()) {
+        auto phoneme = codepoints[i];
+
+        if (in_lang_flag) {
+          if (phoneme == U')') {
+            in_lang_flag = false;
+          }
+          ++i;
+        } else if (phoneme == U'(') {
+          in_lang_flag = true;
+          ++i;
+        } else {
+          const std::vector<Phoneme> *matched_cluster = nullptr;
+          std::size_t token_len = 1;
+          for (auto &cluster : synth->vowel_clusters) {
+            if (cluster.size() > token_len &&
+                i + cluster.size() <= codepoints.size() &&
+                std::equal(cluster.begin(), cluster.end(),
+                           codepoints.begin() +
+                               static_cast<std::ptrdiff_t>(i))) {
+              matched_cluster = &cluster;
+              token_len = cluster.size();
+            }
+          }
+
+          if (matched_cluster != nullptr) {
+            auto ids_for_phoneme =
+                synth->multi_phoneme_id_map.find(*matched_cluster);
+            if (ids_for_phoneme != synth->multi_phoneme_id_map.end()) {
+              emit_ids(phoneme, ids_for_phoneme->second);
+            }
+            // A merged token missing from the map is skipped, as in
+            // Python (which merges, then warns and skips).
+            i += token_len;
+          } else {
+            auto ids_for_phoneme = synth->phoneme_id_map.find(phoneme);
+            if (ids_for_phoneme != synth->phoneme_id_map.end()) {
+              emit_ids(phoneme, ids_for_phoneme->second);
+            }
+            // Unknown phonemes are skipped, as before.
+            ++i;
           }
         }
-
-        auto ids_for_phoneme = synth->phoneme_id_map.find(token);
-        if (ids_for_phoneme != synth->phoneme_id_map.end()) {
-          for (auto identifier : ids_for_phoneme->second) {
-            sentence_codepoints.push_back(phoneme);
-            sentence_ids.push_back(identifier);
-
-            sentence_codepoints.push_back(phoneme);
-            sentence_ids.push_back(ID_PAD);
-
-            sentence_codepoints.push_back(PHONEME_SEPARATOR);
-          }
-        }
-        // Unknown phonemes are skipped, as before (and as in Python,
-        // which warns and skips a token missing from the id map).
-
-        i += token_len;
       }
     }
 
