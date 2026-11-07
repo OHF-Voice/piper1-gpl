@@ -9,7 +9,6 @@
 #include <cstdint>
 #include <map>
 #include <memory>
-#include <optional>
 #include <queue>
 #include <string>
 #include <vector>
@@ -19,7 +18,10 @@
 typedef char32_t Phoneme;
 typedef int64_t PhonemeId;
 typedef int64_t SpeakerId;
-typedef std::map<Phoneme, std::vector<PhonemeId>> PhonemeIdMap;
+// Phoneme to ids, keyed by the full phoneme (a sequence of codepoints).
+// Multi-codepoint phonemes such as diphthongs ("aɪ") keep their own entry
+// instead of folding onto their first codepoint.
+typedef std::map<std::vector<Phoneme>, std::vector<PhonemeId>> PhonemeIdMap;
 typedef std::map<std::string, std::vector<PhonemeId>> PinyinIdMap;
 
 const PhonemeId ID_PAD = 0; // interleaved
@@ -81,6 +83,11 @@ struct piper_synthesizer {
   int sample_rate;
   int num_speakers;
   PhonemeIdMap phoneme_id_map;
+  // Known multi-codepoint phonemes (e.g. diphthongs) from the voice config.
+  // Adjacent codepoints matching a cluster are merged into one phoneme
+  // token before id lookup, mirroring Python's vowel_clusters handling.
+  // Empty when the config does not define vowel_clusters.
+  std::vector<std::vector<Phoneme>> vowel_clusters;
   PinyinIdMap pinyin_id_map;
   int hop_length = DEFAULT_HOP_LENGTH;
   PhonemeType phoneme_type = PhonemeType::Espeak;
@@ -141,17 +148,5 @@ struct piper_synthesizer {
   float noise_w_scale = DEFAULT_NOISE_W_SCALE;
   SpeakerId speaker_id = 0;
 };
-
-// Get the first UTF-8 codepoint of a string
-inline std::optional<Phoneme> get_codepoint(std::string s) {
-  auto view = una::views::utf8(s);
-  auto it = view.begin();
-
-  if (it != view.end()) {
-    return *it;
-  }
-
-  return std::nullopt;
-}
 
 #endif // PIPER_IMPL_H_
