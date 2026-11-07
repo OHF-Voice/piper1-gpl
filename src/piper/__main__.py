@@ -12,7 +12,7 @@ from pathlib import Path
 
 from pathvalidate import sanitize_filename
 
-from . import PiperVoice, SynthesisConfig
+from . import AudioChunk, PiperVoice, SynthesisConfig
 from .audio_playback import AudioPlayer
 
 _FILE = Path(__file__)
@@ -166,31 +166,33 @@ def main() -> None:
         int(voice.config.sample_rate * args.sentence_silence) * 2
     )
 
+    def audio_chunks() -> Iterable[AudioChunk]:
+        # Sentences of every line, so that silence also goes between lines
+        for line in lines():
+            yield from voice.synthesize(line, syn_config)
+
     def lines_to_wav() -> None:
         wav_params_set = False
-        for line in lines():
-            for i, audio_chunk in enumerate(voice.synthesize(line, syn_config)):
-                if not wav_params_set:
-                    wav_file.setframerate(audio_chunk.sample_rate)
-                    wav_file.setsampwidth(audio_chunk.sample_width)
-                    wav_file.setnchannels(audio_chunk.sample_channels)
-                    wav_params_set = True
+        for i, audio_chunk in enumerate(audio_chunks()):
+            if not wav_params_set:
+                wav_file.setframerate(audio_chunk.sample_rate)
+                wav_file.setsampwidth(audio_chunk.sample_width)
+                wav_file.setnchannels(audio_chunk.sample_channels)
+                wav_params_set = True
 
-                if i > 0:
-                    wav_file.writeframes(silence_int16_bytes)
+            if i > 0:
+                wav_file.writeframes(silence_int16_bytes)
 
-                wav_file.writeframes(audio_chunk.audio_int16_bytes)
+            wav_file.writeframes(audio_chunk.audio_int16_bytes)
 
     if args.output_raw:
         # Write raw audio to stdout as its produced
-        for line in lines():
-            audio_stream = voice.synthesize(line, syn_config)
-            for i, audio_chunk in enumerate(audio_stream):
-                if i > 0:
-                    sys.stdout.buffer.write(silence_int16_bytes)
+        for i, audio_chunk in enumerate(audio_chunks()):
+            if i > 0:
+                sys.stdout.buffer.write(silence_int16_bytes)
 
-                sys.stdout.buffer.write(audio_chunk.audio_int16_bytes)
-                sys.stdout.buffer.flush()
+            sys.stdout.buffer.write(audio_chunk.audio_int16_bytes)
+            sys.stdout.buffer.flush()
     elif args.output_dir:
         # Write multiple WAV files to a directory, one per line
         output_dir = Path(args.output_dir)
@@ -234,12 +236,11 @@ def main() -> None:
         elif (not args.output_file) and AudioPlayer.is_available():
             # Play audio using ffplay
             with AudioPlayer(voice.config.sample_rate) as player:
-                for line in lines():
-                    for i, audio_chunk in enumerate(voice.synthesize(line, syn_config)):
-                        if i > 0:
-                            player.play(silence_int16_bytes)
+                for i, audio_chunk in enumerate(audio_chunks()):
+                    if i > 0:
+                        player.play(silence_int16_bytes)
 
-                        player.play(audio_chunk.audio_int16_bytes)
+                    player.play(audio_chunk.audio_int16_bytes)
         else:
             # Write to WAV file
             if not args.output_file:
