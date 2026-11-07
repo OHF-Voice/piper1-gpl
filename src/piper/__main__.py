@@ -166,16 +166,16 @@ def main() -> None:
         int(voice.config.sample_rate * args.sentence_silence) * 2
     )
 
+    def set_wav_format() -> None:
+        # Set up front so that input without speech still gives a valid WAV file
+        wav_file.setframerate(voice.config.sample_rate)
+        wav_file.setsampwidth(2)
+        wav_file.setnchannels(1)
+
     def lines_to_wav() -> None:
-        wav_params_set = False
+        set_wav_format()
         for line in lines():
             for i, audio_chunk in enumerate(voice.synthesize(line, syn_config)):
-                if not wav_params_set:
-                    wav_file.setframerate(audio_chunk.sample_rate)
-                    wav_file.setsampwidth(audio_chunk.sample_width)
-                    wav_file.setnchannels(audio_chunk.sample_channels)
-                    wav_params_set = True
-
                 if i > 0:
                     wav_file.writeframes(silence_int16_bytes)
 
@@ -207,14 +207,8 @@ def main() -> None:
 
             wav_file = wave.open(str(wav_path), "wb")
             with wav_file:
-                wav_params_set = False
+                set_wav_format()
                 for i, audio_chunk in enumerate(voice.synthesize(line, syn_config)):
-                    if not wav_params_set:
-                        wav_file.setframerate(audio_chunk.sample_rate)
-                        wav_file.setsampwidth(audio_chunk.sample_width)
-                        wav_file.setnchannels(audio_chunk.sample_channels)
-                        wav_params_set = True
-
                     if i > 0:
                         wav_file.writeframes(silence_int16_bytes)
 

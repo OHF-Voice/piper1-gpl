@@ -352,16 +352,13 @@ def main() -> None:
         with io.BytesIO() as wav_io:
             wav_file: wave.Wave_write = wave.open(wav_io, "wb")
             with wav_file:
-                wav_params_set = False
+                # Set up front so that text without speech still gives a valid WAV
+                wav_file.setframerate(voice.config.sample_rate)
+                wav_file.setsampwidth(2)
+                wav_file.setnchannels(1)
                 for i, audio_chunk in enumerate(
                     voice.synthesize(text, syn_config, include_alignments=True)
                 ):
-                    if not wav_params_set:
-                        wav_file.setframerate(audio_chunk.sample_rate)
-                        wav_file.setsampwidth(audio_chunk.sample_width)
-                        wav_file.setnchannels(audio_chunk.sample_channels)
-                        wav_params_set = True
-
                     if i > 0:
                         wav_file.writeframes(
                             bytes(
