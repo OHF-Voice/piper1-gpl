@@ -11,6 +11,8 @@ pip install piper-tts
 * 🎧 [Samples][samples]
 * 💡 [Demo][demo]
 * 🗣️ [Voices][voices]
+* ⚖️ [Voice licensing][licensing]
+* 💼 [Commercial use][commercial-use]
 * 🖥️ [Command-line interface][cli]
 * 🌐 [Web server][api-http]
 * 🐍 [Python API][api-python]
@@ -57,6 +59,8 @@ Bindings to use Piper in programming languages other than Python and C/C++:
 [training]: https://github.com/OHF-Voice/piper1-gpl/blob/main/docs/TRAINING.md
 [building]: https://github.com/OHF-Voice/piper1-gpl/blob/main/docs/BUILDING.md
 [voices]: https://github.com/OHF-Voice/piper1-gpl/blob/main/docs/VOICES.md
+[licensing]: https://github.com/OHF-Voice/piper1-gpl/blob/main/docs/LICENSING.md
+[commercial-use]: https://github.com/OHF-Voice/piper1-gpl/blob/main/docs/COMMERCIAL_USE.md
 [samples]: https://rhasspy.github.io/piper-samples
 [demo]: https://rhasspy.github.io/piper-samples/demo.html
 [libpiper]: https://github.com/OHF-Voice/piper1-gpl/tree/main/libpiper
