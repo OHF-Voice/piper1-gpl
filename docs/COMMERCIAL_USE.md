@@ -54,6 +54,7 @@ asks anything of you.
 | `fi_FI-harri-medium` | CC0 |
 | `hu_HU-imre-medium` | CC0 |
 | `ne_NP-chitwan-medium` | CC0 |
+| `nl_BE-flemishguy-medium` | CC0 |
 | `nl_NL-alex-medium` | CC0 |
 | `nl_NL-pim-medium` | CC0 |
 | `nl_NL-ronnie-medium` | CC0 |
@@ -83,6 +84,9 @@ requirement for Hi-Fi TTS, in addition to whatever its own dataset asks for.
 | `en_GB-jenny_dioco-medium` | [Custom][jenny] | Commercial use permitted; the voice must be called "Jenny", and "Jenny (Dioco)" where practical |
 | `es_ES-sharvard-medium` | CC BY 3.0 | |
 | `fr_FR-siwis-medium` | CC BY 4.0 | |
+| `hu_HU-anna-medium` | CC0 | |
+| `hu_HU-berta-medium` | CC0 | |
+| `sk_SK-lili-medium` | CC0 | |
 | `zh_CN-chaowen-medium` | CC0 | |
 
 ## Voices trained from scratch
