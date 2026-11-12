@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Write a valid, empty WAV file when the text has nothing to speak
+    - `PiperVoice.synthesize_wav`, the `piper` command and `/synthesize` in `piper.http_server` set the WAV format from the first audio chunk, so empty input left the format unset and closing the file raised `wave.Error: # channels not specified`
+    - The format now comes from the voice config before synthesis starts
+
 - Stream audio from `libpiper` for voices split into an encoder and a decoder
     - `piper_synthesize_next` returned one chunk per sentence, so the first sound of a long sentence came only after the whole sentence was synthesized (about 4 seconds for a 6 second sentence of a high voice used by VoiceOver on an Apple M3)
     - `python3 -m piper.split_voice_for_streaming model.onnx` writes `model.encoder.onnx` and `model.decoder.onnx`; when both are next to the model, `piper_create` loads them instead of the full model and the decoder runs in chunks
