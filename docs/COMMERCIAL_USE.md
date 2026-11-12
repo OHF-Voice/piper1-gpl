@@ -78,14 +78,18 @@ requirement for Hi-Fi TTS, in addition to whatever its own dataset asks for.
 | Voice | Dataset license | Notes |
 | ----- | --------------- | ----- |
 | `en_US-hifi_tts_92-medium` (the base itself) | CC BY 4.0 | |
+| `cs_CZ-jirka-medium` | CC0 | `cs_CZ-jirka-low` still descends from lessac |
 | `de_DE-kerstin-medium` | CC0 | |
 | `en_GB-alba-medium` | CC BY 4.0 | |
 | `en_GB-cori-medium` | CC BY 4.0 | Same reader and dataset as the base |
 | `en_GB-jenny_dioco-medium` | [Custom][jenny] | Commercial use permitted; the voice must be called "Jenny", and "Jenny (Dioco)" where practical |
+| `en_US-kathleen-medium` | CC0 | New quality; `en_US-kathleen-low` still descends from ryan |
 | `es_ES-sharvard-medium` | CC BY 3.0 | |
 | `fr_FR-siwis-medium` | CC BY 4.0 | |
 | `hu_HU-anna-medium` | CC0 | |
 | `hu_HU-berta-medium` | CC0 | |
+| `pt_BR-faber-medium` | CC0 | |
+| `ru_RU-dmitri-medium` | CC0 | |
 | `sk_SK-lili-medium` | CC0 | |
 | `zh_CN-chaowen-medium` | CC0 | |
 
