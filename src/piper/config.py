@@ -150,3 +150,6 @@ class SynthesisConfig:
 
     volume: float = 1.0
     """Multiplier for audio samples (< 1 is quieter, > 1 is louder)."""
+
+    sentence_silence: float = 0.0
+    """Seconds of silence to add between sentences."""
