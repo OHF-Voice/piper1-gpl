@@ -58,6 +58,7 @@ asks anything of you.
 | `nl_NL-alex-medium` | CC0 |
 | `nl_NL-pim-medium` | CC0 |
 | `nl_NL-ronnie-medium` | CC0 |
+| `no_NO-talesyntese-medium` | CC0 |
 | `pl_PL-darkman-medium` | CC0 |
 | `pt_BR-cadu-medium` | CC0 |
 | `pt_BR-jeff-medium` | CC0 |
@@ -88,7 +89,10 @@ requirement for Hi-Fi TTS, in addition to whatever its own dataset asks for.
 | `fr_FR-siwis-medium` | CC BY 4.0 | |
 | `hu_HU-anna-medium` | CC0 | |
 | `hu_HU-berta-medium` | CC0 | |
+| `it_IT-paola-medium` | CC0 | Retrained on a different recording set than the earlier paola |
+| `nl_BE-nathalie-medium` | CC0 | |
 | `pt_BR-faber-medium` | CC0 | |
+| `pt_PT-tugão-medium` | CC0 | |
 | `ru_RU-dmitri-medium` | CC0 | |
 | `sk_SK-lili-medium` | CC0 | |
 | `zh_CN-chaowen-medium` | CC0 | |
@@ -147,7 +151,7 @@ licensing information lives (see [Voice licensing](LICENSING.md)).
   intermediate voice, `eu_ES-antton` and `eu_ES-maider` (from amy), `es_MX-ald`
   (from the earlier davefx), `fa_IR-ganji` and `fa_IR-ganji_adabi` (from amir),
   `lt_LT-reginute1` and `lt_LT-ingute` (from irina), `sv_SE-lisa` (from
-  talesyntese), and `de_DE-thorsten_emotional` (from the earlier thorsten).
+  the earlier talesyntese), and `de_DE-thorsten_emotional` (from the earlier thorsten).
   These voices are being retrained over time.
 * **Non-commercial datasets**, whatever the base. Examples are hfc_female,
   hfc_male, ryan, semaine, l2arctic, saspeech, kss, hi_fi_captain, tsync2,
