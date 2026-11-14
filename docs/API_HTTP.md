@@ -70,3 +70,9 @@ Get the available voices with:
 ``` sh
 curl localhost:5000/voices
 ```
+
+Download a voice with `POST /download`, passing a JSON object with a `voice` name
+and, optionally, `force_redownload: true`. The response is the name used for the
+downloaded files. If the requested name is an alias for a renamed voice, the
+response contains its current name. Use that returned name as the `voice` field
+in subsequent `/synthesize` requests.
