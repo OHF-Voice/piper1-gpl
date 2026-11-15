@@ -79,6 +79,7 @@ requirement for Hi-Fi TTS, in addition to whatever its own dataset asks for.
 | Voice | Dataset license | Notes |
 | ----- | --------------- | ----- |
 | `en_US-hifi_tts_92-medium` (the base itself) | CC BY 4.0 | |
+| `bn_BD-google-medium` | CC BY-SA 4.0, plus the [CMU Indic license][cmu] for speaker `rm` | 16 speakers. The CMU license asks you to keep its copyright notice, which is in the `MODEL_CARD` |
 | `cs_CZ-jirka-medium` | CC0 | `cs_CZ-jirka-low` still descends from lessac |
 | `de_DE-kerstin-medium` | CC0 | |
 | `en_GB-alba-medium` | CC BY 4.0 | |
@@ -86,6 +87,7 @@ requirement for Hi-Fi TTS, in addition to whatever its own dataset asks for.
 | `en_GB-jenny_dioco-medium` | [Custom][jenny] | Commercial use permitted; the voice must be called "Jenny", and "Jenny (Dioco)" where practical |
 | `en_US-kathleen-medium` | CC0 | New quality; `en_US-kathleen-low` still descends from ryan |
 | `es_ES-sharvard-medium` | CC BY 3.0 | |
+| `et_EE-news-medium` | CC BY | 4 speakers |
 | `fr_FR-siwis-medium` | CC BY 4.0 | |
 | `hu_HU-anna-medium` | CC0 | |
 | `hu_HU-berta-medium` | CC0 | |
@@ -141,6 +143,7 @@ notes are on [his site][bryce].
 | CC BY | Credit the dataset (and, for the hifi_tts_92 group, the base's dataset too). The `MODEL_CARD` has the dataset URL to cite. |
 | CC BY-SA | Credit, and anything you build from the dataset is shared under the same license. Whether that reaches a trained model, or audio it produces, is one of the open questions above. |
 | Apache 2.0 | Keep the license and any notice with what you distribute. |
+| CMU Indic | Keep CMU's copyright notice and conditions with what you distribute, and do not use the authors' names to endorse your product. |
 
 When you ship a voice, ship its `MODEL_CARD` with it. It is the only place the
 licensing information lives (see [Voice licensing](LICENSING.md)).
@@ -157,6 +160,8 @@ licensing information lives (see [Voice licensing](LICENSING.md)).
   hfc_male, ryan, semaine, l2arctic, saspeech, kss, hi_fi_captain, tsync2,
   lanfrica and xiao_ya.
 * **Datasets with no documented license**, such as amy, irina and huayan.
+  `fa_IR-magnoliasis` is in this group: its Kaggle dataset lists no license
+  and does not say who the speaker is or where the recordings came from.
 * **Permissively licensed voices whose base is not documented.** Their own
   datasets allow commercial use, but their cards do not say whether they were
   trained from scratch. Ask the person who trained them:
@@ -171,4 +176,5 @@ licensing information lives (see [Voice licensing](LICENSING.md)).
 [rdh]: https://github.com/r-dh/dutch-vl-tts
 [hifi-tts]: https://www.openslr.org/109/
 [jenny]: https://github.com/dioco-group/jenny-tts-dataset
+[cmu]: http://festvox.org/cmu_indic/index.html
 [bryce]: https://brycebeattie.com/files/tts/
