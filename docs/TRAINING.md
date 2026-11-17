@@ -415,7 +415,7 @@ To make this compatible with other Piper voices, rename `model.onnx` as `<langua
 
 ### Phoneme Counts
 
-The config written during training includes `phoneme_counts`: how many times each phoneme occurs in the voice's training data, counted from the cached phoneme ids. Phonemes that never occur are left out, and so are the `_`, `^`, and `$` tokens. A phoneme that is missing or rare was barely trained on in this voice's own data, even if a base model it was warmstarted from saw it.
+The config written during training includes `phoneme_counts`: how many times each phoneme occurs in the voice's training data, counted from the cached phoneme ids. Phonemes that never occur are left out, and so are the `_`, `^`, and `$` tokens. Phonemes that share an id, like `。` and `.` in the Chinese map, each get that id's count. A phoneme that is missing or rare was barely trained on in this voice's own data, even if a base model it was warmstarted from saw it.
 
 To add counts to the config of a voice trained before they were written automatically, point the script at the voice's training CSV and cache directory:
 

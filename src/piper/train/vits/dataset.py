@@ -449,7 +449,8 @@ class VitsDataModule(L.LightningDataModule):
                 sidecar_path=self.cache_dir / PHONEME_COUNTS_SIDECAR_NAME,
             )
         except ValueError as err:
-            # Counting needs one id per phoneme; never stop training over it.
+            # A phoneme with several ids can't be counted; never stop
+            # training over it.
             _LOGGER.warning("Not writing phoneme counts: %s", err)
         else:
             _LOGGER.info(

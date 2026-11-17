@@ -39,8 +39,10 @@ _NOT_COUNTED = (PAD, BOS, EOS)
 SIDECAR_NAME = "phoneme_counts.json"
 
 
-def _id_to_phoneme(phoneme_id_map: Mapping[str, Sequence[int]]) -> dict[int, str]:
-    id_to_phoneme: dict[int, str] = {}
+def _id_to_phonemes(
+    phoneme_id_map: Mapping[str, Sequence[int]],
+) -> dict[int, list[str]]:
+    id_to_phonemes: dict[int, list[str]] = {}
     for phoneme, phoneme_ids in phoneme_id_map.items():
         if isinstance(phoneme_ids, int):
             phoneme_ids = [phoneme_ids]
@@ -51,16 +53,11 @@ def _id_to_phoneme(phoneme_id_map: Mapping[str, Sequence[int]]) -> dict[int, str
                 "counting needs exactly one id per phoneme"
             )
 
-        phoneme_id = phoneme_ids[0]
-        if phoneme_id in id_to_phoneme:
-            raise ValueError(
-                f"Phonemes {id_to_phoneme[phoneme_id]!r} and {phoneme!r} "
-                f"share id {phoneme_id}"
-            )
+        # Several phonemes can share an id, e.g. the Chinese map folds "。"
+        # and "." together.
+        id_to_phonemes.setdefault(phoneme_ids[0], []).append(phoneme)
 
-        id_to_phoneme[phoneme_id] = phoneme
-
-    return id_to_phoneme
+    return id_to_phonemes
 
 
 def count_phoneme_ids(
@@ -69,10 +66,12 @@ def count_phoneme_ids(
 ) -> dict[str, int]:
     """Count phonemes in sequences of phoneme ids.
 
-    Returns phoneme -> count for phonemes that occur, in id order. PAD, BOS and
-    EOS are not counted. Ids missing from the map are logged and skipped.
+    Returns phoneme -> count for phonemes that occur, in id order. Phonemes
+    that share an id are aliases the model can't tell apart, so each one gets
+    that id's count. PAD, BOS and EOS are not counted. Ids missing from the map
+    are logged and skipped.
     """
-    id_to_phoneme = _id_to_phoneme(phoneme_id_map)
+    id_to_phonemes = _id_to_phonemes(phoneme_id_map)
     skip_ids = {
         phoneme_id
         for phoneme in _NOT_COUNTED
@@ -88,8 +87,8 @@ def count_phoneme_ids(
         if phoneme_id in skip_ids:
             continue
 
-        phoneme = id_to_phoneme.get(phoneme_id)
-        if phoneme is None:
+        phonemes = id_to_phonemes.get(phoneme_id)
+        if phonemes is None:
             _LOGGER.warning(
                 "Phoneme id %s is not in the id map (%s occurrence(s))",
                 phoneme_id,
@@ -97,7 +96,8 @@ def count_phoneme_ids(
             )
             continue
 
-        phoneme_counts[phoneme] = id_counts[phoneme_id]
+        for phoneme in phonemes:
+            phoneme_counts[phoneme] = id_counts[phoneme_id]
 
     return phoneme_counts
 

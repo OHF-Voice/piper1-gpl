@@ -35,16 +35,17 @@ def test_unknown_ids_are_skipped() -> None:
     assert phoneme_counts.count_phoneme_ids([[1, 4, 0, 99, 0, 2]], ID_MAP) == {"a": 1}
 
 
-@pytest.mark.parametrize(
-    "bad_map",
-    [
-        {"_": [0], "a": [1, 2]},
-        {"_": [0], "a": [1], "b": [1]},
-    ],
-)
-def test_maps_that_cant_be_inverted_raise(bad_map) -> None:
+def test_phonemes_sharing_an_id_each_get_its_count() -> None:
+    # Like the Chinese map, which folds "。" into ".".
+    alias_map = {**ID_MAP, "。": [4]}
+    counts = phoneme_counts.count_phoneme_ids([[1, 4, 0, 4, 0, 5, 0, 2]], alias_map)
+
+    assert counts == {"a": 2, "。": 2, "b": 1}
+
+
+def test_phoneme_with_several_ids_raises() -> None:
     with pytest.raises(ValueError):
-        phoneme_counts.count_phoneme_ids([[1]], bad_map)
+        phoneme_counts.count_phoneme_ids([[1]], {"_": [0], "a": [1, 2]})
 
 
 def _write_cache(tmp_path, rows, speaker_id_map=None):

@@ -69,6 +69,7 @@ class PiperConfig:
     """Phoneme -> number of times it occurs in the voice's own training data.
 
     Phonemes that never occur are left out. PAD/BOS/EOS are not counted.
+    Phonemes that share an id each get that id's count.
     Counts cover this voice's data only, not a base model it was warmstarted
     from, so a missing phoneme still has whatever embedding the base learned.
     """
