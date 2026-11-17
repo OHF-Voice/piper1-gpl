@@ -92,7 +92,9 @@ requirement for Hi-Fi TTS, in addition to whatever its own dataset asks for.
 | `hu_HU-anna-medium` | CC0 | |
 | `hu_HU-berta-medium` | CC0 | |
 | `it_IT-paola-medium` | CC0 | Retrained on a different recording set than the earlier paola |
+| `mr_IN-google-medium` | CC BY-SA 4.0 | 9 speakers |
 | `nl_BE-nathalie-medium` | CC0 | |
+| `pl_PL-gosia-medium` | CC0 | |
 | `pt_BR-faber-medium` | CC0 | |
 | `pt_PT-tugão-medium` | CC0 | |
 | `ru_RU-dmitri-medium` | CC0 | |
@@ -151,8 +153,8 @@ licensing information lives (see [Voice licensing](LICENSING.md)).
 ## Not on this list
 
 * **Everything fine-tuned from lessac or ryan.** That includes, through an
-  intermediate voice, `eu_ES-antton` and `eu_ES-maider` (from amy), `es_MX-ald`
-  (from the earlier davefx), `fa_IR-ganji` and `fa_IR-ganji_adabi` (from amir),
+  intermediate voice, `eu_ES-antton` and `eu_ES-maider` (from amy),
+  `fa_IR-ganji` and `fa_IR-ganji_adabi` (from amir),
   `lt_LT-reginute1` and `lt_LT-ingute` (from irina), `sv_SE-lisa` (from
   the earlier talesyntese), and `de_DE-thorsten_emotional` (from the earlier thorsten).
   These voices are being retrained over time.
@@ -162,6 +164,10 @@ licensing information lives (see [Voice licensing](LICENSING.md)).
 * **Datasets with no documented license**, such as amy, irina and huayan.
   `fa_IR-magnoliasis` is in this group: its Kaggle dataset lists no license
   and does not say who the speaker is or where the recordings came from.
+* **Datasets whose uploader may not hold the rights.** `es_MX-ald-medium` is now
+  fine-tuned from rdh, and its dataset is labeled Unlicense. But the recordings
+  look like vlog audio, and the dataset does not say whether the uploader is
+  the speaker or has the speaker's permission.
 * **Permissively licensed voices whose base is not documented.** Their own
   datasets allow commercial use, but their cards do not say whether they were
   trained from scratch. Ask the person who trained them:
