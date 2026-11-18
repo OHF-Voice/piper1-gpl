@@ -219,6 +219,38 @@ def test_sentence_silence_even_byte_count(
     assert data_size == expected_bytes
 
 
+@pytest.mark.parametrize("output_arg", ["-f", "--output-raw"])
+def test_sentence_silence_between_lines(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, output_arg: str
+) -> None:
+    """Silence goes after every sentence but the last, also across lines."""
+    from piper.__main__ import main
+
+    output_path = tmp_path / "out.wav"
+    argv = ["piper", "-m", str(_TEST_VOICE), "--sentence-silence", "0.5"]
+    if output_arg == "-f":
+        argv += ["-f", str(output_path)]
+    else:
+        argv += [output_arg]
+
+    stdout = io.BytesIO()
+    monkeypatch.setattr(sys, "argv", argv)
+    monkeypatch.setattr(sys, "stdin", io.StringIO("This is a test.\nThis is another."))
+    monkeypatch.setattr(sys, "stdout", io.TextIOWrapper(stdout))
+
+    main()
+
+    if output_arg == "-f":
+        with wave.open(str(output_path), "rb") as wav_input:
+            num_samples = wav_input.getnframes()
+    else:
+        num_samples = len(stdout.getvalue()) // 2
+
+    # Two one-second sentences of the test voice with half a second between them
+    sample_rate = 22050
+    assert num_samples == (2 * sample_rate) + (sample_rate // 2)
+
+
 def test_ar_tashkeel() -> None:
     """Test Arabic diacritization."""
     voice = PiperVoice.load(_TEST_VOICE)

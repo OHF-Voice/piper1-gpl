@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Put the `--sentence-silence` pause of the `piper` command between lines of input too
+    - The silence was written before every sentence but the first of each line, so `This is a test.` and `This is another.` on two lines ran together in one WAV file, raw output or playback, while the same text on one line had the pause
+    - Every sentence but the last now gets the silence, as the CLI docs say; `--output-dir` still writes one file per line
+
 - Stream audio from `libpiper` for voices split into an encoder and a decoder
     - `piper_synthesize_next` returned one chunk per sentence, so the first sound of a long sentence came only after the whole sentence was synthesized (about 4 seconds for a 6 second sentence of a high voice used by VoiceOver on an Apple M3)
     - `python3 -m piper.split_voice_for_streaming model.onnx` writes `model.encoder.onnx` and `model.decoder.onnx`; when both are next to the model, `piper_create` loads them instead of the full model and the decoder runs in chunks
