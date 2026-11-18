@@ -1,27 +1,30 @@
 #!/usr/bin/env python3
-"""Tests for Hebrew phonemization: Nakdimon diacritization + IPA G2P."""
+"""Tests for Hebrew phonemization: renikud G2P (text -> stressed IPA)."""
 
 import unicodedata
 
 import pytest
 
 from piper.config import PhonemeType, PiperConfig
-from piper.hebrew import NakdimonDiacritizer
-from piper.hebrew.hebrew_ipa import hebrew_to_ipa
+from piper.hebrew import RenikudG2P
 from piper.phoneme_ids import DEFAULT_PHONEME_ID_MAP
 from piper.phonemize_hebrew import HebrewPhonemizer
 from piper.voice import PiperVoice
 
-# Undotted input -> Nakdimon output. Reference produced by the original model.
-_ORACLE = (
-    "הכוח לשנות מתחיל ברגע שבו אתה מאמין שזה אפשרי!",
-    "הַכּוֹחַ לְשַׁנּוֹת מַתְחִיל בָּרֶגַע שֶׁבּוֹ אַתָּה מַאֲמִין שֶׁזֶּה אֶפְשָׁרִי!",
-)
+# Undotted input -> IPA. References produced by the original renikud-onnx package.
+_ORACLE = [
+    (
+        "הכוח לשנות מתחיל ברגע שבו אתה מאמין שזה אפשרי!",
+        "hakˈoaχ leʃanˈot matχˈil baʁˈeɡa ʃebˈo ʔatˈa maʔamˈin ʃezˈe ʔefʃaʁˈi!",
+    ),
+    ("צ'יפס וג'ירפה", "tʃˈips vedʒiʁafˈa"),
+    ("שלום, מה שלומך? Classiq 2026.", "ʃelˈom, mˈa ʃlomχˈa? Classiq 2026."),
+]
 
 
-@pytest.fixture(name="diacritizer", scope="module")
-def diacritizer_fixture() -> NakdimonDiacritizer:
-    return NakdimonDiacritizer()
+@pytest.fixture(name="g2p", scope="module")
+def g2p_fixture() -> RenikudG2P:
+    return RenikudG2P()
 
 
 @pytest.fixture(name="phonemizer", scope="module")
@@ -29,34 +32,16 @@ def phonemizer_fixture() -> HebrewPhonemizer:
     return HebrewPhonemizer()
 
 
-def test_diacritizer_matches_reference(diacritizer: NakdimonDiacritizer) -> None:
-    # Compare under NFC: content correctness independent of mark storage order.
-    undotted, expected = _ORACLE
-    got = diacritizer(undotted)
-    assert unicodedata.normalize("NFC", got) == unicodedata.normalize("NFC", expected)
+@pytest.mark.parametrize("text,expected", _ORACLE)
+def test_g2p_matches_reference(g2p: RenikudG2P, text: str, expected: str) -> None:
+    assert unicodedata.normalize("NFC", g2p(text)) == unicodedata.normalize(
+        "NFC", expected
+    )
 
 
-def test_holam_male_is_vowel_not_consonant() -> None:
-    """חוֹ (vav carrying holam) is the /o/ vowel, not /v/ (regression)."""
-    _, dotted = _ORACLE
-    ipa = hebrew_to_ipa(dotted)
-    assert "o" in ipa
-    # הַכּוֹחַ -> should contain 'ko', never a spurious 'kv'
-    assert hebrew_to_ipa("הַכּוֹחַ").count("v") == 0
-
-
-def test_shva_na_resolution() -> None:
-    """Shva na -> /e/, shva nach -> silent (modern Israeli rules)."""
-    # No leftover schwa anywhere.
-    assert "ə" not in hebrew_to_ipa("נִרְאֵית לְעֵינֵינוּ בְּטִפּוֹת")
-    # Shva nach is silent: nir'eit, not ni-re-eit.
-    assert hebrew_to_ipa("נִרְאֵית") == "nˈiʁejt"
-    # Word-initial shva na is pronounced /e/ (prefix kept).
-    assert hebrew_to_ipa("בְּטִפּוֹת").startswith("be")
-    # Two consecutive shvas: first nach, second na (yish-me-ru).
-    assert hebrew_to_ipa("יִשְׁמְרוּ") == "jiʃmeʁˈu"
-    # Dagesh chazak forces shva na (me-dab-e-rim).
-    assert "medabe" in hebrew_to_ipa("מְדַבְּרִים")
+def test_one_stress_per_hebrew_word(g2p: RenikudG2P) -> None:
+    ipa = g2p("אני רוצה לשמוע מוזיקה")
+    assert [w.count("ˈ") for w in ipa.split()] == [1, 1, 1, 1]
 
 
 def test_phonemes_are_in_default_map(phonemizer: HebrewPhonemizer) -> None:
@@ -67,18 +52,11 @@ def test_phonemes_are_in_default_map(phonemizer: HebrewPhonemizer) -> None:
             assert phoneme in DEFAULT_PHONEME_ID_MAP, repr(phoneme)
 
 
-def test_phonemizer_diacritizes_undotted(phonemizer: HebrewPhonemizer) -> None:
-    ipa = "".join("".join(s) for s in phonemizer.phonemize("שלום"))
-    assert ipa  # produced phonemes
-    assert any(v in ipa for v in "aeiou")  # vowels restored via Nakdimon
-
-
-def test_phonemizer_preserves_dotted_input(phonemizer: HebrewPhonemizer) -> None:
-    """Already-dotted text is not re-diacritized (training transcripts)."""
-    _, dotted = _ORACLE
-    from_dotted = "".join("".join(s) for s in phonemizer.phonemize(dotted))
-    from_undotted = "".join("".join(s) for s in phonemizer.phonemize(_ORACLE[0]))
-    assert from_dotted == from_undotted
+def test_phonemizer_strips_niqqud(phonemizer: HebrewPhonemizer) -> None:
+    """Dotted text (e.g. training transcripts) phonemizes like its undotted form."""
+    dotted = "הַכּוֹחַ לְשַׁנּוֹת מַתְחִיל בָּרֶגַע"
+    undotted = "הכוח לשנות מתחיל ברגע"
+    assert phonemizer.phonemize(dotted) == phonemizer.phonemize(undotted)
 
 
 def test_end_to_end_phonemize_ids() -> None:
