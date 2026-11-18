@@ -40,8 +40,8 @@ it says "Finetuned from U.S. English lessac voice", download the voice again.
 ## Voices fine-tuned from rdh
 
 [rdh][rdh] is a Flemish (nl_BE) male voice, trained from scratch on CC0
-recordings. These voices' own datasets are CC0 as well, so nothing in the chain
-asks anything of you.
+recordings. Apart from `eu_ES-antton-medium`, these voices' own datasets are
+CC0 as well, so nothing in the chain asks anything of you.
 
 | Voice | Dataset license |
 | ----- | --------------- |
@@ -51,6 +51,7 @@ asks anything of you.
 | `en_US-joe-medium` | CC0 |
 | `en_US-mike-medium` | CC0 |
 | `es_ES-davefx-medium` | CC0 |
+| `eu_ES-antton-medium` | CC BY 4.0, synthetic recordings ([see below](#synthetic-recordings)) |
 | `fi_FI-harri-medium` | CC0 |
 | `hu_HU-imre-medium` | CC0 |
 | `ne_NP-chitwan-medium` | CC0 |
@@ -88,6 +89,7 @@ requirement for Hi-Fi TTS, in addition to whatever its own dataset asks for.
 | `en_US-kathleen-medium` | CC0 | New quality; `en_US-kathleen-low` still descends from ryan |
 | `es_ES-sharvard-medium` | CC BY 3.0 | |
 | `et_EE-news-medium` | CC BY | 4 speakers |
+| `eu_ES-maider-medium` | CC BY 4.0 | Synthetic recordings ([see below](#synthetic-recordings)) |
 | `fr_FR-siwis-medium` | CC BY 4.0 | |
 | `hu_HU-anna-medium` | CC0 | |
 | `hu_HU-berta-medium` | CC0 | |
@@ -100,6 +102,17 @@ requirement for Hi-Fi TTS, in addition to whatever its own dataset asks for.
 | `ru_RU-dmitri-medium` | CC0 | |
 | `sk_SK-lili-medium` | CC0 | |
 | `zh_CN-chaowen-medium` | CC0 | |
+
+## Synthetic recordings
+
+`eu_ES-antton-medium` and `eu_ES-maider-medium` are trained on synthetic
+speech, not on recordings of a person. Itzune generated about 100,000 clips
+for each voice with the Antton and Maider TTS models from [HiTZ (Aholab)][hitz],
+and released them as the [antton][itzune-antton] and [maider][itzune-maider]
+datasets under CC BY 4.0. HiTZ releases those models under Apache 2.0 and
+credits the voice recordings behind them as CC BY 4.0. Every license in that
+chain permits commercial use. Credit Itzune's dataset, which is the URL on the
+`MODEL_CARD`, and HiTZ.
 
 ## Voices trained from scratch
 
@@ -153,8 +166,7 @@ licensing information lives (see [Voice licensing](LICENSING.md)).
 ## Not on this list
 
 * **Everything fine-tuned from lessac or ryan.** That includes, through an
-  intermediate voice, `eu_ES-antton` and `eu_ES-maider` (from amy),
-  `fa_IR-ganji` and `fa_IR-ganji_adabi` (from amir),
+  intermediate voice, `fa_IR-ganji` and `fa_IR-ganji_adabi` (from amir),
   `lt_LT-reginute1` and `lt_LT-ingute` (from irina), `sv_SE-lisa` (from
   the earlier talesyntese), and `de_DE-thorsten_emotional` (from the earlier thorsten).
   These voices are being retrained over time.
@@ -184,3 +196,6 @@ licensing information lives (see [Voice licensing](LICENSING.md)).
 [jenny]: https://github.com/dioco-group/jenny-tts-dataset
 [cmu]: http://festvox.org/cmu_indic/index.html
 [bryce]: https://brycebeattie.com/files/tts/
+[hitz]: https://huggingface.co/HiTZ/TTS-eu_antton
+[itzune-antton]: https://huggingface.co/datasets/itzune/antton-dataset
+[itzune-maider]: https://huggingface.co/datasets/itzune/maider-dataset
