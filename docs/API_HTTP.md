@@ -29,11 +29,20 @@ information about the voice (name, language, number of speakers) and, for the mo
 recently synthesized utterance, the synthesis time along with the phonemes and their
 audio alignments.
 
+Under **Settings** you can change the length, noise, and noise W scales before
+speaking, and pick a speaker for multi-speaker voices. The settings start at the
+voice's defaults (or whatever the command line set), and **Reset to voice
+defaults** puts them back.
+
 The same information is available as JSON from the `/info` endpoint:
 
 ``` sh
 curl localhost:5000/info
 ```
+
+Alongside the voice name, language, and number of speakers, `/info` reports the
+voice's `speakers` (each with an `id` and a `name`) and the `defaults` used when a
+synthesis request leaves a setting out.
 
 ## Synthesizing Audio
 
@@ -53,8 +62,17 @@ The JSON data fields are:
 * `noise_scale` (optional) - speaking variability
 * `noise_w_scale` (optional) - phoneme width variability
 
+Fields that are left out fall back to the matching command-line argument, and then
+to the voice config. See `/info` for the defaults of the current voice.
+
 Get the available voices with:
 
 ``` sh
 curl localhost:5000/voices
 ```
+
+Download a voice with `POST /download`, passing a JSON object with a `voice` name
+and, optionally, `force_redownload: true`. The response is the name used for the
+downloaded files. If the requested name is an alias for a renamed voice, the
+response contains its current name. Use that returned name as the `voice` field
+in subsequent `/synthesize` requests.

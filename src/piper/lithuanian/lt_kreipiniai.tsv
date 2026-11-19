@@ -1,0 +1,47 @@
+# Lithuanian nouns that occur as direct address (vocative, šauksmininkas).
+#
+# word <TAB> gloss (optional). Lines starting with # are ignored. An empty file
+# switches the vocative rule off. Written without Lithuanian diacritics;
+# matching strips them, so "teti" also matches "tėti".
+#
+# Why a list is needed: Lithuanian has a separate vocative case, spelled like
+# the nominative for many nouns but accented differently - "mama" (mother) is
+# mamà when talking about her and mãma when talking to her. Neither source
+# behind lt_kirciai.tsv can express that: the dictionary holds one entry per
+# spelling (189262 forms, 189262 distinct spellings, not one duplicate), and
+# the annotated corpus it is built from does not separate the two cases.
+#
+# Why punctuation alone is not enough: a vocative is almost always fenced off
+# by commas, but "Vaje vaje, kiek daug telpa tame žodyje mama" has the comma
+# and no vocative. A word is treated as address only when it is on this list
+# AND fenced on both sides by a comma or the sentence edge.
+#
+# The list is deliberately short: missing a vocative only loses an
+# improvement, while a false positive mis-accents an ordinary word.
+mama	mother
+mamyte	mum (diminutive)
+mamyt	mum (clipped)
+mamute	mum (diminutive)
+teti	dad
+tete	dad
+tetyte	dad (diminutive)
+teveli	father (diminutive)
+vaikeli	child
+vaike	child
+dukryte	daughter (diminutive)
+dukrele	daughter (diminutive)
+dukra	daughter
+sunau	son
+suneli	son (diminutive)
+sese	sister
+seserie	sister
+broli	brother
+brolau	brother (familiar)
+drauge	friend
+mociute	grandmother
+seneli	grandfather
+senele	grandmother
+mielasis	dear (m.)
+mieloji	dear (f.)
+brangusis	dearest (m.)
+brangioji	dearest (f.)

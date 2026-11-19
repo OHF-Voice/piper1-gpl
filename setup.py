@@ -30,6 +30,17 @@ HEBREW_DATA_FILES = [
         "SOURCE",
     )
 ]
+LITHUANIAN_DATA_DIR = MODULE_DIR / "lithuanian"
+LITHUANIAN_DATA_FILES = [
+    (LITHUANIAN_DATA_DIR / f_name).relative_to(MODULE_DIR)
+    for f_name in (
+        "lt_kirciai.tsv",
+        "lt_raides.tsv",
+        "lt_kreipiniai.tsv",
+        "LICENSE",
+        "SOURCE",
+    )
+]
 # Web page and images for the HTTP server
 HTTP_DATA_FILES = [
     f.relative_to(MODULE_DIR)
@@ -68,7 +79,8 @@ setup(
     ],
     extras_require={
         "train": [
-            "torch>=2,<3",
+            # 2.5 added the dynamo argument to torch.onnx.export
+            "torch>=2.5,<3",
             "lightning>=2,<3",
             "tensorboard>=2,<3",
             "tensorboardX>=2,<3",
@@ -144,6 +156,7 @@ setup(
                 ESPEAK_NG_DATA_FILES,
                 TASHKEEL_DATA_FILES,
                 HEBREW_DATA_FILES,
+                LITHUANIAN_DATA_FILES,
                 HTTP_DATA_FILES,
             )
         ],
