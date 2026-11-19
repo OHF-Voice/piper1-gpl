@@ -31,6 +31,12 @@ public:
 
   static auto zhModel() -> std::unique_ptr<PiperTestAssets>;
 
+  /**
+   * @brief English model split into encoder and decoder for streaming.
+   * The directory only has the split files if Python with onnx was found.
+   */
+  static auto enStreamingModel() -> std::unique_ptr<PiperTestAssets>;
+
 private:
   std::filesystem::path modelDir;
 };

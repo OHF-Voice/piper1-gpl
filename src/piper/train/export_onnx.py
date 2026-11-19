@@ -102,6 +102,10 @@ def main() -> None:
             "input_lengths": {0: "batch_size"},
             "output": {0: "batch_size", 2: "time"},
         },
+        # torch 2.13 flipped this default to True. The dynamo exporter cannot
+        # trace infer(), whose output length depends on the predicted durations,
+        # and dynamic_axes above is a TorchScript exporter argument anyway.
+        dynamo=False,
     )
     _LOGGER.info("Exported model to %s", output_path)
 

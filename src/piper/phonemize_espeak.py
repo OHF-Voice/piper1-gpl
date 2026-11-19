@@ -79,6 +79,39 @@ class EspeakPhonemizer:
         return all_phonemes
 
 
+RAW_PHONEME_REPLACEMENTS = {
+    # IPA ligatures; espeak-ng writes the two letters
+    "ʤ": "dʒ",
+    "ʧ": "tʃ",
+    "ʦ": "ts",
+    "ʣ": "dz",
+    "ʥ": "dʑ",
+    "ʨ": "tɕ",
+    # ASCII lookalikes
+    "g": "ɡ",
+    "'": "ˈ",
+}
+"""Symbols people type in [[ raw phoneme ]] blocks that espeak-ng never outputs.
+
+espeak voices were only trained on what espeak-ng outputs, so these either have
+no id or an id the model never learned. Each maps to what espeak-ng writes."""
+
+
+def split_raw_phonemes(
+    phonemes_str: str,
+    vowel_clusters: Optional[Set[Tuple[str, ...]]] = None,
+) -> list[str]:
+    """Split a [[ raw phoneme ]] block the same way as espeak-ng output."""
+    phonemes_str = unicodedata.normalize("NFD", phonemes_str)
+    phonemes_str = "".join(RAW_PHONEME_REPLACEMENTS.get(c, c) for c in phonemes_str)
+    phonemes = list(phonemes_str)
+
+    if vowel_clusters:
+        phonemes = _merge_known_vowel_clusters(phonemes, vowel_clusters)
+
+    return phonemes
+
+
 def _merge_known_vowel_clusters(
     phones: Sequence[str], clusters: Set[Tuple[str, ...]]
 ) -> List[str]:
