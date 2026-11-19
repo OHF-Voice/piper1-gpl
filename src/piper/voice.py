@@ -4,7 +4,6 @@ import itertools
 import json
 import logging
 import re
-import threading
 import unicodedata
 import wave
 from dataclasses import dataclass
@@ -17,11 +16,17 @@ import onnxruntime
 from .config import PhonemeType, PiperConfig, SynthesisConfig
 from .const import BOS, EOS, PAD
 from .phoneme_ids import phonemes_to_ids
-from .phonemize_espeak import ESPEAK_DATA_DIR, EspeakPhonemizer
+from .phonemize_espeak import (
+    ESPEAK_DATA_DIR,
+    ESPEAK_LOCK,
+    EspeakPhonemizer,
+    split_raw_phonemes,
+)
 from .tashkeel import TashkeelDiacritizer
 
 _ESPEAK_PHONEMIZER: Optional[EspeakPhonemizer] = None
-_ESPEAK_PHONEMIZER_LOCK = threading.Lock()
+# One lock for every espeak-ng caller in the process (see phonemize_espeak).
+_ESPEAK_PHONEMIZER_LOCK = ESPEAK_LOCK
 
 _DEFAULT_SYNTHESIS_CONFIG = SynthesisConfig()
 _MAX_WAV_VALUE = 32767.0
@@ -126,6 +131,7 @@ class PiperVoice:
         use_cuda: bool = False,
         espeak_data_dir: Union[str, Path] = ESPEAK_DATA_DIR,
         download_dir: Optional[Union[str, Path]] = None,
+        include_alignments: bool = False,
     ) -> "PiperVoice":
         """
         Load an ONNX model and config.
@@ -135,6 +141,9 @@ class PiperVoice:
         :param use_cuda: True if CUDA (GPU) should be used instead of CPU.
         :param espeak_data_dir: Path to espeak-ng data dir (defaults to internal data).
         :param download_dir: Path to download resources (defaults to current directory).
+        :param include_alignments: If True, patch the model in memory (requires the
+            onnx package) so phoneme/audio alignments are available even if the model
+            file has not been patched with piper.patch_voice_with_alignment.
         :return: Voice object.
         """
         if config_path is None:
@@ -159,10 +168,35 @@ class PiperVoice:
         if download_dir is None:
             download_dir = Path.cwd()
 
+        # By default, load the model directly from its path. To expose alignments
+        # without writing a patched model to disk, load and patch the model in
+        # memory and hand the serialized bytes to onnxruntime.
+        model_or_path: Union[str, bytes] = str(model_path)
+        if include_alignments:
+            try:
+                import onnx
+
+                from .patch_voice_with_alignment import add_alignment_output
+
+                model = onnx.load(str(model_path))
+                tensor_name = add_alignment_output(model)
+                model_or_path = model.SerializeToString()
+                _LOGGER.debug(
+                    "Patched model in memory for alignments (tensor=%s)", tensor_name
+                )
+            except ImportError:
+                _LOGGER.warning(
+                    "The onnx package is required for include_alignments. "
+                    "Install it with: pip install piper-tts[alignment]"
+                )
+            except ValueError as error:
+                # Tensor not found or model already patched: use it as-is.
+                _LOGGER.debug("Not patching model for alignments: %s", error)
+
         return PiperVoice(
             config=PiperConfig.from_dict(config_dict),
             session=onnxruntime.InferenceSession(
-                str(model_path),
+                model_or_path,
                 sess_options=onnxruntime.SessionOptions(),
                 providers=providers,
             ),
@@ -194,6 +228,50 @@ class PiperVoice:
 
             return phonemizer.phonemize(text)
 
+        if self.config.phoneme_type == PhonemeType.HEBREW:
+            from .phonemize_hebrew import HebrewPhonemizer
+
+            # Nakdimon (niqqud) + rule-based IPA G2P
+            phonemizer = getattr(self, "_hebrew_phonemizer", None)
+            if phonemizer is None:
+                phonemizer = HebrewPhonemizer()
+                setattr(self, "_hebrew_phonemizer", phonemizer)
+
+            return phonemizer.phonemize(text)
+
+        if self.config.phoneme_type == PhonemeType.JAPANESE:
+            from .phonemize_japanese import JapanesePhonemizer
+
+            # OpenJTalk -> IPA + pitch accent (default IPA id map)
+            phonemizer = getattr(self, "_japanese_phonemizer", None)
+            if phonemizer is None:
+                phonemizer = JapanesePhonemizer()
+                setattr(self, "_japanese_phonemizer", phonemizer)
+
+            return phonemizer.phonemize(text)
+
+        if self.config.phoneme_type == PhonemeType.THAI:
+            from .phonemize_thai import ThaiPhonemizer
+
+            # TLTK segmentation + G2P -> IPA + tone digits (default IPA id map)
+            phonemizer = getattr(self, "_thai_phonemizer", None)
+            if phonemizer is None:
+                phonemizer = ThaiPhonemizer()
+                setattr(self, "_thai_phonemizer", phonemizer)
+
+            return phonemizer.phonemize(text)
+
+        if self.config.phoneme_type == PhonemeType.LITHUANIAN:
+            from .phonemize_lithuanian import LithuanianPhonemizer
+
+            # espeak-ng IPA + pitch accent from a stress dictionary
+            phonemizer = getattr(self, "_lithuanian_phonemizer", None)
+            if phonemizer is None:
+                phonemizer = LithuanianPhonemizer(espeak_data_dir=self.espeak_data_dir)
+                setattr(self, "_lithuanian_phonemizer", phonemizer)
+
+            return phonemizer.phonemize(text)
+
         if self.config.phoneme_type != PhonemeType.ESPEAK:
             raise ValueError(f"Unexpected phoneme type: {self.config.phoneme_type}")
 
@@ -212,7 +290,12 @@ class PiperVoice:
                 if (i > 0) and (text_parts[i - 1].endswith(" ")):
                     phonemes[-1].append(" ")
 
-                phonemes[-1].extend(text_part[2:-2].strip())
+                phonemes[-1].extend(
+                    split_raw_phonemes(
+                        text_part[2:-2].strip(),
+                        vowel_clusters=self.config.vowel_clusters,
+                    )
+                )
 
                 if (i < (len(text_parts)) - 1) and (text_parts[i + 1].startswith(" ")):
                     phonemes[-1].append(" ")
@@ -233,7 +316,9 @@ class PiperVoice:
                     _ESPEAK_PHONEMIZER = EspeakPhonemizer(self.espeak_data_dir)
 
                 text_part_phonemes = _ESPEAK_PHONEMIZER.phonemize(
-                    self.config.espeak_voice, text_part
+                    self.config.espeak_voice,
+                    text_part,
+                    vowel_clusters=self.config.vowel_clusters,
                 )
 
                 if prev_raw_phonemes and text_part_phonemes:
@@ -473,7 +558,7 @@ class PiperVoice:
 
         if (self.config.num_speakers > 1) and (speaker_id is None):
             # Default speaker
-            speaker_id = 0
+            speaker_id = self.config.default_speaker_id
 
         if speaker_id is not None:
             sid = np.array([speaker_id], dtype=np.int64)

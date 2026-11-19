@@ -21,13 +21,44 @@ TASHKEEL_DATA_FILES = [
         "hint_id_map.json",
     )
 ]
+HEBREW_DATA_DIR = MODULE_DIR / "hebrew"
+HEBREW_DATA_FILES = [
+    (HEBREW_DATA_DIR / f_name).relative_to(MODULE_DIR)
+    for f_name in (
+        "nakdimon.onnx",
+        "LICENSE",
+        "SOURCE",
+    )
+]
+LITHUANIAN_DATA_DIR = MODULE_DIR / "lithuanian"
+LITHUANIAN_DATA_FILES = [
+    (LITHUANIAN_DATA_DIR / f_name).relative_to(MODULE_DIR)
+    for f_name in (
+        "lt_kirciai.tsv",
+        "lt_raides.tsv",
+        "lt_kreipiniai.tsv",
+        "LICENSE",
+        "SOURCE",
+    )
+]
+# Web page and images for the HTTP server
+HTTP_DATA_FILES = [
+    f.relative_to(MODULE_DIR)
+    for f in itertools.chain(
+        (MODULE_DIR / "templates").rglob("*"),
+        (MODULE_DIR / "img").rglob("*"),
+    )
+    if f.is_file()
+]
 
 setup(
     name="piper-tts",
-    version="1.4.1",
+    version="1.8.0",
     description="Fast and local neural text-to-speech engine",
     url="http://github.com/OHF-voice/piper1-gpl",
     license="GPL-3.0-or-later",
+    # g2pW is Apache-2.0; see src/piper/g2pw_onnx.py.
+    license_files=["COPYING", "licenses/LICENSE.g2pW-Apache-2.0"],
     author="The Home Assistant Authors",
     author_email="hello@home-assistant.io",
     keywords=["home", "assistant", "tts", "text-to-speech"],
@@ -44,15 +75,16 @@ setup(
     python_requires=">=3.9",
     install_requires=[
         "onnxruntime>=1,<2",
+        "pathvalidate>=3,<4",
     ],
     extras_require={
         "train": [
-            "torch>=2,<3",
+            # 2.5 added the dynamo argument to torch.onnx.export
+            "torch>=2.5,<3",
             "lightning>=2,<3",
             "tensorboard>=2,<3",
             "tensorboardX>=2,<3",
             "jsonargparse[signatures]>=4.27.7",
-            "pathvalidate>=3,<4",
             "onnx>=1,<2",
             "pysilero-vad>=2.1,<3",
             "cython>=3,<4",
@@ -61,6 +93,7 @@ setup(
         "dev": [
             "black==24.8.0",
             "flake8==7.1.1",
+            "isort==5.13.2",  # used by script/lint and script/format
             "mypy==1.14.0",
             "pylint==3.2.7",
             "pytest==8.3.4",
@@ -68,6 +101,7 @@ setup(
             "scikit-build<1",
             "cmake>=3.18,<4",
             "ninja>=1,<2",
+            "onnx>=1,<2",  # for alignments
         ],
         "http": [
             "flask>=3,<4",
@@ -76,21 +110,54 @@ setup(
             "onnx>=1,<2",
         ],
         "zh": [
+            # g2pW supplies the pinyin/bopomofo lookup tables. Its model is run
+            # by piper.g2pw_onnx rather than g2pw.api, which is what keeps torch
+            # (~750 MB) out of this extra: g2pw.api imports it for a DataLoader.
             "g2pW>=0.1.1,<1",
+            "transformers>=4,<6",
             "sentence-stream>=1.2.1,<2",
             "unicode-rbnf>=2.4.0,<3",
-            "torch>=2,<3",
+        ],
+        "ja": [
+            "pyopenjtalk-plus>=0.4,<1",
+        ],
+        "th": [
+            # Thai word segmentation + G2P. espeak-ng's Thai voice is a
+            # placeholder (see piper.phonemize_thai) and cannot be trained on.
+            # Capped below 1.11: that release pins "scikit-learn~=1.2.0", which
+            # has no wheels for current Pythons and whose compiled extensions
+            # predate the numpy 2 ABI, so it builds from source and then dies
+            # with "numpy.dtype size changed" on import. 1.10 leaves
+            # scikit-learn unpinned. Lift the cap once tltk relaxes it.
+            "tltk>=1.6.8,<1.11",
+            # tltk imports pandas and requests but declares neither (as of
+            # 1.10). requests is pulled in by tltk/__init__.py -> tltk.corpus,
+            # which runs even though we only use tltk.nlp.
+            "pandas>=2,<3",
             "requests>=2,<3",
+            "unicode-rbnf>=2.4.0,<3",
         ],
     },
-    packages=["piper", "piper.tashkeel", "piper.train"],
+    packages=[
+        "piper",
+        "piper.tashkeel",
+        "piper.hebrew",
+        "piper.train",
+        "piper.train.vits",
+        "piper.train.vits.monotonic_align",
+    ],
     package_dir={"": "src"},
     include_package_data=True,
     package_data={
         "piper": [
             str(p)
             for p in itertools.chain(
-                PIPER_DATA_FILES, ESPEAK_NG_DATA_FILES, TASHKEEL_DATA_FILES
+                PIPER_DATA_FILES,
+                ESPEAK_NG_DATA_FILES,
+                TASHKEEL_DATA_FILES,
+                HEBREW_DATA_FILES,
+                LITHUANIAN_DATA_FILES,
+                HTTP_DATA_FILES,
             )
         ],
     },

@@ -13,10 +13,10 @@ from pathlib import Path
 from typing import Optional, Union
 from urllib.request import urlopen
 
-from g2pw import G2PWConverter
 from unicode_rbnf import RbnfEngine
 
 from .const import BOS, EOS, PAD
+from .g2pw_onnx import G2PWOnnxConverter
 from .phoneme_ids import DEFAULT_PHONEME_ID_MAP
 
 _LOGGER = logging.getLogger(__name__)
@@ -209,8 +209,8 @@ class ChinesePhonemizer:
         # Ensure model is downloaded
         download_model(model_dir)
 
-        self.g2p = G2PWConverter(
-            model_dir=str(model_dir), style="pinyin", enable_non_tradional_chinese=True
+        self.g2p = G2PWOnnxConverter(
+            model_dir=model_dir, style="pinyin", enable_non_tradional_chinese=True
         )
         self.number_engine = RbnfEngine.for_language("zh")
 

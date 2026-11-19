@@ -5,11 +5,12 @@ import itertools
 import json
 import logging
 import math
+import os
 import unicodedata
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Union
+from typing import Dict, List, Optional, Sequence, Set, Tuple, Union
 
 import librosa
 import lightning as L
@@ -17,13 +18,15 @@ import numpy as np
 import torch
 from pysilero_vad import SileroVoiceActivityDetector
 from torch import FloatTensor, LongTensor
-from torch.utils.data import DataLoader, Dataset, random_split
+from torch.utils.data import DataLoader, Dataset, Sampler, random_split
 
 from piper.config import PhonemeType, PiperConfig
 from piper.phoneme_ids import DEFAULT_PHONEME_ID_MAP
 from piper.phoneme_ids import phonemes_to_ids as default_phonemes_to_ids
 from piper.phonemize_espeak import EspeakPhonemizer
 
+from ..phoneme_counts import SIDECAR_NAME as PHONEME_COUNTS_SIDECAR_NAME
+from ..phoneme_counts import count_cached_phonemes
 from .mel_processing import spectrogram_torch
 from .utils import get_cache_id
 
@@ -72,6 +75,14 @@ class VitsDataModule(L.LightningDataModule):
         phoneme_type: Optional[str] = None,
         dataset_type: Union[str, DatasetType] = DatasetType.TEXT.value,
         phonemes_path: Optional[Union[str, Path]] = None,
+        vowel_clusters: Optional[str] = None,
+        # Group similar-length utterances into the same batch, so the collate
+        # pads much less. See LengthBucketSampler. Off by default: it changes
+        # batch composition, so turning it on mid-run changes the training
+        # distribution of a schedule already in progress. Worth enabling for a
+        # new run, especially on a corpus with a long duration tail.
+        length_bucketing: bool = False,
+        bucket_multiplier: int = 32,
     ) -> None:
         super().__init__()
 
@@ -106,6 +117,8 @@ class VitsDataModule(L.LightningDataModule):
 
         self.segment_size = segment_size
         self.num_workers = num_workers
+        self.length_bucketing = length_bucketing
+        self.bucket_multiplier = bucket_multiplier
 
         # Silence trimming
         self.trim_silence = trim_silence
@@ -129,6 +142,12 @@ class VitsDataModule(L.LightningDataModule):
         self.phonemes_path: Optional[Path] = None
         if phonemes_path is not None:
             self.phonemes_path = Path(phonemes_path)
+
+        # Vowel clusters to merge into single phonemes (diphthongs).
+        # Expecting [["<vowel>", "<vowel>"], ...]
+        self.vowel_clusters: Optional[Set[Tuple[str, ...]]] = None
+        if vowel_clusters:
+            self.vowel_clusters = {tuple(vc) for vc in json.loads(vowel_clusters)}
 
     def prepare_data(self):
         self.cache_dir.mkdir(parents=True, exist_ok=True)
@@ -165,8 +184,14 @@ class VitsDataModule(L.LightningDataModule):
             espeak_voice=self.espeak_voice,
             phoneme_id_map=phoneme_id_map,
             phoneme_type=self.phoneme_type,
-            piper_version="1.3.0",
+            piper_version="1.5.0",
+            vowel_clusters=self.vowel_clusters,
         )
+
+        if self.vowel_clusters:
+            _LOGGER.info(
+                "Vowel clusters will be merged. This voice will only work with Piper 1.5 or higher."
+            )
 
         speaker_id_map: Dict[str, int] = {}
         if self.is_multispeaker:
@@ -196,15 +221,9 @@ class VitsDataModule(L.LightningDataModule):
 
             self.piper_config.speaker_id_map = speaker_id_map
 
-        # Write config
-        self.config_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.config_path, "w", encoding="utf-8") as config_file:
-            json.dump(
-                self.piper_config.to_dict(),
-                config_file,
-                ensure_ascii=False,
-                indent=2,
-            )
+        # Write config now so it exists even if preprocessing stops partway;
+        # it's written again with phoneme counts at the end.
+        self._write_config()
 
         if self.phoneme_type == PhonemeType.PINYIN:
             from piper.phonemize_chinese import ChinesePhonemizer
@@ -215,6 +234,43 @@ class VitsDataModule(L.LightningDataModule):
             def phonemize(text: str) -> list[list[str]]:
                 return phonemizer.phonemize(text)
 
+        elif self.phoneme_type == PhonemeType.HEBREW:
+            from piper.phonemize_hebrew import HebrewPhonemizer
+
+            # Nakdimon (niqqud) -> IPA G2P (default IPA id map)
+            hebrew_phonemizer = HebrewPhonemizer()
+
+            def phonemize(text: str) -> list[list[str]]:
+                return hebrew_phonemizer.phonemize(text)
+
+        elif self.phoneme_type == PhonemeType.JAPANESE:
+            from piper.phonemize_japanese import JapanesePhonemizer
+
+            # OpenJTalk -> IPA + pitch accent (default IPA id map)
+            japanese_phonemizer = JapanesePhonemizer()
+
+            def phonemize(text: str) -> list[list[str]]:
+                return japanese_phonemizer.phonemize(text)
+
+        elif self.phoneme_type == PhonemeType.THAI:
+            from piper.phonemize_thai import ThaiPhonemizer
+
+            # TLTK segmentation + G2P -> IPA + tone digits (default IPA id map)
+            thai_phonemizer = ThaiPhonemizer()
+
+            def phonemize(text: str) -> list[list[str]]:
+                return thai_phonemizer.phonemize(text)
+
+        elif self.phoneme_type == PhonemeType.LITHUANIAN:
+            from piper.phonemize_lithuanian import LithuanianPhonemizer
+
+            # espeak-ng IPA + pitch accent dictionary (default IPA id map plus
+            # one symbol); the dictionary ships with piper as package data.
+            lithuanian_phonemizer = LithuanianPhonemizer()
+
+            def phonemize(text: str) -> list[list[str]]:
+                return lithuanian_phonemizer.phonemize(text)
+
         elif self.phoneme_type == PhonemeType.TEXT:
             # text = phonemes
 
@@ -222,15 +278,21 @@ class VitsDataModule(L.LightningDataModule):
                 return [list(unicodedata.normalize("NFD", text))]
 
         else:
+            if self.phoneme_type != PhonemeType.ESPEAK:
+                raise ValueError(f"Unexpected phoneme type: {self.phoneme_type}")
+
             # espeak-ng
             phonemizer = EspeakPhonemizer()
 
             def phonemize(text: str) -> list[list[str]]:
-                return phonemizer.phonemize(self.espeak_voice, text)
+                return phonemizer.phonemize(
+                    self.espeak_voice, text, vowel_clusters=self.vowel_clusters
+                )
 
         vad = SileroVoiceActivityDetector()
 
         num_utterances = 0
+        phoneme_ids_paths: List[Path] = []
         report_prepare: Optional[bool] = None
         with open(self.csv_path, "r", encoding="utf-8") as csv_file:
             reader = csv.reader(csv_file, delimiter="|")
@@ -310,7 +372,9 @@ class VitsDataModule(L.LightningDataModule):
                         phoneme_ids = list(
                             itertools.chain(
                                 *(
-                                    phonemes_to_ids(sentence_phonemes)
+                                    phonemes_to_ids(
+                                        sentence_phonemes, id_map=phoneme_id_map
+                                    )
                                     for sentence_phonemes in phonemes
                                 )
                             )
@@ -371,11 +435,41 @@ class VitsDataModule(L.LightningDataModule):
                         report_prepare = True
 
                 num_utterances += 1
+                phoneme_ids_paths.append(phoneme_ids_path)
                 if report_prepare:
                     _LOGGER.info("Processing utterances...")
                     report_prepare = False
 
         _LOGGER.info("Processed %s utterance(s)", num_utterances)
+
+        try:
+            self.piper_config.phoneme_counts = count_cached_phonemes(
+                phoneme_ids_paths,
+                phoneme_id_map,
+                sidecar_path=self.cache_dir / PHONEME_COUNTS_SIDECAR_NAME,
+            )
+        except ValueError as err:
+            # A phoneme with several ids can't be counted; never stop
+            # training over it.
+            _LOGGER.warning("Not writing phoneme counts: %s", err)
+        else:
+            _LOGGER.info(
+                "Training data uses %s of %s phoneme(s) in the id map",
+                len(self.piper_config.phoneme_counts),
+                len(phoneme_id_map),
+            )
+            self._write_config()
+
+    def _write_config(self) -> None:
+        assert self.piper_config is not None
+        self.config_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(self.config_path, "w", encoding="utf-8") as config_file:
+            json.dump(
+                self.piper_config.to_dict(),
+                config_file,
+                ensure_ascii=False,
+                indent=2,
+            )
 
     def setup(self, stage: str) -> None:
         assert self.piper_config is not None
@@ -413,7 +507,7 @@ class VitsDataModule(L.LightningDataModule):
                 cache_id = get_cache_id(row_number, text, speaker_id=speaker_id)
 
                 phoneme_ids_path = self.cache_dir / f"{cache_id}.phonemes.pt"
-                if not phoneme_ids_path:
+                if not phoneme_ids_path.exists():
                     _LOGGER.warning(
                         "Missing phoneme ids for %s: %s",
                         audio_path,
@@ -422,7 +516,7 @@ class VitsDataModule(L.LightningDataModule):
                     continue
 
                 audio_norm_path = self.cache_dir / f"{cache_id}.audio.pt"
-                if not audio_norm_path:
+                if not audio_norm_path.exists():
                     _LOGGER.warning(
                         "Missing normalized audio for %s: %s",
                         audio_path,
@@ -431,7 +525,7 @@ class VitsDataModule(L.LightningDataModule):
                     continue
 
                 audio_spec_path = self.cache_dir / f"{cache_id}.spec.pt"
-                if not audio_spec_path:
+                if not audio_spec_path.exists():
                     _LOGGER.warning(
                         "Missing mel spec for %s: %s",
                         audio_path,
@@ -456,41 +550,81 @@ class VitsDataModule(L.LightningDataModule):
 
         full_dataset = VitsDataset(all_utts)
 
-        valid_set_size = int(len(full_dataset) * self.validation_split)
-        train_set_size = len(full_dataset) - valid_set_size - self.num_test_examples
+        n = len(full_dataset)
+        valid_set_size = int(n * self.validation_split)
+        num_test = min(self.num_test_examples, max(0, n - valid_set_size - 1))
+        train_set_size = n - valid_set_size - num_test
         self.train_dataset, self.test_dataset, self.val_dataset = random_split(
-            full_dataset, [train_set_size, self.num_test_examples, valid_set_size]
+            full_dataset, [train_set_size, num_test, valid_set_size]
         )
 
-    def train_dataloader(self):
-        return DataLoader(
-            self.train_dataset,
+    def _make_dataloader(
+        self,
+        dataset,
+        shuffle: bool = False,
+        drop_last: bool = False,
+        batch_sampler: Optional[Sampler] = None,
+    ) -> DataLoader:
+        kwargs = dict(
             collate_fn=UtteranceCollate(
                 is_multispeaker=(self.num_speakers > 1), segment_size=self.segment_size
             ),
-            batch_size=self.batch_size,
             num_workers=self.num_workers,
+            pin_memory=True,
+        )
+        if batch_sampler is not None:
+            # batch_sampler owns batching entirely; DataLoader rejects
+            # batch_size/shuffle/drop_last alongside it.
+            kwargs["batch_sampler"] = batch_sampler
+        else:
+            kwargs["batch_size"] = self.batch_size
+            kwargs["shuffle"] = shuffle
+            kwargs["drop_last"] = drop_last
+        # persistent_workers/prefetch_factor are only valid with workers
+        if self.num_workers > 0:
+            kwargs["persistent_workers"] = True
+            kwargs["prefetch_factor"] = 4
+        return DataLoader(dataset, **kwargs)
+
+    def train_dataloader(self):
+        # shuffle=True: main never shuffles, so batch order is identical every
+        # epoch. drop_last avoids a tiny ragged final batch.
+        drop_last = len(self.train_dataset) > self.batch_size
+        if not drop_last:
+            _LOGGER.warning(
+                "Train split (%s) is not larger than batch_size (%s) ",
+                len(self.train_dataset),
+                self.batch_size,
+            )
+        if self.length_bucketing:
+            # random_split hands back a Subset, so map the subset positions
+            # back onto the CachedUtterance records the sampler measures.
+            utterances = [
+                self.train_dataset.dataset.utts[i] for i in self.train_dataset.indices
+            ]
+            _LOGGER.info(
+                "Length bucketing enabled (window %s batches)",
+                self.bucket_multiplier,
+            )
+            return self._make_dataloader(
+                self.train_dataset,
+                batch_sampler=LengthBucketSampler(
+                    utterances,
+                    batch_size=self.batch_size,
+                    drop_last=drop_last,
+                    bucket_multiplier=self.bucket_multiplier,
+                ),
+            )
+
+        return self._make_dataloader(
+            self.train_dataset, shuffle=True, drop_last=drop_last
         )
 
     def test_dataloader(self):
-        return DataLoader(
-            self.test_dataset,
-            collate_fn=UtteranceCollate(
-                is_multispeaker=(self.num_speakers > 1), segment_size=self.segment_size
-            ),
-            batch_size=self.batch_size,
-            num_workers=self.num_workers,
-        )
+        return self._make_dataloader(self.test_dataset)
 
     def val_dataloader(self):
-        return DataLoader(
-            self.val_dataset,
-            collate_fn=UtteranceCollate(
-                is_multispeaker=(self.num_speakers > 1), segment_size=self.segment_size
-            ),
-            batch_size=self.batch_size,
-            num_workers=self.num_workers,
-        )
+        return self._make_dataloader(self.val_dataset)
 
     def _trim_silence(
         self,
@@ -502,7 +636,6 @@ class VitsDataModule(L.LightningDataModule):
         """Trims silence from original array."""
         vad.reset()
 
-        offset_sec: float = 0.0
         first_chunk: Optional[int] = None
         last_chunk: Optional[int] = None
         first_sample: Optional[int] = None
@@ -525,11 +658,13 @@ class VitsDataModule(L.LightningDataModule):
 
             if is_speech:
                 if first_chunk is None:
-                    # First speech
+                    # First speech chunk
                     first_chunk = chunk_idx
-                else:
-                    # Last speech so far
-                    last_chunk = chunk_idx
+
+                # Last speech chunk so far. Set on every speech chunk so that
+                # utterances with a single speech chunk (e.g. short phrases like
+                # "yes") are still trimmed instead of being skipped entirely.
+                last_chunk = chunk_idx
 
         if (first_chunk is not None) and (last_chunk is not None):
             # Expand with seconds before/after silence
@@ -539,7 +674,7 @@ class VitsDataModule(L.LightningDataModule):
             first_sec = first_chunk * seconds_per_chunk
             first_sec = max(0, first_sec - self.keep_seconds_before_silence)
             first_sample = int(
-                math.floor(num_original_samples * (offset_sec / audio_seconds))
+                math.floor(num_original_samples * (first_sec / audio_seconds))
             )
 
             last_sec = (last_chunk + 1) * seconds_per_chunk
@@ -573,6 +708,71 @@ class Batch:
     audios: FloatTensor
     audio_lengths: LongTensor
     speaker_ids: Optional[LongTensor] = None
+
+
+class LengthBucketSampler(Sampler[List[int]]):
+    """Batch sampler that groups utterances of similar length together.
+
+    UtteranceCollate pads every batch to its longest member, and nothing else
+    orders the data, so a uniformly shuffled batch is padded to roughly the
+    longest utterance in the corpus. On a corpus whose p90 is 11 s but whose
+    tail reaches 20 s, almost every batch drags in something near the tail and
+    the padding dominates.
+
+    Each epoch the indices are shuffled, cut into windows of
+    `batch_size * bucket_multiplier`, and sorted by length inside the window
+    before being split into batches. Batch order is then shuffled again. That
+    keeps the sampling stochastic while making individual batches
+    length-homogeneous.
+
+    Lengths come from the size of the cached audio tensor on disk. It is a
+    plain 1-D float32 tensor, so its byte size is proportional to its sample
+    count, and os.stat costs nothing next to loading every tensor up front.
+    """
+
+    def __init__(
+        self,
+        utterances: Sequence["CachedUtterance"],
+        batch_size: int,
+        drop_last: bool = True,
+        bucket_multiplier: int = 32,
+        generator: Optional[torch.Generator] = None,
+    ) -> None:
+        super().__init__()
+        self.batch_size = batch_size
+        self.drop_last = drop_last
+        self.window = max(batch_size, batch_size * bucket_multiplier)
+        self.generator = generator
+
+        self.lengths: List[int] = []
+        for utt in utterances:
+            try:
+                self.lengths.append(os.path.getsize(utt.audio_norm_path))
+            except OSError:
+                # Sorts with the shortest; a missing file fails later anyway.
+                self.lengths.append(0)
+
+    def __len__(self) -> int:
+        if self.drop_last:
+            return len(self.lengths) // self.batch_size
+        return math.ceil(len(self.lengths) / self.batch_size)
+
+    def __iter__(self):
+        order = torch.randperm(len(self.lengths), generator=self.generator).tolist()
+
+        batches: List[List[int]] = []
+        for start in range(0, len(order), self.window):
+            window = sorted(
+                order[start : start + self.window], key=lambda i: self.lengths[i]
+            )
+            for offset in range(0, len(window), self.batch_size):
+                batch = window[offset : offset + self.batch_size]
+                if self.drop_last and len(batch) < self.batch_size:
+                    continue
+                batches.append(batch)
+
+        for index in torch.randperm(len(batches), generator=self.generator).tolist():
+            yield batches[index]
 
 
 class VitsDataset(Dataset):

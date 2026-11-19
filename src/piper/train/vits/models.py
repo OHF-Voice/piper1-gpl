@@ -77,7 +77,12 @@ class StochasticDurationPredictor(nn.Module):
             h_w = self.post_pre(w)
             h_w = self.post_convs(h_w, x_mask)
             h_w = self.post_proj(h_w) * x_mask
-            e_q = torch.randn(w.size(0), 2, w.size(2)).type_as(x) * x_mask
+            # Drawn on the GPU: drawing on the CPU and copying over made every
+            # training step wait for the GPU to drain.
+            e_q = (
+                torch.randn(w.size(0), 2, w.size(2), device=x.device, dtype=x.dtype)
+                * x_mask
+            )
             z_q = e_q
             for flow in self.post_flows:
                 z_q, logdet_q = flow(z_q, x_mask, g=(x + h_w))
@@ -519,6 +524,97 @@ class MultiPeriodDiscriminator(torch.nn.Module):
         return y_d_rs, y_d_gs, fmap_rs, fmap_gs
 
 
+class DiscriminatorR(torch.nn.Module):
+    """Single-resolution STFT sub-discriminator (operates on magnitude spectra).
+
+    Part of the Multi-Resolution Discriminator (UnivNet/Vocos lineage). It is a
+    training-only module: it shapes the generator's spectral output but is
+    discarded after training, so it adds ZERO inference cost.
+    """
+
+    def __init__(self, resolution, use_spectral_norm: bool = False):
+        super().__init__()
+        self.resolution = resolution  # (n_fft, hop_length, win_length)
+        self.LRELU_SLOPE = 0.1
+        norm_f = weight_norm if not use_spectral_norm else spectral_norm
+        self.convs = nn.ModuleList(
+            [
+                norm_f(Conv2d(1, 32, (3, 9), padding=(1, 4))),
+                norm_f(Conv2d(32, 32, (3, 9), stride=(1, 2), padding=(1, 4))),
+                norm_f(Conv2d(32, 32, (3, 9), stride=(1, 2), padding=(1, 4))),
+                norm_f(Conv2d(32, 32, (3, 9), stride=(1, 2), padding=(1, 4))),
+                norm_f(Conv2d(32, 32, (3, 3), padding=(1, 1))),
+            ]
+        )
+        self.conv_post = norm_f(Conv2d(32, 1, (3, 3), padding=(1, 1)))
+
+    def _spectrogram(self, x):
+        n_fft, hop_length, win_length = self.resolution
+        # stft requires float32 (not bf16/half) -- force it regardless of AMP.
+        x = x.squeeze(1).float()  # [B, T]
+        pad = int((n_fft - hop_length) / 2)
+        x = F.pad(x, (pad, pad), mode="reflect")
+        window = torch.hann_window(win_length, device=x.device)
+        spec = torch.stft(
+            x,
+            n_fft=n_fft,
+            hop_length=hop_length,
+            win_length=win_length,
+            window=window,
+            center=False,
+            return_complex=True,
+        )
+        return torch.abs(spec).unsqueeze(1)  # [B, 1, F, frames]
+
+    def forward(self, x):
+        fmap = []
+        x = self._spectrogram(x)
+        for l in self.convs:
+            x = l(x)
+            x = F.leaky_relu(x, self.LRELU_SLOPE)
+            fmap.append(x)
+        x = self.conv_post(x)
+        fmap.append(x)
+        x = torch.flatten(x, 1, -1)
+        return x, fmap
+
+
+class MultiResolutionDiscriminator(torch.nn.Module):
+    """Multi-Resolution STFT Discriminator (training-only, zero inference cost).
+
+    Complements the MultiPeriodDiscriminator: the period discriminators capture
+    periodic/temporal structure while these capture spectral detail across
+    several STFT resolutions, reducing the metallic/buzzy artifacts VITS can
+    leave behind. Same interface as MultiPeriodDiscriminator so it reuses the
+    existing generator/feature/discriminator loss helpers.
+    """
+
+    def __init__(
+        self,
+        resolutions=((1024, 120, 600), (2048, 240, 1200), (512, 50, 240)),
+        use_spectral_norm: bool = False,
+    ):
+        super().__init__()
+        self.discriminators = nn.ModuleList(
+            [
+                DiscriminatorR(r, use_spectral_norm=use_spectral_norm)
+                for r in resolutions
+            ]
+        )
+
+    def forward(self, y, y_hat):
+        y_d_rs, y_d_gs, fmap_rs, fmap_gs = [], [], [], []
+        for d in self.discriminators:
+            y_d_r, fmap_r = d(y)
+            y_d_g, fmap_g = d(y_hat)
+            y_d_rs.append(y_d_r)
+            y_d_gs.append(y_d_g)
+            fmap_rs.append(fmap_r)
+            fmap_gs.append(fmap_g)
+
+        return y_d_rs, y_d_gs, fmap_rs, fmap_gs
+
+
 class SynthesizerTrn(nn.Module):
     """
     Synthesizer for Training
@@ -722,6 +818,24 @@ class SynthesizerTrn(nn.Module):
         o = self.dec((z * y_mask)[:, :, :max_len], g=g)
 
         return o, attn, y_mask, (z, z_p, m_p, logs_p)
+
+    def reconstruct(self, y, y_lengths, sid=None):
+        """Decode the posterior latent for a whole utterance (teacher forced).
+
+        This is the training path with the random segment slice removed: the
+        posterior encoder produces z from the ground-truth spectrogram and the
+        decoder renders all of it, rather than one `segment_size` window. The
+        text encoder, alignment and duration predictor are not involved, so
+        comparing the result against the real waveform isolates the vocoder.
+
+        Training only ever shows the decoder a ~0.37 s slice per utterance per
+        epoch, so the segment-scoped mel loss saturates long before the decoder
+        has actually converged. This is what makes that visible -- see
+        "val_vocoder_mel" in VitsModel.
+        """
+        g = self.emb_g(sid).unsqueeze(-1) if self.n_speakers > 1 else None
+        z, _m_q, _logs_q, y_mask = self.enc_q(y, y_lengths, g=g)
+        return self.dec(z * y_mask, g=g), y_mask
 
     def voice_conversion(self, y, y_lengths, sid_src, sid_tgt):
         assert self.n_speakers > 1, "n_speakers have to be larger than 1."

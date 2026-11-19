@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Final, Mapping, Optional, Sequence
+from typing import Any, Final, Mapping, Optional, Sequence, Set, Tuple
 
 DEFAULT_NOISE_SCALE: Final = 0.667
 DEFAULT_LENGTH_SCALE: Final = 1.0
@@ -15,6 +15,10 @@ class PhonemeType(str, Enum):
     ESPEAK = "espeak"
     TEXT = "text"
     PINYIN = "pinyin"  # zh-CN
+    HEBREW = "hebrew"  # he-IL: Nakdimon niqqud + IPA G2P
+    JAPANESE = "japanese"  # ja-JP: OpenJTalk + pitch accent -> IPA
+    THAI = "thai"  # th-TH: TLTK segmentation + G2P -> IPA + tone digits
+    LITHUANIAN = "lithuanian"  # lt-LT: espeak-ng IPA + pitch accent dictionary
 
 
 @dataclass
@@ -51,10 +55,30 @@ class PiperConfig:
 
     hop_length: int = DEFAULT_HOP_LENGTH
 
+    vowel_clusters: Optional[Set[Tuple[str, ...]]] = None
+    """Clusters of vowels to merge into a single 'phoneme'.
+
+    Example: ("a", "ɪ") -> "aɪ"
+    The final cluster phoneme must be present in the id map.
+    """
+
+    default_speaker_id: int = 0
+    """Id of the default speaker for multi-speaker voices."""
+
+    phoneme_counts: Optional[Mapping[str, int]] = None
+    """Phoneme -> number of times it occurs in the voice's own training data.
+
+    Phonemes that never occur are left out. PAD/BOS/EOS are not counted.
+    Phonemes that share an id each get that id's count.
+    Counts cover this voice's data only, not a base model it was warmstarted
+    from, so a missing phoneme still has whatever embedding the base learned.
+    """
+
     @staticmethod
     def from_dict(config: dict[str, Any]) -> "PiperConfig":
         """Load configuration from a dictionary."""
         inference = config.get("inference", {})
+        vowel_clusters = config.get("vowel_clusters", {})
 
         return PiperConfig(
             num_symbols=config["num_symbols"],
@@ -72,6 +96,13 @@ class PiperConfig:
             piper_version=config.get("piper_version"),
             #
             hop_length=config.get("hop_length", DEFAULT_HOP_LENGTH),
+            #
+            vowel_clusters=(
+                {tuple(vc) for vc in vowel_clusters} if vowel_clusters else None
+            ),
+            #
+            default_speaker_id=config.get("default_speaker_id", 0),
+            phoneme_counts=config.get("phoneme_counts"),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -94,10 +125,19 @@ class PiperConfig:
             "phoneme_id_map": self.phoneme_id_map,
             "speaker_id_map": self.speaker_id_map,
             "hop_length": self.hop_length,
+            "default_speaker_id": self.default_speaker_id,
         }
 
         if self.piper_version:
             config_dict["piper_version"] = self.piper_version
+
+        if self.vowel_clusters:
+            config_dict["vowel_clusters"] = [
+                list(vc) for vc in sorted(self.vowel_clusters)
+            ]
+
+        if self.phoneme_counts is not None:
+            config_dict["phoneme_counts"] = dict(self.phoneme_counts)
 
         return config_dict
 

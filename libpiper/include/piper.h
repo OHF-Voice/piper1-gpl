@@ -1,18 +1,44 @@
 #ifndef PIPER_H_
 #define PIPER_H_
 
+#if defined(__has_include)
+#if __has_include(<cuchar>)
+#include <cuchar>
+#endif
+#if __has_include(<cstddef>)
+#include <cstddef>
+#else
 #include <stdbool.h>
-#include <stddef.h>
+#endif
+#endif
+
+#if !defined(__cplusplus) && !defined(__char32_t_defined)
 #include <stdint.h>
-#include <uchar.h>
+typedef uint32_t char32_t;
+#define __char32_t_defined
+#endif
+
+#if !defined(__cplusplus)
+#include <stddef.h>
+#endif
+
+#if defined(WIN32) && (defined(__GNUC__) || defined(_MSC_VER))
+#if defined(BUILDING_LIBPIPER)
+#define EXPORT_SYMBOL __declspec(dllexport)
+#else
+#define EXPORT_SYMBOL __declspec(dllimport)
+#endif
+#else
+#define EXPORT_SYMBOL
+#endif
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#define PIPER_OK 0
-#define PIPER_DONE 1
-#define PIPER_ERR_GENERIC -1
+#define PIPER_OK (0)
+#define PIPER_DONE (1)
+#define PIPER_ERR_GENERIC (-1)
 
 /**
  * \brief Text-to-speech synthesizer.
@@ -143,6 +169,107 @@ typedef struct piper_synthesize_options {
 } piper_synthesize_options;
 
 /**
+ * \brief Options for creating a synthesizer.
+ *
+ * This struct is versioned by struct_size. Set struct_size =
+ * sizeof(piper_create_options) before passing to piper_create_with_options.
+ * Future fields will be appended at the end and gated by struct_size.
+ */
+typedef struct piper_create_options {
+  /**
+   * \brief Size of this struct in bytes, for versioning.
+   */
+  size_t struct_size;
+
+  /**
+   * \brief Path to ONNX voice model file.
+   */
+  const char *model_path;
+
+  /**
+   * \brief Path to JSON voice config file or NULL if it's model_path + .json
+   */
+  const char *config_path;
+
+  /**
+   * \brief Path to espeak-ng data directory, or NULL if not needed (text
+   * phonemes).
+   */
+  const char *espeak_data_path;
+
+  /**
+   * \brief Path to g2pw / pinyin dictionary directory for pinyin, or NULL for
+   * auto-discovery.
+   *
+   * Phase 1 (monophonic fallback) directory should contain
+   * MONOPHONIC_CHARS.txt (118K) and/or char_bopomofo_dict.json and
+   * bopomofo_to_pinyin_wo_tune_dict.json. g2pw.onnx and
+   * POLYPHONIC_CHARS.txt are not required in Phase 1; they will be used in
+   * Phase 2 for contextual polyphone disambiguation.
+   *
+   * Directory may be next to espeak data / data_dir, or be data_dir/g2pw or
+   * data_dir itself.
+   */
+  const char *g2pw_model_dir;
+
+  /**
+   * \brief Optional root data directory that may contain espeak-ng-data/ and
+   * g2pw/.
+   *
+   * If espeak_data_path or g2pw_model_dir is NULL, library will search inside
+   * data_dir/espeak-ng-data and data_dir/g2pw / data_dir.
+   */
+  const char *data_dir;
+
+  /**
+   * \brief Path to the OpenJTalk system dictionary directory for Japanese
+   * voices (phoneme_type "japanese"), or NULL for auto-discovery.
+   *
+   * The directory must contain the MeCab dictionary files (sys.dic,
+   * matrix.bin, char.bin, unk.dic). Use the pyopenjtalk-plus dictionary
+   * (mecab-naist-jdic base with jpreprocess fixes), not stock
+   * open_jtalk_dic_utf_8-1.11, to match training.
+   *
+   * If NULL, the library probes <data_dir>/openjtalk, then <data_dir>, then
+   * <model_dir>/openjtalk. The dictionary is large (~107 MB unpacked), so it
+   * is expected to be downloaded on demand, not bundled with the app.
+   *
+   * This field is ABI-versioned: it is only read when struct_size covers it.
+   */
+  const char *openjtalk_dict_dir;
+} piper_create_options;
+
+/**
+ * \brief Initialize piper_create_options with defaults.
+ *
+ * Sets struct_size and nulls paths. Caller must fill model_path at least.
+ */
+static inline void piper_init_create_options(piper_create_options *opts) {
+  if (opts) {
+    opts->struct_size = sizeof(piper_create_options);
+    opts->model_path = NULL;
+    opts->config_path = NULL;
+    opts->espeak_data_path = NULL;
+    opts->g2pw_model_dir = NULL;
+    opts->data_dir = NULL;
+    opts->openjtalk_dict_dir = NULL;
+  }
+}
+
+/**
+ * \brief Create a Piper text-to-speech synthesizer from a voice model (options
+ * version).
+ *
+ * \param options creation options, must have struct_size set.
+ *
+ * \return a Piper text-to-speech synthesizer for the voice model, or NULL on
+ * failure.
+ */
+EXPORT_SYMBOL
+piper_synthesizer *
+piper_create_with_options(const piper_create_options *options);
+
+/**
  * \brief Create a Piper text-to-speech synthesizer from a voice model.
  *
  * \param model_path path to ONNX voice model file.
@@ -155,6 +282,7 @@ typedef struct piper_synthesize_options {
  *
  * \return a Piper text-to-speech synthesizer for the voice model.
  */
+EXPORT_SYMBOL
 piper_synthesizer *piper_create(const char *model_path, const char *config_path,
                                 const char *espeak_data_path);
 
@@ -163,6 +291,7 @@ piper_synthesizer *piper_create(const char *model_path, const char *config_path,
  *
  * \param synth Piper synthesizer.
  */
+EXPORT_SYMBOL
 void piper_free(piper_synthesizer *synth);
 
 /**
@@ -172,6 +301,7 @@ void piper_free(piper_synthesizer *synth);
  *
  * \return synthesis options from voice config.
  */
+EXPORT_SYMBOL
 piper_synthesize_options
 piper_default_synthesize_options(piper_synthesizer *synth);
 
@@ -188,6 +318,7 @@ piper_default_synthesize_options(piper_synthesizer *synth);
  *
  * \return PIPER_OK or error code.
  */
+EXPORT_SYMBOL
 int piper_synthesize_start(piper_synthesizer *synth, const char *text,
                            const piper_synthesize_options *options);
 
@@ -208,7 +339,14 @@ int piper_synthesize_start(piper_synthesizer *synth, const char *text,
  *
  * \return PIPER_DONE when complete, otherwise PIPER_OK or error code.
  */
+EXPORT_SYMBOL
 int piper_synthesize_next(piper_synthesizer *synth, piper_audio_chunk *chunk);
+
+/**
+ * \return piper version
+ */
+EXPORT_SYMBOL
+char const *piper_version(void);
 
 #ifdef __cplusplus
 }
