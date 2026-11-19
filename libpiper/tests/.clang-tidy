@@ -1,0 +1,5 @@
+InheritParentConfig: true
+Checks: >
+  -bugprone-unchecked-optional-access,
+  -readability-magic-numbers,
+  -readability-function-cognitive-complexity

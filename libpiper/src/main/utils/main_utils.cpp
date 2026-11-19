@@ -11,48 +11,58 @@
 
 namespace piper {
 
-void printUsage(char *argv[]) {
-  std::cerr << std::endl;
-  std::cerr << "usage: " << argv[0] << " [options]" << std::endl;
-  std::cerr << std::endl;
-  std::cerr << "options:" << std::endl;
+void printUsage(char *argv[]) { // NOLINT(modernize-avoid-c-arrays)
+  std::cerr << '\n';
+  std::cerr << "usage: " << argv[0] << " [options]" << '\n';
+  std::cerr << '\n';
+  std::cerr << "options:" << '\n';
   std::cerr << "   -h        --help              show this message and exit"
-            << std::endl;
+            << '\n';
   std::cerr << "   -m  FILE  --model       FILE  path to onnx model file"
-            << std::endl;
+            << '\n';
   std::cerr << "   -c  FILE  --config      FILE  path to model config file "
                "(default: model path + .json)"
-            << std::endl;
+            << '\n';
   std::cerr << "   -f  FILE  --output_file FILE  path to output WAV file ('-' "
                "for stdout)"
-            << std::endl;
+            << '\n';
   std::cerr << "   -d  DIR   --output_dir  DIR   path to output directory "
                "(default: cwd)"
-            << std::endl;
+            << '\n';
   std::cerr << "   -s  NUM   --speaker     NUM   id of speaker (default: 0)"
-            << std::endl;
-  std::cerr << "   --noise_scale           NUM   generator noise (default: 0.667)"
-            << std::endl;
+            << '\n';
+  std::cerr
+      << "   --noise_scale           NUM   generator noise (default: 0.667)"
+      << '\n';
   std::cerr << "   --length_scale          NUM   phoneme length (default: 1.0)"
-            << std::endl;
-  std::cerr << "   --noise_w               NUM   phoneme width noise (default: 0.8)"
-            << std::endl;
-  std::cerr << "   --espeak_data           DIR   path to espeak-ng data directory"
-            << std::endl;
+            << '\n';
+  std::cerr
+      << "   --noise_w               NUM   phoneme width noise (default: 0.8)"
+      << '\n';
+  std::cerr
+      << "   --espeak_data           DIR   path to espeak-ng data directory"
+      << '\n';
+  std::cerr << "   --data_dir            DIR   base data dir (looks for "
+               "espeak-ng-data and g2pw subdirs)"
+            << '\n';
+  std::cerr << "   --g2pw_dir            DIR   path to Chinese dict directory "
+               "(MONOPHONIC_CHARS.txt, char_bopomofo_dict.json etc)"
+            << '\n';
   std::cerr << "   --json-input                  stdin input is lines of JSON "
                "instead of plain text"
-            << std::endl;
-  std::cerr << std::endl;
+            << '\n';
+  std::cerr << '\n';
 }
 
+// NOLINTNEXTLINE(modernize-avoid-c-arrays)
 void ensureArg(int argc, char *argv[], int argi) {
-    if ((argi + 1) >= argc)
-    {
-        throw ArgError(std::string("Missing argument for ") + argv[argi]);
-    }
+  if ((argi + 1) >= argc) {
+    throw ArgError(std::string("Missing argument for ") + argv[argi]);
+  }
 }
 
 // Parse command-line arguments
+// NOLINTNEXTLINE(readability-function-cognitive-complexity,modernize-avoid-c-arrays)
 void parseArgsLogic(int argc, char *argv[], RunConfig &runConfig) {
   std::optional<std::filesystem::path> modelConfigPath;
 
@@ -95,10 +105,17 @@ void parseArgsLogic(int argc, char *argv[], RunConfig &runConfig) {
     } else if (arg == "--espeak_data" || arg == "--espeak-data") {
       ensureArg(argc, argv, i);
       runConfig.eSpeakDataPath = std::filesystem::path(argv[++i]);
+    } else if (arg == "--data_dir" || arg == "--data-dir") {
+      ensureArg(argc, argv, i);
+      runConfig.dataDir = std::filesystem::path(argv[++i]);
+    } else if (arg == "--g2pw_dir" || arg == "--g2pw-dir" ||
+               arg == "--g2pw_model_dir" || arg == "--g2pw-model-dir") {
+      ensureArg(argc, argv, i);
+      runConfig.g2pwModelDir = std::filesystem::path(argv[++i]);
     } else if (arg == "--json_input" || arg == "--json-input") {
       runConfig.jsonInput = true;
     } else if (arg == "--version") {
-      std::cout << piper_version() << std::endl;
+      std::cout << piper_version() << '\n';
       exit(0);
     } else if (arg == "-h" || arg == "--help") {
       printUsage(argv);
@@ -126,15 +143,16 @@ void parseArgsLogic(int argc, char *argv[], RunConfig &runConfig) {
   }
 }
 
+// NOLINTNEXTLINE(modernize-avoid-c-arrays)
 void parseArgs(int argc, char *argv[], RunConfig &runConfig) {
   try {
     parseArgsLogic(argc, argv, runConfig);
   } catch (const ArgError &e) {
-    std::cerr << e.what() << std::endl;
+    std::cerr << e.what() << '\n';
     printUsage(argv);
     exit(1);
   } catch (const std::exception &e) {
-    std::cerr << e.what() << std::endl;
+    std::cerr << e.what() << '\n';
     exit(1);
   }
 }

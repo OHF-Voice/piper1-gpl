@@ -1,14 +1,21 @@
 """Tests for Chinese phonemization."""
 
+import subprocess
+import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
-# Chinese phonemization requires the optional [zh] dependencies (g2pW, torch, ...).
-# Skip the whole module if they are not installed.
-phonemize_chinese = pytest.importorskip("piper.phonemize_chinese")
-ChinesePhonemizer = phonemize_chinese.ChinesePhonemizer
-phonemes_to_ids = phonemize_chinese.phonemes_to_ids
+if TYPE_CHECKING:
+    # Real names for type checking, which doesn't need the deps installed.
+    from piper.phonemize_chinese import ChinesePhonemizer, phonemes_to_ids
+else:
+    # Chinese phonemization requires the optional [zh] dependencies (g2pW, ...).
+    # Skip the whole module if they are not installed.
+    phonemize_chinese = pytest.importorskip("piper.phonemize_chinese")
+    ChinesePhonemizer = phonemize_chinese.ChinesePhonemizer
+    phonemes_to_ids = phonemize_chinese.phonemes_to_ids
 
 PAD_ID = 0
 BOS_ID = 1
@@ -202,3 +209,35 @@ def test_numbers_to_words(
     phonemizer: ChinesePhonemizer, number_text: str, word_text: str
 ) -> None:
     assert phonemizer.phonemize(number_text) == phonemizer.phonemize(word_text)
+
+
+def test_works_without_torch() -> None:
+    """Chinese phonemization must not need torch.
+
+    piper.g2pw_onnx exists to keep torch out of the [zh] extra, which stays true
+    only as long as nothing imports g2pw.api -- or g2pw at all, since its
+    __init__ imports api. Asserting "torch not in sys.modules" would not catch a
+    regression here, because transformers imports torch whenever it happens to
+    be installed. So torch is made unimportable instead: setting sys.modules
+    entries to None makes find_spec() return None and `import` raise, exactly as
+    if the packages were absent.
+
+    Runs in a subprocess because it has to mutate the import system.
+    """
+    code = (
+        "import sys;"
+        "sys.modules['torch'] = None;"
+        "sys.modules['torchaudio'] = None;"
+        "sys.modules['torchvision'] = None;"
+        "from piper.phonemize_chinese import ChinesePhonemizer;"
+        f"p = ChinesePhonemizer(model_dir={str(MODEL_DIR)!r});"
+        "phonemes = p.phonemize('卡尔普陪外孙玩滑梯。');"
+        "assert phonemes[0][:3] == ['k', 'a', '3'], phonemes;"
+        "assert 'g2pw' not in sys.modules, 'g2pw was imported; it imports torch'"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=False
+    )
+    assert (
+        result.returncode == 0
+    ), f"Chinese phonemization failed without torch\n{result.stderr}"

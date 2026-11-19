@@ -1,0 +1,9 @@
+Language: Cpp
+BasedOnStyle: Google
+# Configure for your project's style
+IndentWidth: 2
+UseTab: Never
+BreakBeforeBraces: Allman
+AllowShortFunctionsOnASingleLine: None
+IndentCaseLabels: false
+ColumnLimit: 80

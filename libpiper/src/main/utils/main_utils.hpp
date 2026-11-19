@@ -1,11 +1,9 @@
 #ifndef PIPER_MAIN_UTILS_HPP
 #define PIPER_MAIN_UTILS_HPP
 
-#include <chrono>
 #include <filesystem>
 #include <optional>
 #include <stdexcept>
-
 
 namespace piper {
 
@@ -31,6 +29,8 @@ struct RunConfig {
   std::optional<float> lengthScale;
   std::optional<float> noiseW;
   std::optional<std::filesystem::path> eSpeakDataPath;
+  std::optional<std::filesystem::path> dataDir;
+  std::optional<std::filesystem::path> g2pwModelDir;
   bool jsonInput = false;
 };
 

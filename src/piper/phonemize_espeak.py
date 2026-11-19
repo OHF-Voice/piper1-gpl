@@ -1,6 +1,7 @@
 """Phonemization with espeak-ng."""
 
 import re
+import threading
 import unicodedata
 from collections.abc import Sequence
 from pathlib import Path
@@ -8,6 +9,14 @@ from typing import List, Optional, Set, Tuple, Union
 
 _DIR = Path(__file__).parent
 ESPEAK_DATA_DIR = _DIR / "espeak-ng-data"
+
+ESPEAK_LOCK = threading.Lock()
+"""Held around every call into espeakbridge.
+
+espeakbridge.set_voice() is process-global: two voices phonemizing at the same
+time (http_server serving Lithuanian beside another language, say) would race
+on the current voice. PiperVoice takes this lock for its own espeak calls, and
+any other phonemizer that talks to espeak-ng must take the same one."""
 
 
 class EspeakPhonemizer:
@@ -68,6 +77,39 @@ class EspeakPhonemizer:
             all_phonemes.append(sentence_phonemes)
 
         return all_phonemes
+
+
+RAW_PHONEME_REPLACEMENTS = {
+    # IPA ligatures; espeak-ng writes the two letters
+    "ʤ": "dʒ",
+    "ʧ": "tʃ",
+    "ʦ": "ts",
+    "ʣ": "dz",
+    "ʥ": "dʑ",
+    "ʨ": "tɕ",
+    # ASCII lookalikes
+    "g": "ɡ",
+    "'": "ˈ",
+}
+"""Symbols people type in [[ raw phoneme ]] blocks that espeak-ng never outputs.
+
+espeak voices were only trained on what espeak-ng outputs, so these either have
+no id or an id the model never learned. Each maps to what espeak-ng writes."""
+
+
+def split_raw_phonemes(
+    phonemes_str: str,
+    vowel_clusters: Optional[Set[Tuple[str, ...]]] = None,
+) -> list[str]:
+    """Split a [[ raw phoneme ]] block the same way as espeak-ng output."""
+    phonemes_str = unicodedata.normalize("NFD", phonemes_str)
+    phonemes_str = "".join(RAW_PHONEME_REPLACEMENTS.get(c, c) for c in phonemes_str)
+    phonemes = list(phonemes_str)
+
+    if vowel_clusters:
+        phonemes = _merge_known_vowel_clusters(phonemes, vowel_clusters)
+
+    return phonemes
 
 
 def _merge_known_vowel_clusters(

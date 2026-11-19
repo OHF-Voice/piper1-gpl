@@ -1,0 +1,11 @@
+Checks: >
+  -*,
+  bugprone-*,
+  modernize-*,
+  performance-*,
+  readability-*
+
+WarningsAsErrors: '*'
+HeaderFilterRegex: '^(src|tests|include)/.*'
+ExcludeHeaderFilterRegex: '.*/(json\.hpp|uni_algo\.h)$'
+FormatStyle: file

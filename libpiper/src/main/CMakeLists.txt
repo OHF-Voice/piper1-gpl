@@ -1,12 +1,14 @@
 cmake_minimum_required(VERSION 3.26)
 
 add_executable(piper_exe main.cpp)
+enable_clang_tidy(piper_exe)
 
 add_library(main_utils
   utils/wavfile.cpp
   utils/main_utils.cpp
   utils/process.cpp
   utils/wav_headers.cpp)
+enable_clang_tidy(main_utils)
 
 target_include_directories(
   main_utils
