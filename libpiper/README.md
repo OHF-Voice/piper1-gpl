@@ -24,7 +24,7 @@ The `--config Release` flag is required for multi-config generators such as
 Visual Studio and is ignored by single-config generators, so it is safe to
 pass on every platform.
 
-This will automatically download/build [espeak-ng][] as well as download shared libraries for the [onnxruntime][].
+This will automatically download/build [espeak-ng][] as well as download shared libraries for the [onnxruntime][] from Microsoft's [NuGet package][onnxruntime-nuget] (checked against a pinned SHA256). To use your own onnxruntime instead, pass `-DONNXRUNTIME_DIR=<dir>` with `include/` and `lib/` subdirectories, or install it where CMake's `find_package(onnxruntime)` finds it.
 
 To use `libpiper`, you will need to:
 
@@ -91,4 +91,5 @@ python3 -m piper.split_voice_for_streaming /path/to/voice.onnx
 
 <!-- Links -->
 [espeak-ng]: https://github.com/espeak-ng/espeak-ng
-[onnxruntime]: https://github.com/microsoft/onnxruntime
+[onnxruntime]: https://onnxruntime.ai/
+[onnxruntime-nuget]: https://www.nuget.org/packages/Microsoft.ML.OnnxRuntime
