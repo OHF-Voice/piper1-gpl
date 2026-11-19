@@ -86,6 +86,7 @@ requirement for Hi-Fi TTS, in addition to whatever its own dataset asks for.
 | `en_GB-alba-medium` | CC BY 4.0 | |
 | `en_GB-cori-medium` | CC BY 4.0 | Same reader and dataset as the base |
 | `en_GB-jenny_dioco-medium` | [Custom][jenny] | Commercial use permitted; the voice must be called "Jenny", and "Jenny (Dioco)" where practical |
+| `en_GB-vctk-medium` | CC BY 4.0 | 109 speakers |
 | `en_US-kathleen-medium` | CC0 | New quality; `en_US-kathleen-low` still descends from ryan |
 | `es_ES-sharvard-medium` | CC BY 3.0 | |
 | `et_EE-news-medium` | CC BY | 4 speakers |
