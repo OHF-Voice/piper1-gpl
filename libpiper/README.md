@@ -67,11 +67,14 @@ int main() {
     piper_synthesize_start(synth, "Welcome to the world of speech synthesis!",
                            &options /* NULL for defaults */);
 
+    // The final chunk has audio too: piper_synthesize_next returns PIPER_DONE
+    // together with it, so loop on is_last.
     piper_audio_chunk chunk;
-    while (piper_synthesize_next(synth, &chunk) != PIPER_DONE) {
+    do {
+        piper_synthesize_next(synth, &chunk);
         audio_stream.write(reinterpret_cast<const char *>(chunk.samples),
                            chunk.num_samples * sizeof(float));
-    }
+    } while (!chunk.is_last);
 
     piper_free(synth);
 
