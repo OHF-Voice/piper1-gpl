@@ -40,8 +40,8 @@ it says "Finetuned from U.S. English lessac voice", download the voice again.
 ## Voices fine-tuned from rdh
 
 [rdh][rdh] is a Flemish (nl_BE) male voice, trained from scratch on CC0
-recordings. These voices' own datasets are CC0 as well, so nothing in the chain
-asks anything of you.
+recordings. Apart from `eu_ES-antton-medium`, these voices' own datasets are
+CC0 as well, so nothing in the chain asks anything of you.
 
 | Voice | Dataset license |
 | ----- | --------------- |
@@ -51,6 +51,7 @@ asks anything of you.
 | `en_US-joe-medium` | CC0 |
 | `en_US-mike-medium` | CC0 |
 | `es_ES-davefx-medium` | CC0 |
+| `eu_ES-antton-medium` | CC BY 4.0, synthetic recordings ([see below](#synthetic-recordings)) |
 | `fi_FI-harri-medium` | CC0 |
 | `hu_HU-imre-medium` | CC0 |
 | `ne_NP-chitwan-medium` | CC0 |
@@ -58,6 +59,7 @@ asks anything of you.
 | `nl_NL-alex-medium` | CC0 |
 | `nl_NL-pim-medium` | CC0 |
 | `nl_NL-ronnie-medium` | CC0 |
+| `no_NO-talesyntese-medium` | CC0 |
 | `pl_PL-darkman-medium` | CC0 |
 | `pt_BR-cadu-medium` | CC0 |
 | `pt_BR-jeff-medium` | CC0 |
@@ -78,16 +80,39 @@ requirement for Hi-Fi TTS, in addition to whatever its own dataset asks for.
 | Voice | Dataset license | Notes |
 | ----- | --------------- | ----- |
 | `en_US-hifi_tts_92-medium` (the base itself) | CC BY 4.0 | |
+| `bn_BD-google-medium` | CC BY-SA 4.0, plus the [CMU Indic license][cmu] for speaker `rm` | 16 speakers. The CMU license asks you to keep its copyright notice, which is in the `MODEL_CARD` |
+| `cs_CZ-jirka-medium` | CC0 | `cs_CZ-jirka-low` still descends from lessac |
 | `de_DE-kerstin-medium` | CC0 | |
 | `en_GB-alba-medium` | CC BY 4.0 | |
 | `en_GB-cori-medium` | CC BY 4.0 | Same reader and dataset as the base |
 | `en_GB-jenny_dioco-medium` | [Custom][jenny] | Commercial use permitted; the voice must be called "Jenny", and "Jenny (Dioco)" where practical |
+| `en_US-kathleen-medium` | CC0 | New quality; `en_US-kathleen-low` still descends from ryan |
 | `es_ES-sharvard-medium` | CC BY 3.0 | |
+| `et_EE-news-medium` | CC BY | 4 speakers |
+| `eu_ES-maider-medium` | CC BY 4.0 | Synthetic recordings ([see below](#synthetic-recordings)) |
 | `fr_FR-siwis-medium` | CC BY 4.0 | |
 | `hu_HU-anna-medium` | CC0 | |
 | `hu_HU-berta-medium` | CC0 | |
+| `it_IT-paola-medium` | CC0 | Retrained on a different recording set than the earlier paola |
+| `mr_IN-google-medium` | CC BY-SA 4.0 | 9 speakers |
+| `nl_BE-nathalie-medium` | CC0 | |
+| `pl_PL-gosia-medium` | CC0 | |
+| `pt_BR-faber-medium` | CC0 | |
+| `pt_PT-tugão-medium` | CC0 | |
+| `ru_RU-dmitri-medium` | CC0 | |
 | `sk_SK-lili-medium` | CC0 | |
 | `zh_CN-chaowen-medium` | CC0 | |
+
+## Synthetic recordings
+
+`eu_ES-antton-medium` and `eu_ES-maider-medium` are trained on synthetic
+speech, not on recordings of a person. Itzune generated about 100,000 clips
+for each voice with the Antton and Maider TTS models from [HiTZ (Aholab)][hitz],
+and released them as the [antton][itzune-antton] and [maider][itzune-maider]
+datasets under CC BY 4.0. HiTZ releases those models under Apache 2.0 and
+credits the voice recordings behind them as CC BY 4.0. Every license in that
+chain permits commercial use. Credit Itzune's dataset, which is the URL on the
+`MODEL_CARD`, and HiTZ.
 
 ## Voices trained from scratch
 
@@ -133,6 +158,7 @@ notes are on [his site][bryce].
 | CC BY | Credit the dataset (and, for the hifi_tts_92 group, the base's dataset too). The `MODEL_CARD` has the dataset URL to cite. |
 | CC BY-SA | Credit, and anything you build from the dataset is shared under the same license. Whether that reaches a trained model, or audio it produces, is one of the open questions above. |
 | Apache 2.0 | Keep the license and any notice with what you distribute. |
+| CMU Indic | Keep CMU's copyright notice and conditions with what you distribute, and do not use the authors' names to endorse your product. |
 
 When you ship a voice, ship its `MODEL_CARD` with it. It is the only place the
 licensing information lives (see [Voice licensing](LICENSING.md)).
@@ -140,15 +166,20 @@ licensing information lives (see [Voice licensing](LICENSING.md)).
 ## Not on this list
 
 * **Everything fine-tuned from lessac or ryan.** That includes, through an
-  intermediate voice, `eu_ES-antton` and `eu_ES-maider` (from amy), `es_MX-ald`
-  (from the earlier davefx), `fa_IR-ganji` and `fa_IR-ganji_adabi` (from amir),
+  intermediate voice, `fa_IR-ganji` and `fa_IR-ganji_adabi` (from amir),
   `lt_LT-reginute1` and `lt_LT-ingute` (from irina), `sv_SE-lisa` (from
-  talesyntese), and `de_DE-thorsten_emotional` (from the earlier thorsten).
+  the earlier talesyntese), and `de_DE-thorsten_emotional` (from the earlier thorsten).
   These voices are being retrained over time.
 * **Non-commercial datasets**, whatever the base. Examples are hfc_female,
   hfc_male, ryan, semaine, l2arctic, saspeech, kss, hi_fi_captain, tsync2,
   lanfrica and xiao_ya.
 * **Datasets with no documented license**, such as amy, irina and huayan.
+  `fa_IR-magnoliasis` is in this group: its Kaggle dataset lists no license
+  and does not say who the speaker is or where the recordings came from.
+* **Datasets whose uploader may not hold the rights.** `es_MX-ald-medium` is now
+  fine-tuned from rdh, and its dataset is labeled Unlicense. But the recordings
+  look like vlog audio, and the dataset does not say whether the uploader is
+  the speaker or has the speaker's permission.
 * **Permissively licensed voices whose base is not documented.** Their own
   datasets allow commercial use, but their cards do not say whether they were
   trained from scratch. Ask the person who trained them:
@@ -163,4 +194,8 @@ licensing information lives (see [Voice licensing](LICENSING.md)).
 [rdh]: https://github.com/r-dh/dutch-vl-tts
 [hifi-tts]: https://www.openslr.org/109/
 [jenny]: https://github.com/dioco-group/jenny-tts-dataset
+[cmu]: http://festvox.org/cmu_indic/index.html
 [bryce]: https://brycebeattie.com/files/tts/
+[hitz]: https://huggingface.co/HiTZ/TTS-eu_antton
+[itzune-antton]: https://huggingface.co/datasets/itzune/antton-dataset
+[itzune-maider]: https://huggingface.co/datasets/itzune/maider-dataset

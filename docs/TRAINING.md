@@ -413,6 +413,21 @@ To make this compatible with other Piper voices, rename `model.onnx` as `<langua
 * `en_US-lessac-medium.onnx` (from the export script)
 * `en_US-lessac-medium.onnx.json` (from training)
 
+### Phoneme Counts
+
+The config written during training includes `phoneme_counts`: how many times each phoneme occurs in the voice's training data, counted from the cached phoneme ids. Phonemes that never occur are left out, and so are the `_`, `^`, and `$` tokens. Phonemes that share an id, like `。` and `.` in the Chinese map, each get that id's count. A phoneme that is missing or rare was barely trained on in this voice's own data, even if a base model it was warmstarted from saw it.
+
+To add counts to the config of a voice trained before they were written automatically, point the script at the voice's training CSV and cache directory:
+
+``` sh
+python3 -m piper.train.phoneme_counts \
+  --config /path/to/en_US-lessac-medium.onnx.json \
+  --csv /path/to/dataset/metadata.csv \
+  --cache-dir /path/to/cache
+```
+
+This edits the config in place and keeps every other key. Use `--output` to write somewhere else, `--dry-run` to only print the counts, and `--dataset-type phoneme_ids` for a voice trained from phoneme ids.
+
 ## Hardware
 
 Most of the Piper voices were trained/fine-tuned on a Threadripper 1900X with 128GB of RAM and either an NVIDIA A6000 (48 GB VRAM) or a 3090 (24 GB VRAM).

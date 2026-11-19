@@ -95,7 +95,7 @@ def main() -> None:
             f"Unable to find voice: {model_path} (use piper.download_voices)"
         )
 
-    default_model_id = model_path.name.rstrip(".onnx")
+    default_model_id = model_path.stem
 
     # Load voice
     default_voice = PiperVoice.load(
@@ -226,7 +226,7 @@ def main() -> None:
                     config_paths.append(config_path)
 
         for config_path in config_paths:
-            model_id = config_path.name.rstrip(".onnx.json")
+            model_id = config_path.name.removesuffix(".onnx.json")
             if model_id in voices_dict:
                 continue
 
@@ -350,22 +350,18 @@ def main() -> None:
         with io.BytesIO() as wav_io:
             wav_file: wave.Wave_write = wave.open(wav_io, "wb")
             with wav_file:
-                wav_params_set = False
+                # Set up front so that text without speech still gives a valid WAV
+                wav_file.setframerate(voice.config.sample_rate)
+                wav_file.setsampwidth(2)
+                wav_file.setnchannels(1)
                 for i, audio_chunk in enumerate(
                     voice.synthesize(text, syn_config, include_alignments=True)
                 ):
-                    if not wav_params_set:
-                        wav_file.setframerate(audio_chunk.sample_rate)
-                        wav_file.setsampwidth(audio_chunk.sample_width)
-                        wav_file.setnchannels(audio_chunk.sample_channels)
-                        wav_params_set = True
-
                     if i > 0:
                         wav_file.writeframes(
                             bytes(
-                                int(
-                                    voice.config.sample_rate * args.sentence_silence * 2
-                                )
+                                int(voice.config.sample_rate * args.sentence_silence)
+                                * 2
                             )
                         )
 
