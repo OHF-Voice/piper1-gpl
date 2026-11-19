@@ -31,8 +31,9 @@ class AudioPlayer:
                 "s16le",
                 "-sample_rate",
                 str(self.sample_rate),
-                "-ch_layout",
-                "mono",
+                # No channel option: ffmpeg 7 rejects -ac ("Option not found")
+                # and ffmpeg before 5.1 has no -ch_layout. Raw PCM input is
+                # mono by default in every ffmpeg version, as Piper's audio is.
                 "-",
             ],
             stdin=subprocess.PIPE,
