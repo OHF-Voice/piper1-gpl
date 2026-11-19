@@ -226,7 +226,8 @@ def main() -> None:
             # Write WAV file to stdout
             with tempfile.NamedTemporaryFile("wb+", suffix=".wav") as temp_wav_file:
                 wav_file = wave.open(temp_wav_file.name, "wb")
-                lines_to_wav()
+                with wav_file:
+                    lines_to_wav()
 
                 temp_wav_file.seek(0)
                 shutil.copyfileobj(temp_wav_file, sys.stdout.buffer)
