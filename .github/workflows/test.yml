@@ -58,7 +58,7 @@ jobs:
 
       - name: Install Piper
         run: |
-          script/setup --dev --train --zh --ja --th --torch-cpu --constraint .github/constraints.txt
+          script/setup --dev --train --zh --ja --th --http --torch-cpu --constraint .github/constraints.txt
           script/dev_build
 
       - name: Run tests
