@@ -267,9 +267,7 @@ def main() -> None:
             raise ValueError("voice is required")
 
         force_redownload = data.get("force_redownload", False)
-        download_voice(model_id, download_dir, force_redownload=force_redownload)
-
-        return model_id
+        return download_voice(model_id, download_dir, force_redownload=force_redownload)
 
     @app.route("/synthesize", methods=["POST"])
     def app_synthesize() -> bytes:
