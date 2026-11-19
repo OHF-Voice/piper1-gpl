@@ -16,7 +16,12 @@ import onnxruntime
 from .config import PhonemeType, PiperConfig, SynthesisConfig
 from .const import BOS, EOS, PAD
 from .phoneme_ids import phonemes_to_ids
-from .phonemize_espeak import ESPEAK_DATA_DIR, ESPEAK_LOCK, EspeakPhonemizer
+from .phonemize_espeak import (
+    ESPEAK_DATA_DIR,
+    ESPEAK_LOCK,
+    EspeakPhonemizer,
+    split_raw_phonemes,
+)
 from .tashkeel import TashkeelDiacritizer
 
 _ESPEAK_PHONEMIZER: Optional[EspeakPhonemizer] = None
@@ -285,7 +290,12 @@ class PiperVoice:
                 if (i > 0) and (text_parts[i - 1].endswith(" ")):
                     phonemes[-1].append(" ")
 
-                phonemes[-1].extend(text_part[2:-2].strip())
+                phonemes[-1].extend(
+                    split_raw_phonemes(
+                        text_part[2:-2].strip(),
+                        vowel_clusters=self.config.vowel_clusters,
+                    )
+                )
 
                 if (i < (len(text_parts)) - 1) and (text_parts[i + 1].startswith(" ")):
                     phonemes[-1].append(" ")
@@ -471,20 +481,17 @@ class PiperVoice:
 
         :return: Phoneme/audio alignments if include_alignments is True, otherwise None.
         """
+        if set_wav_format:
+            # Set the format before synthesizing so that text without any
+            # speech still produces a valid (empty) WAV file.
+            wav_file.setframerate(self.config.sample_rate)
+            wav_file.setsampwidth(2)
+            wav_file.setnchannels(1)
+
         alignments: list[PhonemeAlignment] = []
-        first_chunk = True
         for audio_chunk in self.synthesize(
             text, syn_config=syn_config, include_alignments=include_alignments
         ):
-            if first_chunk:
-                if set_wav_format:
-                    # Set audio format on first chunk
-                    wav_file.setframerate(audio_chunk.sample_rate)
-                    wav_file.setsampwidth(audio_chunk.sample_width)
-                    wav_file.setnchannels(audio_chunk.sample_channels)
-
-                first_chunk = False
-
             wav_file.writeframes(audio_chunk.audio_int16_bytes)
 
             if include_alignments and audio_chunk.phoneme_alignments:

@@ -30,6 +30,33 @@ download_piper_model(VOICE "zh/zh_CN/chaowen/medium/zh_CN-chaowen-medium"
 
 download_g2pw_data(OUTPUT_DIR G2PW_MODEL_DIR)
 
+# Split the English voice for the streaming tests. This needs Python with the
+# onnx package; without it the streaming tests are skipped.
+set(EN_STREAMING_MODEL_DIR "${CMAKE_BINARY_DIR}/models/en-streaming")
+find_package(Python3 COMPONENTS Interpreter QUIET)
+if(Python3_FOUND AND NOT EXISTS "${EN_STREAMING_MODEL_DIR}/model.decoder.onnx")
+    execute_process(
+        COMMAND ${Python3_EXECUTABLE} -c "import onnx"
+        RESULT_VARIABLE PYTHON_ONNX_RESULT
+        OUTPUT_QUIET ERROR_QUIET
+    )
+    if(PYTHON_ONNX_RESULT EQUAL 0)
+        file(COPY "${EN_MODEL_DIR}/model.onnx" "${EN_MODEL_DIR}/model.onnx.json"
+             DESTINATION "${EN_STREAMING_MODEL_DIR}")
+        execute_process(
+            COMMAND ${Python3_EXECUTABLE}
+                    "${CMAKE_CURRENT_SOURCE_DIR}/../../src/piper/split_voice_for_streaming.py"
+                    "${EN_STREAMING_MODEL_DIR}/model.onnx"
+            RESULT_VARIABLE SPLIT_VOICE_RESULT
+        )
+        if(NOT SPLIT_VOICE_RESULT EQUAL 0)
+            message(WARNING "Splitting the test voice failed; streaming tests will be skipped")
+        endif()
+    else()
+        message(STATUS "Python onnx package not found; streaming tests will be skipped")
+    endif()
+endif()
+
 add_executable(piper_test
    test_piper.cpp
    utils/piper_test_assets.h
@@ -39,6 +66,7 @@ add_executable(piper_test
    test_wav_headers.cpp
    test_wavfile.cpp
    test_japanese.cpp
+   test_streaming.cpp
 )
 enable_clang_tidy(piper_test)
 
@@ -51,6 +79,7 @@ target_compile_definitions(piper_test
     PRIVATE "EN_TEST_MODEL_DIR=\"${EN_MODEL_DIR}\""
     PRIVATE "TEXT_TEST_MODEL_DIR=\"${TEXT_MODEL_DIR}\""
     PRIVATE "ZH_TEST_MODEL_DIR=\"${ZH_MODEL_DIR}\""
+    PRIVATE "EN_STREAMING_TEST_MODEL_DIR=\"${EN_STREAMING_MODEL_DIR}\""
     PRIVATE "G2PW_TEST_DATA_DIR=\"${G2PW_MODEL_DIR}\""
 )
 
