@@ -61,6 +61,11 @@
 - Fix the installed `libpiper` CLI on Windows
     - The CLI was installed to `bin` but `piper.dll` and the bundled onnxruntime DLLs to `lib`, so it failed to start outside the build tree (`0xC0000135`); it also looked for the espeak-ng data beside the executable, where the install never put it
     - The runtime DLLs and a copy of the espeak-ng data now go beside the CLI; import libraries stay in `lib` and the data stays in `share` for API callers
+- Download `libpiper`'s onnxruntime from Microsoft's NuGet package
+    - The release archives `libpiper` downloaded from `github.com/microsoft/onnxruntime` started returning 404 on 2026-11-19, along with the repository itself, so `libpiper` no longer configured on any platform
+    - `Microsoft.ML.OnnxRuntime` on nuget.org carries the same 1.22.0 build (the Linux x64 library is byte-identical) for Linux x64/aarch64, macOS x86_64/arm64 and Windows x64, with the headers; the build lays it out like the release archives, under the file names the libraries' install names and sonames refer to
+    - The package is checked against a pinned SHA256, and a failed download now stops with `Failed to download <url>` instead of saving the error page and failing later with `Could not find ONNXRUNTIME_LIB`
+    - `-DONNXRUNTIME_URL` still takes an archive laid out like the release archives (as the 32-bit ARM build does), and `-DONNXRUNTIME_SHA256` checks it
 - Build `libpiper` sources as UTF-8 with MSVC
     - On a Windows machine with a non-UTF-8 code page (e.g. 936), the Chinese phonemizer's UTF-8 punctuation literals were read in the local code page and the build failed
 
