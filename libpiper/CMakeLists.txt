@@ -40,10 +40,34 @@ else()
     set(UCD_STATIC_LIB ${UCD_TOOLS_DIR}/${UCD_CONFIG_SUBDIR}libucd.a)
 endif()
 
+# espeak-ng's compat shims (unistd.h, endian.h, getopt.h) test
+# `#if __has_include_next(...)`, which MSVC 14.52 (Visual Studio 2026) rejects
+# with C7780 because MSVC has no __has_include_next. Backport of espeak-ng
+# 021e465, which defines it as 0 when the compiler lacks it. Drop this once the
+# pinned commit includes that fix.
+set(ESPEAKNG_PATCH_SCRIPT ${CMAKE_CURRENT_BINARY_DIR}/espeak_ng_patch.cmake)
+file(WRITE ${ESPEAKNG_PATCH_SCRIPT} [=[
+foreach(header unistd endian getopt)
+    set(path "${ESPEAKNG_SOURCE_DIR}/src/include/compat/${header}.h")
+    file(READ "${path}" content)
+    string(FIND "${content}" "#ifndef __has_include_next" guarded)
+    if(guarded EQUAL -1)
+        set(anchor "#if __has_include_next(<${header}.h>)")
+        string(FIND "${content}" "${anchor}" anchor_pos)
+        if(anchor_pos EQUAL -1)
+            message(FATAL_ERROR "${path}: '${anchor}' not found")
+        endif()
+        string(REPLACE "${anchor}" "#ifndef __has_include_next // MSVC has no __has_include_next\n#define __has_include_next(header) 0\n#endif\n\n${anchor}" content "${content}")
+        file(WRITE "${path}" "${content}")
+    endif()
+endforeach()
+]=])
+
 ExternalProject_Add(espeak_ng_external
     GIT_REPOSITORY https://github.com/espeak-ng/espeak-ng.git
     GIT_TAG 212928b394a96e8fd2096616bfd54e17845c48f6  # 2025-Mar-22
     PREFIX ${ESPEAKNG_BUILD_DIR}
+    PATCH_COMMAND ${CMAKE_COMMAND} -DESPEAKNG_SOURCE_DIR=<SOURCE_DIR> -P ${ESPEAKNG_PATCH_SCRIPT}
     CMAKE_ARGS
         -DCMAKE_INSTALL_PREFIX=${ESPEAKNG_INSTALL_DIR}
         -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
