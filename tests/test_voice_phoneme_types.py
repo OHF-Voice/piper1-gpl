@@ -55,6 +55,8 @@ def _stub_phonemizer(monkeypatch, module_name: str, class_name: str) -> list:
 @pytest.mark.parametrize("phoneme_type", list(_PHONEMIZERS))
 def test_phoneme_type_uses_its_own_phonemizer(monkeypatch, phoneme_type):
     module_name, class_name = _PHONEMIZERS[phoneme_type]
+    # Not importable without its extra (e.g. zh), as in the wheel tests
+    pytest.importorskip(module_name)
     used = _stub_phonemizer(monkeypatch, module_name, class_name)
     assert _voice(phoneme_type).phonemize("test") == [["x"]]
     assert used == [class_name]

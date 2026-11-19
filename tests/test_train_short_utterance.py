@@ -12,8 +12,8 @@ padded reference slice, and the discriminator feature loss failed with
 from typing import Any
 
 import pytest
-import torch
 
+torch = pytest.importorskip("torch")
 lightning_module = pytest.importorskip("piper.train.vits.lightning")
 dataset_module = pytest.importorskip("piper.train.vits.dataset")
 # The training step aligns with the Cython extension from build_monotonic_align.sh
