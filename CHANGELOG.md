@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Write a valid, empty WAV file when the text has nothing to speak
+    - `PiperVoice.synthesize_wav`, the `piper` command and `/synthesize` in `piper.http_server` set the WAV format from the first audio chunk, so empty input left the format unset and closing the file raised `wave.Error: # channels not specified`
+    - The format now comes from the voice config before synthesis starts
+
 - Stream audio from `libpiper` for voices split into an encoder and a decoder
     - `piper_synthesize_next` returned one chunk per sentence, so the first sound of a long sentence came only after the whole sentence was synthesized (about 4 seconds for a 6 second sentence of a high voice used by VoiceOver on an Apple M3)
     - `python3 -m piper.split_voice_for_streaming model.onnx` writes `model.encoder.onnx` and `model.decoder.onnx`; when both are next to the model, `piper_create` loads them instead of the full model and the decoder runs in chunks
@@ -15,6 +19,10 @@
 - Phonemize Hebrew with `HebrewPhonemizer` in `piper.train.infer_torch`
     - The dispatch had no `HEBREW` branch, so a Hebrew checkpoint was inferred from raw espeak-ng output with no error
     - The espeak-ng fallback in `infer_torch` and in the training dataset now raises `ValueError` for any phoneme type other than `espeak`, as `PiperVoice.phonemize` already does, so a type without its own branch fails instead of training or inferring on the wrong phonemes
+- Fix training failing on a clip shorter than `segment_size` (#155)
+    - A clip that ends up shorter than `segment_size` (8192 samples) after VAD trimming makes the generator produce fewer samples than the reference slice, which the collate function pads to `segment_size`; when every clip in a batch is that short (always with `--data.batch_size 1`), the discriminator feature loss failed with `The size of tensor a (8192) must match the size of tensor b (7424)`
+    - The generated and reference audio are now both trimmed to the shorter of the two before the discriminators, so the clip trains on its real content
+    - A clip shorter than the STFT window (1024 samples) still cannot be trained on
 - Add synthesis settings and a speaker picker to the web page of `piper.http_server`
     - `/synthesize` has always accepted `length_scale`, `noise_scale`, `noise_w_scale`, and `speaker`/`speaker_id`, but the page sent nothing but `text`, so the only way to hear a voice's other speakers or a different speaking rate was to leave the browser and use `curl`
     - The page now has a **Settings** section with a slider and a number box per scale, plus a speaker drop-down for multi-speaker voices; **Reset to voice defaults** restores the starting values
@@ -53,8 +61,16 @@
 - Fix the installed `libpiper` CLI on Windows
     - The CLI was installed to `bin` but `piper.dll` and the bundled onnxruntime DLLs to `lib`, so it failed to start outside the build tree (`0xC0000135`); it also looked for the espeak-ng data beside the executable, where the install never put it
     - The runtime DLLs and a copy of the espeak-ng data now go beside the CLI; import libraries stay in `lib` and the data stays in `share` for API callers
+- Download `libpiper`'s onnxruntime from Microsoft's NuGet package
+    - The release archives `libpiper` downloaded from `github.com/microsoft/onnxruntime` started returning 404 on 2026-11-19, along with the repository itself, so `libpiper` no longer configured on any platform
+    - `Microsoft.ML.OnnxRuntime` on nuget.org carries the same 1.22.0 build (the Linux x64 library is byte-identical) for Linux x64/aarch64, macOS x86_64/arm64 and Windows x64, with the headers; the build lays it out like the release archives, under the file names the libraries' install names and sonames refer to
+    - The package is checked against a pinned SHA256, and a failed download now stops with `Failed to download <url>` instead of saving the error page and failing later with `Could not find ONNXRUNTIME_LIB`
+    - `-DONNXRUNTIME_URL` still takes an archive laid out like the release archives (as the 32-bit ARM build does), and `-DONNXRUNTIME_SHA256` checks it
 - Build `libpiper` sources as UTF-8 with MSVC
     - On a Windows machine with a non-UTF-8 code page (e.g. 936), the Chinese phonemizer's UTF-8 punctuation literals were read in the local code page and the build failed
+- Build espeak-ng with MSVC 14.52 (Visual Studio 2026), for `libpiper` and for the Python package
+    - espeak-ng's compat headers (`unistd.h`, `endian.h`, `getopt.h`) test `#if __has_include_next(...)`, and MSVC has no `__has_include_next`; MSVC 14.44 let it pass, but 14.52 stops with errors C7780 and C1017, so the espeak-ng build failed on current Windows runners
+    - Both espeak-ng builds now patch the headers after checkout to define `__has_include_next(header)` as 0 when the compiler lacks it, as espeak-ng itself does since 021e465; the patch is a no-op for GCC and Clang, which define it
 
 - Keep voice files intact when a download is interrupted
     - `urlopen` stops quietly when a connection drops, so a truncated model or config was written to its final path and treated as cached from then on, and `--force-redownload` truncated a working voice before the replacement had arrived

@@ -13,19 +13,54 @@ find_package(Python COMPONENTS Development.Module Development.SABIModule REQUIRE
 set(ESPEAKNG_BUILD_DIR ${CMAKE_BINARY_DIR}/espeak_ng)
 set(ESPEAKNG_INSTALL_DIR ${CMAKE_BINARY_DIR}/espeak_ng-install)
 
+# ucd-tools is built, not installed. Multi-config generators place its static
+# library in a configuration subdirectory; single-config generators do not.
+get_property(IS_MULTI_CONFIG GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
+if(IS_MULTI_CONFIG)
+    set(UCD_CONFIG_SUBDIR "$<CONFIG>/")
+else()
+    set(UCD_CONFIG_SUBDIR "")
+endif()
+
+set(UCD_TOOLS_DIR ${ESPEAKNG_BUILD_DIR}/src/espeak_ng_external-build/src/ucd-tools)
+
 if(WIN32)
     # Special handling for Windows
     set(ESPEAKNG_STATIC_LIB ${ESPEAKNG_INSTALL_DIR}/lib/espeak-ng.lib)
-    set(UCD_STATIC_LIB ${ESPEAKNG_BUILD_DIR}/src/espeak_ng_external-build/src/ucd-tools/ucd.lib)
+    set(UCD_STATIC_LIB ${UCD_TOOLS_DIR}/${UCD_CONFIG_SUBDIR}ucd.lib)
 else()
     set(ESPEAKNG_STATIC_LIB ${ESPEAKNG_INSTALL_DIR}/lib/libespeak-ng.a)
-    set(UCD_STATIC_LIB ${ESPEAKNG_BUILD_DIR}/src/espeak_ng_external-build/src/ucd-tools/libucd.a)
+    set(UCD_STATIC_LIB ${UCD_TOOLS_DIR}/${UCD_CONFIG_SUBDIR}libucd.a)
 endif()
+
+# espeak-ng's compat shims (unistd.h, endian.h, getopt.h) test
+# `#if __has_include_next(...)`, which MSVC 14.52 (Visual Studio 2026) rejects
+# with C7780 because MSVC has no __has_include_next. Backport of espeak-ng
+# 021e465, which defines it as 0 when the compiler lacks it. Drop this once the
+# pinned commit includes that fix.
+set(ESPEAKNG_PATCH_SCRIPT ${CMAKE_CURRENT_BINARY_DIR}/espeak_ng_patch.cmake)
+file(WRITE ${ESPEAKNG_PATCH_SCRIPT} [=[
+foreach(header unistd endian getopt)
+    set(path "${ESPEAKNG_SOURCE_DIR}/src/include/compat/${header}.h")
+    file(READ "${path}" content)
+    string(FIND "${content}" "#ifndef __has_include_next" guarded)
+    if(guarded EQUAL -1)
+        set(anchor "#if __has_include_next(<${header}.h>)")
+        string(FIND "${content}" "${anchor}" anchor_pos)
+        if(anchor_pos EQUAL -1)
+            message(FATAL_ERROR "${path}: '${anchor}' not found")
+        endif()
+        string(REPLACE "${anchor}" "#ifndef __has_include_next // MSVC has no __has_include_next\n#define __has_include_next(header) 0\n#endif\n\n${anchor}" content "${content}")
+        file(WRITE "${path}" "${content}")
+    endif()
+endforeach()
+]=])
 
 ExternalProject_Add(espeak_ng_external
     GIT_REPOSITORY https://github.com/espeak-ng/espeak-ng.git
-    GIT_TAG 724808c  # 2026-Apr-06
+    GIT_TAG 724808c5a83f9ef95fdd0db886ba7ba537ff224a  # 2026-Apr-06
     PREFIX ${ESPEAKNG_BUILD_DIR}
+    PATCH_COMMAND ${CMAKE_COMMAND} -DESPEAKNG_SOURCE_DIR=<SOURCE_DIR> -P ${ESPEAKNG_PATCH_SCRIPT}
     CMAKE_ARGS
         -DCMAKE_INSTALL_PREFIX=${ESPEAKNG_INSTALL_DIR}
         -DBUILD_SHARED_LIBS:BOOL=OFF
