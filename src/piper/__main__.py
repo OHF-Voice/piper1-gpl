@@ -154,17 +154,13 @@ def main() -> None:
         noise_w_scale=args.noise_w_scale,
         normalize_audio=(not args.no_normalize),
         volume=args.volume,
+        sentence_silence=args.sentence_silence,
     )
 
     wav_file: wave.Wave_write
 
     # 16-bit samples for silence.
-    # Compute whole samples first, then multiply by 2 bytes/sample so the byte
-    # count is always even. Otherwise an odd byte count would write a half frame
-    # of 16-bit PCM and misalign every subsequent sample (see issue #253).
-    silence_int16_bytes = bytes(
-        int(voice.config.sample_rate * args.sentence_silence) * 2
-    )
+    silence_int16_bytes = voice.get_silence_bytes(args.sentence_silence)
 
     def lines_to_wav() -> None:
         wav_params_set = False

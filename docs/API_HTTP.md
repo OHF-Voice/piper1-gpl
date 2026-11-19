@@ -61,6 +61,7 @@ The JSON data fields are:
 * `length_scale` (optional) - speaking speed; defaults to 1
 * `noise_scale` (optional) - speaking variability
 * `noise_w_scale` (optional) - phoneme width variability
+* `sentence_silence` (optional) - seconds of silence between sentences
 
 Fields that are left out fall back to the matching command-line argument, and then
 to the voice config. See `/info` for the defaults of the current voice.
