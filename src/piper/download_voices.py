@@ -111,14 +111,14 @@ def resolve_alias(voice: str) -> Optional[str]:
 
 def download_voice(
     voice: str, download_dir: Path, force_redownload: bool = False
-) -> None:
-    """Download a voice model and config file to a directory."""
+) -> str:
+    """Download a voice model and config file, returning its current name."""
     voice = voice.strip()
 
     if VOICE_PATTERN.match(voice):
         try:
             _download_voice(voice, download_dir, force_redownload=force_redownload)
-            return
+            return voice
         except HTTPError as error:
             if error.code != 404:
                 raise
@@ -142,6 +142,7 @@ def download_voice(
         current_name,
     )
     _download_voice(current_name, download_dir, force_redownload=force_redownload)
+    return current_name
 
 
 def _download_voice(

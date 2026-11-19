@@ -25,6 +25,8 @@ from piper.phoneme_ids import DEFAULT_PHONEME_ID_MAP
 from piper.phoneme_ids import phonemes_to_ids as default_phonemes_to_ids
 from piper.phonemize_espeak import EspeakPhonemizer
 
+from ..phoneme_counts import SIDECAR_NAME as PHONEME_COUNTS_SIDECAR_NAME
+from ..phoneme_counts import count_cached_phonemes
 from .mel_processing import spectrogram_torch
 from .utils import get_cache_id
 
@@ -219,15 +221,9 @@ class VitsDataModule(L.LightningDataModule):
 
             self.piper_config.speaker_id_map = speaker_id_map
 
-        # Write config
-        self.config_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.config_path, "w", encoding="utf-8") as config_file:
-            json.dump(
-                self.piper_config.to_dict(),
-                config_file,
-                ensure_ascii=False,
-                indent=2,
-            )
+        # Write config now so it exists even if preprocessing stops partway;
+        # it's written again with phoneme counts at the end.
+        self._write_config()
 
         if self.phoneme_type == PhonemeType.PINYIN:
             from piper.phonemize_chinese import ChinesePhonemizer
@@ -296,6 +292,7 @@ class VitsDataModule(L.LightningDataModule):
         vad = SileroVoiceActivityDetector()
 
         num_utterances = 0
+        phoneme_ids_paths: List[Path] = []
         report_prepare: Optional[bool] = None
         with open(self.csv_path, "r", encoding="utf-8") as csv_file:
             reader = csv.reader(csv_file, delimiter="|")
@@ -438,11 +435,41 @@ class VitsDataModule(L.LightningDataModule):
                         report_prepare = True
 
                 num_utterances += 1
+                phoneme_ids_paths.append(phoneme_ids_path)
                 if report_prepare:
                     _LOGGER.info("Processing utterances...")
                     report_prepare = False
 
         _LOGGER.info("Processed %s utterance(s)", num_utterances)
+
+        try:
+            self.piper_config.phoneme_counts = count_cached_phonemes(
+                phoneme_ids_paths,
+                phoneme_id_map,
+                sidecar_path=self.cache_dir / PHONEME_COUNTS_SIDECAR_NAME,
+            )
+        except ValueError as err:
+            # A phoneme with several ids can't be counted; never stop
+            # training over it.
+            _LOGGER.warning("Not writing phoneme counts: %s", err)
+        else:
+            _LOGGER.info(
+                "Training data uses %s of %s phoneme(s) in the id map",
+                len(self.piper_config.phoneme_counts),
+                len(phoneme_id_map),
+            )
+            self._write_config()
+
+    def _write_config(self) -> None:
+        assert self.piper_config is not None
+        self.config_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(self.config_path, "w", encoding="utf-8") as config_file:
+            json.dump(
+                self.piper_config.to_dict(),
+                config_file,
+                ensure_ascii=False,
+                indent=2,
+            )
 
     def setup(self, stage: str) -> None:
         assert self.piper_config is not None
@@ -480,7 +507,7 @@ class VitsDataModule(L.LightningDataModule):
                 cache_id = get_cache_id(row_number, text, speaker_id=speaker_id)
 
                 phoneme_ids_path = self.cache_dir / f"{cache_id}.phonemes.pt"
-                if not phoneme_ids_path:
+                if not phoneme_ids_path.exists():
                     _LOGGER.warning(
                         "Missing phoneme ids for %s: %s",
                         audio_path,
@@ -489,7 +516,7 @@ class VitsDataModule(L.LightningDataModule):
                     continue
 
                 audio_norm_path = self.cache_dir / f"{cache_id}.audio.pt"
-                if not audio_norm_path:
+                if not audio_norm_path.exists():
                     _LOGGER.warning(
                         "Missing normalized audio for %s: %s",
                         audio_path,
@@ -498,7 +525,7 @@ class VitsDataModule(L.LightningDataModule):
                     continue
 
                 audio_spec_path = self.cache_dir / f"{cache_id}.spec.pt"
-                if not audio_spec_path:
+                if not audio_spec_path.exists():
                     _LOGGER.warning(
                         "Missing mel spec for %s: %s",
                         audio_path,

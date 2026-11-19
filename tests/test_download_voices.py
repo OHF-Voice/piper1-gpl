@@ -63,7 +63,9 @@ def test_download_current_name(tmp_path: Path) -> None:
     """Test that a current voice name downloads without consulting voices.json."""
     fake = FakeUrlopen({"en_US-lessac-medium": b"fake"})
     with patch.object(download_voices, "urlopen", fake):
-        download_voices.download_voice("en_US-lessac-medium", tmp_path)
+        name = download_voices.download_voice("en_US-lessac-medium", tmp_path)
+
+    assert name == "en_US-lessac-medium"
 
     assert (tmp_path / "en_US-lessac-medium.onnx").read_bytes() == b"fake"
     assert (tmp_path / "en_US-lessac-medium.onnx.json").read_bytes() == b"fake"
@@ -77,7 +79,9 @@ def test_download_legacy_name(tmp_path: Path) -> None:
     """Test that a pre-1.0 name is resolved through its alias."""
     fake = FakeUrlopen({"de_DE-karlsson-low": b"fake"})
     with patch.object(download_voices, "urlopen", fake):
-        download_voices.download_voice("de-karlsson-low", tmp_path)
+        name = download_voices.download_voice("de-karlsson-low", tmp_path)
+
+    assert name == "de_DE-karlsson-low"
 
     # Files are saved under the current name
     assert (tmp_path / "de_DE-karlsson-low.onnx").exists()
@@ -90,7 +94,9 @@ def test_download_renamed_voice(tmp_path: Path) -> None:
     # first and only resolved after the download 404s.
     fake = FakeUrlopen({"ja_JP-hi_fi_captain-medium": b"fake"})
     with patch.object(download_voices, "urlopen", fake):
-        download_voices.download_voice("ja_JA-hi_fi_captain-medium", tmp_path)
+        name = download_voices.download_voice("ja_JA-hi_fi_captain-medium", tmp_path)
+
+    assert name == "ja_JP-hi_fi_captain-medium"
 
     assert (tmp_path / "ja_JP-hi_fi_captain-medium.onnx").exists()
     assert not (tmp_path / "ja_JA-hi_fi_captain-medium.onnx").exists()
