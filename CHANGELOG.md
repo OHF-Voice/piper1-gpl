@@ -63,6 +63,9 @@
     - The runtime DLLs and a copy of the espeak-ng data now go beside the CLI; import libraries stay in `lib` and the data stays in `share` for API callers
 - Build `libpiper` sources as UTF-8 with MSVC
     - On a Windows machine with a non-UTF-8 code page (e.g. 936), the Chinese phonemizer's UTF-8 punctuation literals were read in the local code page and the build failed
+- Build espeak-ng with MSVC 14.52 (Visual Studio 2026), for `libpiper` and for the Python package
+    - espeak-ng's compat headers (`unistd.h`, `endian.h`, `getopt.h`) test `#if __has_include_next(...)`, and MSVC has no `__has_include_next`; MSVC 14.44 let it pass, but 14.52 stops with errors C7780 and C1017, so the espeak-ng build failed on current Windows runners
+    - Both espeak-ng builds now patch the headers after checkout to define `__has_include_next(header)` as 0 when the compiler lacks it, as espeak-ng itself does since 021e465; the patch is a no-op for GCC and Clang, which define it
 
 - Keep voice files intact when a download is interrupted
     - `urlopen` stops quietly when a connection drops, so a truncated model or config was written to its final path and treated as cached from then on, and `--force-redownload` truncated a working voice before the replacement had arrived
