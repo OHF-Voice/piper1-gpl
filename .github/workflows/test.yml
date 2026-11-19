@@ -3,28 +3,62 @@ name: Test
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
   pull_request:
     branches:
       - main
 
 jobs:
+  test_sdist:
+    name: Test source distribution
+    # Same image, Python and package pins as the job below
+    runs-on: ubuntu-26.04
+    env:
+      # Also pins what python -m build installs into its isolated build
+      # environment, and Piper's dependencies when the wheel is installed
+      PIP_CONSTRAINT: ${{ github.workspace }}/.github/constraints.txt
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12.15"
+
+      - name: Build wheel from source distribution
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install build
+          python -m build
+
+      - name: Test installed wheel
+        run: |
+          python -m pip install pytest dist/*.whl
+          mkdir -p "$RUNNER_TEMP/sdist-tests/tests"
+          cp tests/__init__.py tests/test_espeak_phonemizer.py "$RUNNER_TEMP/sdist-tests/tests/"
+          cd "$RUNNER_TEMP/sdist-tests"
+          python -I -m pytest tests/test_espeak_phonemizer.py
+
   build_wheels:
     name: Test on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest]
+        # Pinned, like Python and the packages in .github/constraints.txt, so
+        # a run only changes when a commit does.
+        os: [ubuntu-26.04]
 
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.12.15"
 
       - name: Install Piper
         run: |
-          script/setup --dev --train --zh --ja --torch-cpu
+          script/setup --dev --train --zh --ja --th --torch-cpu --constraint .github/constraints.txt
           script/dev_build
 
       - name: Run tests

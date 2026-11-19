@@ -255,6 +255,23 @@ def test_raw_phonemes() -> None:
     assert phonemes_str == "bˈætmæn ɪz bɹˈuːs wˈe‍ɪn"
 
 
+def test_raw_phonemes_match_espeak() -> None:
+    """Test that [[ raw phonemes ]] are split like espeak-ng output."""
+    voice = PiperVoice.load(_TEST_VOICE)
+
+    # Ligatures and ASCII lookalikes are replaced with what espeak-ng writes
+    assert voice.phonemize("[[ 'stoʊnhɛnʤ ]]") == voice.phonemize("[[ ˈstoʊnhɛndʒ ]]")
+    assert voice.phonemize("[[ ʧˈɜːʧ gˈʊd ]]") == voice.phonemize("church good")
+    assert voice.phonemize("[[ ʦ ʣ ʥ ʨ ]]") == [list("ts dz dʑ tɕ")]
+
+    # Precomposed characters are decomposed into separate phonemes
+    assert voice.phonemize("[[ ã ]]") == [["a", "̃"]]
+
+    # Vowel clusters are merged
+    voice.config.vowel_clusters = EN_US_VOWEL_CLUSTERS
+    assert voice.phonemize("[[ nˈoʊ ]]") == voice.phonemize("no")
+
+
 def test_synthesize_alignment() -> None:
     """Test synthesis with phoneme alignments."""
     alignments = [
