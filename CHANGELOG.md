@@ -81,6 +81,9 @@
 - Fix a use-after-free when more than one espeak-ng phonemizer is created
     - Every `EspeakPhonemizer()` called `espeak_Initialize()` again, which frees and reloads the phoneme tables while the current voice still points into the old ones, so the next phonemization read freed memory; whether that crashed depended on memory layout
     - espeak-ng is now initialized once per data directory, and switching directories terminates it first
+- Play audio through ffplay with any ffmpeg version
+    - Since 1.4.0, `piper` without an output file passed `-ch_layout mono` to ffplay instead of `-ac 1`, which ffmpeg 7 rejects. But ffmpeg before 5.1 has no `-ch_layout`, so on Ubuntu 22.04 (ffmpeg 4.4) ffplay exited at once ("Option not found") and `piper` failed with a broken pipe
+    - ffplay now gets no channel option: raw PCM input is mono by default in every ffmpeg version, and Piper's audio is mono
 - Fix `piper -f -` writing a truncated or empty WAV file to stdout
     - The temporary WAV file was copied to stdout before its writer was closed, so whatever was still buffered was lost and the header kept stale sizes; short single-sentence outputs could come out empty
 - Add `requests` to the `th` extra

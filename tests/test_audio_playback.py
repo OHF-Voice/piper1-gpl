@@ -93,3 +93,23 @@ def test_reentering_player_resets_audio_duration() -> None:
 
     first_process.wait.assert_called_once_with(timeout=13.0)
     second_process.wait.assert_called_once_with(timeout=5.0)
+
+
+def test_ffplay_command_has_no_channel_option() -> None:
+    """Play with any ffmpeg version: rely on raw PCM input defaulting to mono.
+
+    -ac fails on ffmpeg 7 and -ch_layout on ffmpeg before 5.1 (#149).
+    """
+    process = _process_mock()
+
+    with patch("piper.audio_playback.subprocess.Popen", return_value=process) as popen:
+        with AudioPlayer(sample_rate=22050):
+            pass
+
+    args = popen.call_args.args[0]
+    assert args[0] == "ffplay"
+    assert args[args.index("-f") + 1] == "s16le"
+    assert args[args.index("-sample_rate") + 1] == "22050"
+    assert "-ac" not in args
+    assert "-ch_layout" not in args
+    assert args[-1] == "-"
