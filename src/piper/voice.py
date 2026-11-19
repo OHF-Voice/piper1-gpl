@@ -481,20 +481,17 @@ class PiperVoice:
 
         :return: Phoneme/audio alignments if include_alignments is True, otherwise None.
         """
+        if set_wav_format:
+            # Set the format before synthesizing so that text without any
+            # speech still produces a valid (empty) WAV file.
+            wav_file.setframerate(self.config.sample_rate)
+            wav_file.setsampwidth(2)
+            wav_file.setnchannels(1)
+
         alignments: list[PhonemeAlignment] = []
-        first_chunk = True
         for audio_chunk in self.synthesize(
             text, syn_config=syn_config, include_alignments=include_alignments
         ):
-            if first_chunk:
-                if set_wav_format:
-                    # Set audio format on first chunk
-                    wav_file.setframerate(audio_chunk.sample_rate)
-                    wav_file.setsampwidth(audio_chunk.sample_width)
-                    wav_file.setnchannels(audio_chunk.sample_channels)
-
-                first_chunk = False
-
             wav_file.writeframes(audio_chunk.audio_int16_bytes)
 
             if include_alignments and audio_chunk.phoneme_alignments:
