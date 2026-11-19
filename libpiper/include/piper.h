@@ -220,6 +220,23 @@ typedef struct piper_create_options {
    * data_dir/espeak-ng-data and data_dir/g2pw / data_dir.
    */
   const char *data_dir;
+
+  /**
+   * \brief Path to the OpenJTalk system dictionary directory for Japanese
+   * voices (phoneme_type "japanese"), or NULL for auto-discovery.
+   *
+   * The directory must contain the MeCab dictionary files (sys.dic,
+   * matrix.bin, char.bin, unk.dic). Use the pyopenjtalk-plus dictionary
+   * (mecab-naist-jdic base with jpreprocess fixes), not stock
+   * open_jtalk_dic_utf_8-1.11, to match training.
+   *
+   * If NULL, the library probes <data_dir>/openjtalk, then <data_dir>, then
+   * <model_dir>/openjtalk. The dictionary is large (~107 MB unpacked), so it
+   * is expected to be downloaded on demand, not bundled with the app.
+   *
+   * This field is ABI-versioned: it is only read when struct_size covers it.
+   */
+  const char *openjtalk_dict_dir;
 } piper_create_options;
 
 /**
@@ -235,6 +252,7 @@ static inline void piper_init_create_options(piper_create_options *opts) {
     opts->espeak_data_path = NULL;
     opts->g2pw_model_dir = NULL;
     opts->data_dir = NULL;
+    opts->openjtalk_dict_dir = NULL;
   }
 }
 
