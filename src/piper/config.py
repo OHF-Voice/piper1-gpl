@@ -17,6 +17,8 @@ class PhonemeType(str, Enum):
     PINYIN = "pinyin"  # zh-CN
     HEBREW = "hebrew"  # he-IL: Nakdimon niqqud + IPA G2P
     JAPANESE = "japanese"  # ja-JP: OpenJTalk + pitch accent -> IPA
+    THAI = "thai"  # th-TH: TLTK segmentation + G2P -> IPA + tone digits
+    LITHUANIAN = "lithuanian"  # lt-LT: espeak-ng IPA + pitch accent dictionary
 
 
 @dataclass
@@ -63,6 +65,15 @@ class PiperConfig:
     default_speaker_id: int = 0
     """Id of the default speaker for multi-speaker voices."""
 
+    phoneme_counts: Optional[Mapping[str, int]] = None
+    """Phoneme -> number of times it occurs in the voice's own training data.
+
+    Phonemes that never occur are left out. PAD/BOS/EOS are not counted.
+    Phonemes that share an id each get that id's count.
+    Counts cover this voice's data only, not a base model it was warmstarted
+    from, so a missing phoneme still has whatever embedding the base learned.
+    """
+
     @staticmethod
     def from_dict(config: dict[str, Any]) -> "PiperConfig":
         """Load configuration from a dictionary."""
@@ -91,6 +102,7 @@ class PiperConfig:
             ),
             #
             default_speaker_id=config.get("default_speaker_id", 0),
+            phoneme_counts=config.get("phoneme_counts"),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -123,6 +135,9 @@ class PiperConfig:
             config_dict["vowel_clusters"] = [
                 list(vc) for vc in sorted(self.vowel_clusters)
             ]
+
+        if self.phoneme_counts is not None:
+            config_dict["phoneme_counts"] = dict(self.phoneme_counts)
 
         return config_dict
 

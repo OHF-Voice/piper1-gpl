@@ -196,6 +196,47 @@ typedef struct piper_create_options {
    * phonemes).
    */
   const char *espeak_data_path;
+
+  /**
+   * \brief Path to g2pw / pinyin dictionary directory for pinyin, or NULL for
+   * auto-discovery.
+   *
+   * Phase 1 (monophonic fallback) directory should contain
+   * MONOPHONIC_CHARS.txt (118K) and/or char_bopomofo_dict.json and
+   * bopomofo_to_pinyin_wo_tune_dict.json. g2pw.onnx and
+   * POLYPHONIC_CHARS.txt are not required in Phase 1; they will be used in
+   * Phase 2 for contextual polyphone disambiguation.
+   *
+   * Directory may be next to espeak data / data_dir, or be data_dir/g2pw or
+   * data_dir itself.
+   */
+  const char *g2pw_model_dir;
+
+  /**
+   * \brief Optional root data directory that may contain espeak-ng-data/ and
+   * g2pw/.
+   *
+   * If espeak_data_path or g2pw_model_dir is NULL, library will search inside
+   * data_dir/espeak-ng-data and data_dir/g2pw / data_dir.
+   */
+  const char *data_dir;
+
+  /**
+   * \brief Path to the OpenJTalk system dictionary directory for Japanese
+   * voices (phoneme_type "japanese"), or NULL for auto-discovery.
+   *
+   * The directory must contain the MeCab dictionary files (sys.dic,
+   * matrix.bin, char.bin, unk.dic). Use the pyopenjtalk-plus dictionary
+   * (mecab-naist-jdic base with jpreprocess fixes), not stock
+   * open_jtalk_dic_utf_8-1.11, to match training.
+   *
+   * If NULL, the library probes <data_dir>/openjtalk, then <data_dir>, then
+   * <model_dir>/openjtalk. The dictionary is large (~107 MB unpacked), so it
+   * is expected to be downloaded on demand, not bundled with the app.
+   *
+   * This field is ABI-versioned: it is only read when struct_size covers it.
+   */
+  const char *openjtalk_dict_dir;
 } piper_create_options;
 
 /**
@@ -209,6 +250,9 @@ static inline void piper_init_create_options(piper_create_options *opts) {
     opts->model_path = NULL;
     opts->config_path = NULL;
     opts->espeak_data_path = NULL;
+    opts->g2pw_model_dir = NULL;
+    opts->data_dir = NULL;
+    opts->openjtalk_dict_dir = NULL;
   }
 }
 

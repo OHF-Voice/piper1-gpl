@@ -130,3 +130,47 @@ TEST_F(MainUtilsTest, ParseArgsMissingArgument) {
       },
       piper::ArgError);
 }
+
+TEST_F(MainUtilsTest, ParseArgsDataDir) {
+  piper::RunConfig runConfig;
+
+  // NOLINTNEXTLINE(modernize-avoid-c-arrays)
+  const char *argv[] = {"test_program", "--model", "model.onnx", "--data-dir",
+                        "/data/piper"};
+  int argc = sizeof(argv) / sizeof(argv[0]);
+
+  parseArgsLogic(argc, const_cast<char **>(argv), runConfig);
+
+  EXPECT_EQ(runConfig.modelPath, "model.onnx");
+  ASSERT_TRUE(runConfig.dataDir.has_value());
+  EXPECT_EQ(runConfig.dataDir.value(), "/data/piper");
+}
+
+TEST_F(MainUtilsTest, ParseArgsG2pwDir) {
+  piper::RunConfig runConfig;
+
+  // NOLINTNEXTLINE(modernize-avoid-c-arrays)
+  const char *argv[] = {"test_program", "--model", "model.onnx", "--g2pw-dir",
+                        "/tmp/g2pw_dict"};
+  int argc = sizeof(argv) / sizeof(argv[0]);
+
+  parseArgsLogic(argc, const_cast<char **>(argv), runConfig);
+
+  ASSERT_TRUE(runConfig.g2pwModelDir.has_value());
+  EXPECT_EQ(runConfig.g2pwModelDir.value(), "/tmp/g2pw_dict");
+}
+
+TEST_F(MainUtilsTest, ParseArgsG2pwAlias) {
+  piper::RunConfig runConfig;
+
+  // alias --g2pw_model_dir
+  // NOLINTNEXTLINE(modernize-avoid-c-arrays)
+  const char *argv[] = {"test_program", "--model", "model.onnx",
+                        "--g2pw_model_dir", "/custom/g2pw"};
+  int argc = sizeof(argv) / sizeof(argv[0]);
+
+  parseArgsLogic(argc, const_cast<char **>(argv), runConfig);
+
+  ASSERT_TRUE(runConfig.g2pwModelDir.has_value());
+  EXPECT_EQ(runConfig.g2pwModelDir.value(), "/custom/g2pw");
+}

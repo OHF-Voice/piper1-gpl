@@ -29,6 +29,8 @@ struct RunConfig {
   std::optional<float> lengthScale;
   std::optional<float> noiseW;
   std::optional<std::filesystem::path> eSpeakDataPath;
+  std::optional<std::filesystem::path> dataDir;
+  std::optional<std::filesystem::path> g2pwModelDir;
   bool jsonInput = false;
 };
 

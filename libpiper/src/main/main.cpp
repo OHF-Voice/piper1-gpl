@@ -77,9 +77,31 @@ auto main(int argc, char *argv[]) -> int {
     if (!runConfig.eSpeakDataPath.has_value()) {
       throw std::runtime_error("eSpeak data path not set");
     }
-    piper = piper_create(runConfig.modelPath.string().c_str(),
-                         runConfig.modelConfigPath.string().c_str(),
-                         runConfig.eSpeakDataPath.value().string().c_str());
+
+    piper_create_options create_opts;
+    piper_init_create_options(&create_opts);
+    std::string model_path_str = runConfig.modelPath.string();
+    std::string config_path_str = runConfig.modelConfigPath.string();
+    std::string espeak_path_str = runConfig.eSpeakDataPath.value().string();
+    std::string data_dir_str;
+    std::string g2pw_dir_str;
+    create_opts.model_path = model_path_str.c_str();
+    create_opts.config_path = config_path_str.c_str();
+    create_opts.espeak_data_path = espeak_path_str.c_str();
+    if (runConfig.dataDir) {
+      data_dir_str = runConfig.dataDir->string();
+      create_opts.data_dir = data_dir_str.c_str();
+    }
+    if (runConfig.g2pwModelDir) {
+      g2pw_dir_str = runConfig.g2pwModelDir->string();
+      create_opts.g2pw_model_dir = g2pw_dir_str.c_str();
+    }
+    piper = piper_create_with_options(&create_opts);
+    if (!piper) {
+      // Fallback to legacy for compatibility
+      piper = piper_create(model_path_str.c_str(), config_path_str.c_str(),
+                           espeak_path_str.c_str());
+    }
 
     piper_synthesize_options options;
     options.speaker_id = 0;
