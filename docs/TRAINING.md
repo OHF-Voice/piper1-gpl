@@ -1,6 +1,6 @@
 # 🏋️ Training
 
-Code for training new voices is included in `src/piper/train` and can be run with `python3 -m piper.train fit`.
+Code for training new voices is included in `src/piper/train` and can be run with `python3 -m piper_tts.train fit`.
 This uses [PyTorch Lightning][lighting] and the `LightningCLI`.
 
 You will need the following system packages installed (`apt-get`):
@@ -46,7 +46,7 @@ The other column(s) will depend on the [training settings](#settings). By defaul
 Run the training script:
 
 ``` sh
-python3 -m piper.train fit \
+python3 -m piper_tts.train fit \
   --data.voice_name "<name of voice>" \
   --data.csv_path /path/to/metadata.csv \
   --data.audio_dir /path/to/audio/ \
@@ -72,7 +72,7 @@ where:
 
 Using `--ckpt_path` is recommended since it will speed up training a lot, even if the checkpoint is from a different language. Only `medium` quality checkpoints are supported without [tweaking other settings][audio-config]. See [How Long To Train](#how-long-to-train) for choosing `--trainer.max_epochs`, and how it interacts with `--ckpt_path`.
 
-Run `python3 -m piper.train fit --help` for many more options.
+Run `python3 -m piper_tts.train fit --help` for many more options.
 
 ## Settings
 
@@ -154,7 +154,7 @@ from `--trainer.max_epochs` so that the learning rate ends the run at
 `--model.lr_final_ratio` (default `0.05`) of where it started:
 
 ``` sh
-python3 -m piper.train fit \
+python3 -m piper_tts.train fit \
   ... \
   --trainer.max_epochs 100   # lr_decay becomes 0.05 ** (1/100) = 0.9705
 ```
@@ -332,7 +332,7 @@ near that tail. On a corpus with p50 7 s and a tail to 20 s this measures at
 ~61% of each batch being padding.
 
 ``` sh
-python3 -m piper.train fit \
+python3 -m piper_tts.train fit \
   ... \
   --data.length_bucketing true
 ```
@@ -391,7 +391,7 @@ other inference settings) with the same predictor:
 import librosa
 import torch
 
-from piper.train.vits.mos import MosPredictor
+from piper_tts.train.vits.mos import MosPredictor
 
 predictor = MosPredictor()
 audio, sample_rate = librosa.load("sample.wav", sr=None, mono=True)
@@ -403,7 +403,7 @@ print(predictor.score(torch.from_numpy(audio), sample_rate))
 When your model is finished training, export it to onnx with:
 
 ``` sh
-python3 -m piper.train.export_onnx \
+python3 -m piper_tts.train.export_onnx \
   --checkpoint /path/to/checkpoint.ckpt \
   --output-file /path/to/model.onnx
 ```
@@ -420,7 +420,7 @@ The config written during training includes `phoneme_counts`: how many times eac
 To add counts to the config of a voice trained before they were written automatically, point the script at the voice's training CSV and cache directory:
 
 ``` sh
-python3 -m piper.train.phoneme_counts \
+python3 -m piper_tts.train.phoneme_counts \
   --config /path/to/en_US-lessac-medium.onnx.json \
   --csv /path/to/dataset/metadata.csv \
   --cache-dir /path/to/cache

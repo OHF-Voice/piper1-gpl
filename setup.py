@@ -5,7 +5,7 @@ from pathlib import Path
 
 from skbuild import setup
 
-MODULE_DIR = Path(__file__).parent / "src" / "piper"
+MODULE_DIR = Path(__file__).parent / "src" / "piper_tts"
 PIPER_DATA_FILES = ["py.typed", "espeakbridge.pyi"]
 ESPEAK_NG_DATA_DIR = MODULE_DIR / "espeak-ng-data"
 ESPEAK_NG_DATA_FILES = [
@@ -57,7 +57,7 @@ setup(
     description="Fast and local neural text-to-speech engine",
     url="http://github.com/OHF-voice/piper1-gpl",
     license="GPL-3.0-or-later",
-    # g2pW is Apache-2.0; see src/piper/g2pw_onnx.py.
+    # g2pW is Apache-2.0; see src/piper_tts/g2pw_onnx.py.
     license_files=["COPYING", "licenses/LICENSE.g2pW-Apache-2.0"],
     author="The Home Assistant Authors",
     author_email="hello@home-assistant.io",
@@ -139,17 +139,20 @@ setup(
         ],
     },
     packages=[
+        "piper_tts",
+        "piper_tts.tashkeel",
+        "piper_tts.hebrew",
+        "piper_tts.train",
+        "piper_tts.train.vits",
+        "piper_tts.train.vits.monotonic_align",
+        # Deprecated alias for piper_tts (issue #182); removed in 2.0. Nothing
+        # in piper_tts imports it, so system packages can leave it out.
         "piper",
-        "piper.tashkeel",
-        "piper.hebrew",
-        "piper.train",
-        "piper.train.vits",
-        "piper.train.vits.monotonic_align",
     ],
     package_dir={"": "src"},
     include_package_data=True,
     package_data={
-        "piper": [
+        "piper_tts": [
             str(p)
             for p in itertools.chain(
                 PIPER_DATA_FILES,
@@ -161,10 +164,11 @@ setup(
             )
         ],
     },
-    cmake_install_dir="src/piper",
+    cmake_install_dir="src/piper_tts",
     entry_points={
         "console_scripts": [
-            "piper = piper.__main__:main",
+            "piper = piper_tts.__main__:main",
+            "piper-tts = piper_tts.__main__:main",
         ]
     },
 )

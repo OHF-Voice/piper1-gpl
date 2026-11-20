@@ -9,11 +9,11 @@ import pytest
 
 if TYPE_CHECKING:
     # Real names for type checking, which doesn't need the deps installed.
-    from piper.phonemize_chinese import ChinesePhonemizer, phonemes_to_ids
+    from piper_tts.phonemize_chinese import ChinesePhonemizer, phonemes_to_ids
 else:
     # Chinese phonemization requires the optional [zh] dependencies (g2pW, ...).
     # Skip the whole module if they are not installed.
-    phonemize_chinese = pytest.importorskip("piper.phonemize_chinese")
+    phonemize_chinese = pytest.importorskip("piper_tts.phonemize_chinese")
     ChinesePhonemizer = phonemize_chinese.ChinesePhonemizer
     phonemes_to_ids = phonemize_chinese.phonemes_to_ids
 
@@ -214,7 +214,7 @@ def test_numbers_to_words(
 def test_works_without_torch() -> None:
     """Chinese phonemization must not need torch.
 
-    piper.g2pw_onnx exists to keep torch out of the [zh] extra, which stays true
+    piper_tts.g2pw_onnx exists to keep torch out of the [zh] extra, which stays true
     only as long as nothing imports g2pw.api -- or g2pw at all, since its
     __init__ imports api. Asserting "torch not in sys.modules" would not catch a
     regression here, because transformers imports torch whenever it happens to
@@ -229,7 +229,7 @@ def test_works_without_torch() -> None:
         "sys.modules['torch'] = None;"
         "sys.modules['torchaudio'] = None;"
         "sys.modules['torchvision'] = None;"
-        "from piper.phonemize_chinese import ChinesePhonemizer;"
+        "from piper_tts.phonemize_chinese import ChinesePhonemizer;"
         f"p = ChinesePhonemizer(model_dir={str(MODEL_DIR)!r});"
         "phonemes = p.phonemize('卡尔普陪外孙玩滑梯。');"
         "assert phonemes[0][:3] == ['k', 'a', '3'], phonemes;"

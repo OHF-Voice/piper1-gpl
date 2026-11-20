@@ -9,8 +9,8 @@ to the old loop's results, values and gradients alike.
 import pytest
 
 torch = pytest.importorskip("torch")
-commons = pytest.importorskip("piper.train.vits.commons")
-losses = pytest.importorskip("piper.train.vits.losses")
+commons = pytest.importorskip("piper_tts.train.vits.commons")
+losses = pytest.importorskip("piper_tts.train.vits.losses")
 
 
 def _loop_slice_segments(x, ids_str, segment_size):

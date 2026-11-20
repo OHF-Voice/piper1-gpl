@@ -19,11 +19,11 @@ needs: it has five phonemic tones and minimal pairs are everywhere
 
 Tones are emitted as the digits 1-5 -- 1 mid, 2 low, 3 falling, 4 high, 5
 rising -- one per syllable, immediately after that syllable's segments. This is
-the representation :mod:`piper.phonemize_chinese` already uses for Mandarin
+the representation :mod:`piper_tts.phonemize_chinese` already uses for Mandarin
 tones. Every symbol produced here is a single codepoint that already has an id
-in :data:`piper.phoneme_ids.DEFAULT_PHONEME_ID_MAP`, so Thai voices stay
+in :data:`piper_tts.phoneme_ids.DEFAULT_PHONEME_ID_MAP`, so Thai voices stay
 compatible with the IPA-based (espeak) warmstart -- the same trick
-:mod:`piper.phonemize_hebrew` and :mod:`piper.phonemize_japanese` use.
+:mod:`piper_tts.phonemize_hebrew` and :mod:`piper_tts.phonemize_japanese` use.
 
 Requires ``pip install tltk unicode-rbnf`` (the ``th`` extra).
 """
@@ -126,7 +126,7 @@ class ThaiPhonemizer:
         """Return IPA phonemes with tone digits, grouped by sentence.
 
         Each phoneme is a single codepoint, matching how espeak phonemes are
-        keyed in :data:`piper.phoneme_ids.DEFAULT_PHONEME_ID_MAP`.
+        keyed in :data:`piper_tts.phoneme_ids.DEFAULT_PHONEME_ID_MAP`.
         """
         all_phonemes: List[List[str]] = []
 

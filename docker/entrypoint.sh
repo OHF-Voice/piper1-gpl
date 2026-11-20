@@ -7,13 +7,13 @@ shift
 
 case "${COMMAND}" in
   speak)
-    exec python3 -m piper --data-dir "${DATA_DIR}" "$@"
+    exec python3 -m piper_tts --data-dir "${DATA_DIR}" "$@"
     ;;
   download)
-    exec python3 -m piper.download_voices --data-dir "${DATA_DIR}" "$@"
+    exec python3 -m piper_tts.download_voices --data-dir "${DATA_DIR}" "$@"
     ;;
   server)
-    exec python3 -m piper.http_server --host 0.0.0.0 --data-dir "${DATA_DIR}" "$@"
+    exec python3 -m piper_tts.http_server --host 0.0.0.0 --data-dir "${DATA_DIR}" "$@"
     ;;
   ""|help|-h|--help)
     echo "Usage: <command> [args...]"

@@ -15,13 +15,13 @@ pip install piper-tts
 List voices with:
 
 ``` sh
-python3 -m piper.download_voices
+python3 -m piper_tts.download_voices
 ```
 
 Choose a voice ([samples here][samples]) and download. For example:
 
 ``` sh
-python3 -m piper.download_voices en_US-lessac-medium
+python3 -m piper_tts.download_voices en_US-lessac-medium
 ```
 
 This will download to the current directory. Override with `--data-dir <DIR>`
@@ -31,7 +31,7 @@ This will download to the current directory. Override with `--data-dir <DIR>`
 After downloading the example voice above, run:
 
 ``` sh
-python3 -m piper -m en_US-lessac-medium -f test.wav -- 'This is a test.'
+python3 -m piper_tts -m en_US-lessac-medium -f test.wav -- 'This is a test.'
 ```
 
 This will write `test.wav` with the sentence "This is a test."
@@ -40,7 +40,7 @@ If you have voices in a different directory, use `--data-dir <DIR>`
 If you have [ffplay][] installed, omit `-f` to hear the audio immediately:
 
 ``` sh
-python3 -m piper -m en_US-lessac-medium -- 'This will play on your speakers.'
+python3 -m piper_tts -m en_US-lessac-medium -- 'This will play on your speakers.'
 ```
 
 Running Piper this way is slow since it needs to load the model each time. Run the [web server](API_HTTP.md) unless you need to stream audio (see `--output-raw` from `--help`).

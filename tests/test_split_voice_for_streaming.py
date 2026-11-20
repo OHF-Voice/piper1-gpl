@@ -9,7 +9,7 @@ ort = pytest.importorskip("onnxruntime")
 # pylint: disable=wrong-import-position
 from onnx import TensorProto, helper  # noqa: E402
 
-from piper.split_voice_for_streaming import LATENT_NAME, split_model  # noqa: E402
+from piper_tts.split_voice_for_streaming import LATENT_NAME, split_model  # noqa: E402
 
 
 def _make_voice(with_alignments: bool = False) -> "onnx.ModelProto":

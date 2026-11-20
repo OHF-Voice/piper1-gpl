@@ -3,9 +3,9 @@
 
 import pytest
 
-from piper.config import PhonemeType, PiperConfig
-from piper.phoneme_ids import DEFAULT_PHONEME_ID_MAP
-from piper.phonemize_japanese import (
+from piper_tts.config import PhonemeType, PiperConfig
+from piper_tts.phoneme_ids import DEFAULT_PHONEME_ID_MAP
+from piper_tts.phonemize_japanese import (
     ACCENT_FALL,
     ACCENT_PHRASE_BOUNDARY,
     ACCENT_RISE,
@@ -13,7 +13,7 @@ from piper.phonemize_japanese import (
     JapanesePhonemizer,
     missing_phonemes,
 )
-from piper.voice import PiperVoice
+from piper_tts.voice import PiperVoice
 
 pytest.importorskip("pyopenjtalk", reason="pyopenjtalk-plus is not installed")
 

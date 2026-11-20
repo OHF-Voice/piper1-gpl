@@ -2,7 +2,7 @@
 
 import pytest
 
-phonemize_chinese = pytest.importorskip("piper.phonemize_chinese")
+phonemize_chinese = pytest.importorskip("piper_tts.phonemize_chinese")
 ChinesePhonemizer = phonemize_chinese.ChinesePhonemizer
 
 

@@ -9,13 +9,13 @@ python3 -m pip install piper-tts[http]
 Download a voice, for example:
 
 ``` sh
-python3 -m piper.download_voices en_US-lessac-medium
+python3 -m piper_tts.download_voices en_US-lessac-medium
 ```
 
 Run the web server:
 
 ``` sh
-python3 -m piper.http_server -m en_US-lessac-medium
+python3 -m piper_tts.http_server -m en_US-lessac-medium
 ```
 
 This will start an HTTP server on port 5000 (use `--host` and `--port` to override).

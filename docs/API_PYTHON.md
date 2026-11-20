@@ -6,17 +6,19 @@ Install with:
 pip install piper-tts
 ```
 
+The Python package is `piper_tts`. Before 1.10 it was `piper`, which clashed with the unrelated [libratbag/piper](https://github.com/libratbag/piper) (#182). `import piper` and `python3 -m piper...` still work but are deprecated, and they will be removed in 2.0.
+
 Download a voice, for example:
 
 ``` sh
-python3 -m piper.download_voices en_US-lessac-medium
+python3 -m piper_tts.download_voices en_US-lessac-medium
 ```
 
 Use `PiperVoice.synthesize_wav`:
 
 ``` python
 import wave
-from piper import PiperVoice
+from piper_tts import PiperVoice
 
 voice = PiperVoice.load("/path/to/en_US-lessac-medium.onnx")
 with wave.open("test.wav", "wb") as wav_file:

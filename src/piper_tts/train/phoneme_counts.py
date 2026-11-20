@@ -9,7 +9,7 @@ multi-character phonemes can't be split back out of it.
 As a script, this backfills ``phoneme_counts`` into the config of a voice that
 was trained before the counts were written automatically::
 
-    python3 -m piper.train.phoneme_counts \\
+    python3 -m piper_tts.train.phoneme_counts \\
         --config voice.onnx.json --csv metadata.csv --cache-dir cache/
 
 The config is edited as raw JSON, so keys this version of Piper doesn't know
@@ -27,7 +27,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Optional
 
-from piper.const import BOS, EOS, PAD
+from piper_tts.const import BOS, EOS, PAD
 
 from .vits.utils import get_cache_id
 
