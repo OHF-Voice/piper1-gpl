@@ -10,7 +10,7 @@ from typing import Optional
 import torch
 from torch import nn
 
-from piper import PiperConfig
+from piper_tts import PiperConfig
 
 _DIR = Path(__file__).parent
 _TESTS_DIR = _DIR

@@ -14,7 +14,7 @@ import pytest
 
 torch = pytest.importorskip("torch")
 lightning = pytest.importorskip("lightning")
-cli_module = pytest.importorskip("piper.train.__main__")
+cli_module = pytest.importorskip("piper_tts.train.__main__")
 
 ModelCheckpoint = lightning.pytorch.callbacks.ModelCheckpoint
 DataLoader = torch.utils.data.DataLoader

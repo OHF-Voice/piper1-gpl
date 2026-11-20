@@ -9,17 +9,17 @@ inference-side equivalent.
 
 import pytest
 
-from piper.config import PhonemeType, PiperConfig
-from piper.phoneme_ids import DEFAULT_PHONEME_ID_MAP
-from piper.voice import PiperVoice
+from piper_tts.config import PhonemeType, PiperConfig
+from piper_tts.phoneme_ids import DEFAULT_PHONEME_ID_MAP
+from piper_tts.voice import PiperVoice
 
 # Module and class of the phonemizer each non-espeak phoneme type must use
 _PHONEMIZERS = {
-    PhonemeType.PINYIN: ("piper.phonemize_chinese", "ChinesePhonemizer"),
-    PhonemeType.HEBREW: ("piper.phonemize_hebrew", "HebrewPhonemizer"),
-    PhonemeType.JAPANESE: ("piper.phonemize_japanese", "JapanesePhonemizer"),
-    PhonemeType.THAI: ("piper.phonemize_thai", "ThaiPhonemizer"),
-    PhonemeType.LITHUANIAN: ("piper.phonemize_lithuanian", "LithuanianPhonemizer"),
+    PhonemeType.PINYIN: ("piper_tts.phonemize_chinese", "ChinesePhonemizer"),
+    PhonemeType.HEBREW: ("piper_tts.phonemize_hebrew", "HebrewPhonemizer"),
+    PhonemeType.JAPANESE: ("piper_tts.phonemize_japanese", "JapanesePhonemizer"),
+    PhonemeType.THAI: ("piper_tts.phonemize_thai", "ThaiPhonemizer"),
+    PhonemeType.LITHUANIAN: ("piper_tts.phonemize_lithuanian", "LithuanianPhonemizer"),
 }
 
 

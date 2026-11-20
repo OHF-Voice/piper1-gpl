@@ -10,10 +10,12 @@ from urllib.error import HTTPError
 import numpy as np
 import pytest
 
-from piper import PiperConfig, PiperVoice, download_voices
-from piper.voice import AudioChunk
+from piper_tts import PiperConfig, PiperVoice, download_voices
+from piper_tts.voice import AudioChunk
 
-http_server = pytest.importorskip("piper.http_server", reason="Flask is not installed")
+http_server = pytest.importorskip(
+    "piper_tts.http_server", reason="Flask is not installed"
+)
 
 
 class DownloadResponse(io.BytesIO):
@@ -74,7 +76,7 @@ def test_download_response_selects_the_downloaded_voice(
         patch(
             "sys.argv",
             [
-                "piper.http_server",
+                "piper_tts.http_server",
                 "--model",
                 str(model),
                 "--data-dir",

@@ -12,7 +12,7 @@ from unittest.mock import patch
 import pytest
 
 http_server = pytest.importorskip(
-    "piper.http_server", reason="Flask (the http extra) is not installed"
+    "piper_tts.http_server", reason="Flask (the http extra) is not installed"
 )
 
 _TESTS_DIR = Path(__file__).parent
@@ -31,7 +31,7 @@ def test_sentence_silence(
         sys,
         "argv",
         [
-            "piper.http_server",
+            "piper_tts.http_server",
             "--model",
             str(_TEST_VOICE),
             "--sentence-silence",
@@ -97,7 +97,7 @@ def test_voice_alignments(
     onnx = pytest.importorskip("onnx")
     from flask import Flask
 
-    from piper.http_server import main
+    from piper_tts.http_server import main
 
     # Add a duration tensor to the silence-generating test voice. One text
     # phoneme produces five ids: BOS, PAD, 'a', PAD, EOS.
@@ -125,7 +125,7 @@ def test_voice_alignments(
         sys,
         "argv",
         [
-            "piper.http_server",
+            "piper_tts.http_server",
             "-m",
             str(tmp_path / "default.onnx"),
             "--data-dir",

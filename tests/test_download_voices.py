@@ -11,7 +11,7 @@ from urllib.error import ContentTooShortError, HTTPError
 
 import pytest
 
-from piper import download_voices
+from piper_tts import download_voices
 
 _VOICES_JSON = {
     "de_DE-karlsson-low": {"aliases": ["de-karlsson-low"]},

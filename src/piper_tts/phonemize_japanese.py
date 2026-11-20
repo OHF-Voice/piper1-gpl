@@ -12,7 +12,7 @@ at segmental phonemes. OpenJTalk's full-context labels are parsed into the
 accent-annotated form used by ESPnet's `pyopenjtalk_prosody` G2P, then mapped to
 IPA so the output uses Piper's default phoneme id map. That keeps Japanese voices
 compatible with the IPA-based (espeak) warmstart, the same trick
-:mod:`piper.phonemize_hebrew` uses.
+:mod:`piper_tts.phonemize_hebrew` uses.
 
 Prosody symbols (all present in the default id map):
 
@@ -25,7 +25,7 @@ Prosody symbols (all present in the default id map):
 
 ESPnet spells the last three ``_``, ``$`` and ``?``. We avoid ``_`` and ``$``
 because Piper reserves them for padding and end-of-sentence
-(see :mod:`piper.const`).
+(see :mod:`piper_tts.const`).
 """
 
 import logging
@@ -157,7 +157,7 @@ class JapanesePhonemizer:
         """Return IPA phonemes with prosody symbols, grouped by sentence.
 
         Each phoneme is a single codepoint, matching how espeak phonemes are
-        keyed in :data:`piper.phoneme_ids.DEFAULT_PHONEME_ID_MAP`.
+        keyed in :data:`piper_tts.phoneme_ids.DEFAULT_PHONEME_ID_MAP`.
         """
         all_phonemes: List[List[str]] = []
 
@@ -328,7 +328,7 @@ def missing_phonemes(
     """Return any phoneme this module can emit that is not in the id map.
 
     Useful as a sanity check before training: the output should be empty for
-    :data:`piper.phoneme_ids.DEFAULT_PHONEME_ID_MAP`.
+    :data:`piper_tts.phoneme_ids.DEFAULT_PHONEME_ID_MAP`.
     """
     if id_map is None:
         from .phoneme_ids import DEFAULT_PHONEME_ID_MAP

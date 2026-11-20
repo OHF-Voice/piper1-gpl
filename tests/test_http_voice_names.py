@@ -6,10 +6,10 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from piper import PiperConfig
+from piper_tts import PiperConfig
 
 http_server = pytest.importorskip(
-    "piper.http_server", reason="Flask (the http extra) is not installed"
+    "piper_tts.http_server", reason="Flask (the http extra) is not installed"
 )
 
 
@@ -32,7 +32,7 @@ def make_client(tmp_path: Path):
             patch(
                 "sys.argv",
                 [
-                    "piper.http_server",
+                    "piper_tts.http_server",
                     "--model",
                     str(tmp_path / f"{voice_names[0]}.onnx"),
                     "--data-dir",

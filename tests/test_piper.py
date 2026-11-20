@@ -10,9 +10,9 @@ from unittest.mock import patch
 
 import pytest
 
-from piper import PiperVoice
-from piper.const import BOS, EOS
-from piper.phonemize_espeak import EspeakPhonemizer
+from piper_tts import PiperVoice
+from piper_tts.const import BOS, EOS
+from piper_tts.phonemize_espeak import EspeakPhonemizer
 
 from . import EN_US_VOWEL_CLUSTERS
 
@@ -184,7 +184,7 @@ def test_synthesize_wav_no_speech() -> None:
 
 def test_cli_no_speech(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Input without speech still gives a valid, empty WAV file."""
-    from piper.__main__ import main
+    from piper_tts.__main__ import main
 
     output_path = tmp_path / "out.wav"
     monkeypatch.setattr(
@@ -212,7 +212,7 @@ def test_sentence_silence_even_byte_count(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, sentence_silence: float
 ) -> None:
     """Inter-sentence silence must never leave the WAV data chunk odd-length."""
-    from piper.__main__ import main
+    from piper_tts.__main__ import main
 
     output_path = tmp_path / "out.wav"
     monkeypatch.setattr(
@@ -499,7 +499,7 @@ def test_synthesize_alignment() -> None:
 def test_add_alignment_output_autodetect() -> None:
     """Test autodetecting and marking the Ceil tensor as an output."""
     onnx = pytest.importorskip("onnx")
-    from piper.patch_voice_with_alignment import add_alignment_output
+    from piper_tts.patch_voice_with_alignment import add_alignment_output
 
     model = onnx.parser.parse_model(
         """
@@ -520,7 +520,7 @@ def test_add_alignment_output_autodetect() -> None:
 def test_add_alignment_output_errors() -> None:
     """Test errors when no Ceil tensor exists or it is already an output."""
     onnx = pytest.importorskip("onnx")
-    from piper.patch_voice_with_alignment import add_alignment_output
+    from piper_tts.patch_voice_with_alignment import add_alignment_output
 
     # No Ceil node
     no_ceil = onnx.parser.parse_model(
@@ -669,7 +669,7 @@ def test_training_phonemize_matches_inference_with_vowel_clusters() -> None:
     """
     import json
 
-    dataset = pytest.importorskip("piper.train.vits.dataset")
+    dataset = pytest.importorskip("piper_tts.train.vits.dataset")
     VitsDataModule = dataset.VitsDataModule
 
     data_module = VitsDataModule(

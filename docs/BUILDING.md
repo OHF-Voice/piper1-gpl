@@ -27,7 +27,7 @@ python3 setup.py build_ext --inplace
 Now you should be able to use `script/run` or manually run Piper:
 
 ``` sh
-python3 -m piper --help
+python3 -m piper_tts --help
 ```
 
 You can manually build wheels with:

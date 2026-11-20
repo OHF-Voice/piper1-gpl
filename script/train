@@ -14,4 +14,4 @@ if _VENV_DIR.exists():
 else:
     python_exe = "python3"
 
-subprocess.check_call([python_exe, "-m", "piper.train", "fit"] + sys.argv[1:])
+subprocess.check_call([python_exe, "-m", "piper_tts.train", "fit"] + sys.argv[1:])

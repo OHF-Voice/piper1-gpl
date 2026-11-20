@@ -45,7 +45,7 @@ if(Python3_FOUND AND NOT EXISTS "${EN_STREAMING_MODEL_DIR}/model.decoder.onnx")
              DESTINATION "${EN_STREAMING_MODEL_DIR}")
         execute_process(
             COMMAND ${Python3_EXECUTABLE}
-                    "${CMAKE_CURRENT_SOURCE_DIR}/../../src/piper/split_voice_for_streaming.py"
+                    "${CMAKE_CURRENT_SOURCE_DIR}/../../src/piper_tts/split_voice_for_streaming.py"
                     "${EN_STREAMING_MODEL_DIR}/model.onnx"
             RESULT_VARIABLE SPLIT_VOICE_RESULT
         )

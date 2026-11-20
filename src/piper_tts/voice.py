@@ -143,7 +143,7 @@ class PiperVoice:
         :param download_dir: Path to download resources (defaults to current directory).
         :param include_alignments: If True, patch the model in memory (requires the
             onnx package) so phoneme/audio alignments are available even if the model
-            file has not been patched with piper.patch_voice_with_alignment.
+            file has not been patched with piper_tts.patch_voice_with_alignment.
         :return: Voice object.
         """
         if config_path is None:

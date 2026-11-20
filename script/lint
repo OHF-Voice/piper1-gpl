@@ -6,10 +6,11 @@ from pathlib import Path
 _DIR = Path(__file__).parent
 _PROGRAM_DIR = _DIR.parent
 _VENV_DIR = _PROGRAM_DIR / ".venv"
-_MODULE_DIR = _PROGRAM_DIR / "src" / "piper"
+_MODULE_DIR = _PROGRAM_DIR / "src" / "piper_tts"
+_SHIM_DIR = _PROGRAM_DIR / "src" / "piper"
 _TESTS_DIR = _PROGRAM_DIR / "tests"
 
-_LINT_DIRS = [_MODULE_DIR, _TESTS_DIR]
+_LINT_DIRS = [_MODULE_DIR, _SHIM_DIR, _TESTS_DIR]
 _LINT_DIRS = [d.relative_to(_PROGRAM_DIR) for d in _LINT_DIRS]
 
 if _VENV_DIR.exists():

@@ -21,8 +21,8 @@ from typing import List, Optional
 
 import pytest
 
-lightning_module = pytest.importorskip("piper.train.vits.lightning")
-dataset_module = pytest.importorskip("piper.train.vits.dataset")
+lightning_module = pytest.importorskip("piper_tts.train.vits.lightning")
+dataset_module = pytest.importorskip("piper_tts.train.vits.dataset")
 torch = pytest.importorskip("torch")
 
 VitsModel = lightning_module.VitsModel

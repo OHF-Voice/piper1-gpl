@@ -3,13 +3,13 @@ import subprocess
 import sys
 from pathlib import Path
 
-from piper.phonemize_espeak import ESPEAK_DATA_DIR, EspeakPhonemizer
+from piper_tts.phonemize_espeak import ESPEAK_DATA_DIR, EspeakPhonemizer
 
 from . import EN_US_VOWEL_CLUSTERS
 
 _INITIALIZE_SCRIPT = """
 import sys
-from piper.phonemize_espeak import EspeakPhonemizer
+from piper_tts.phonemize_espeak import EspeakPhonemizer
 EspeakPhonemizer(sys.argv[1])
 """
 

@@ -20,10 +20,10 @@ from pysilero_vad import SileroVoiceActivityDetector
 from torch import FloatTensor, LongTensor
 from torch.utils.data import DataLoader, Dataset, Sampler, random_split
 
-from piper.config import PhonemeType, PiperConfig
-from piper.phoneme_ids import DEFAULT_PHONEME_ID_MAP
-from piper.phoneme_ids import phonemes_to_ids as default_phonemes_to_ids
-from piper.phonemize_espeak import EspeakPhonemizer
+from piper_tts.config import PhonemeType, PiperConfig
+from piper_tts.phoneme_ids import DEFAULT_PHONEME_ID_MAP
+from piper_tts.phoneme_ids import phonemes_to_ids as default_phonemes_to_ids
+from piper_tts.phonemize_espeak import EspeakPhonemizer
 
 from ..phoneme_counts import SIDECAR_NAME as PHONEME_COUNTS_SIDECAR_NAME
 from ..phoneme_counts import count_cached_phonemes
@@ -169,8 +169,8 @@ class VitsDataModule(L.LightningDataModule):
 
                 max_phoneme_id = max(max_phoneme_id, max(phoneme_ids))
         elif self.phoneme_type == PhonemeType.PINYIN:
-            from piper.phonemize_chinese import PHONEME_TO_ID
-            from piper.phonemize_chinese import (
+            from piper_tts.phonemize_chinese import PHONEME_TO_ID
+            from piper_tts.phonemize_chinese import (
                 phonemes_to_ids as chinese_phonemes_to_ids,
             )
 
@@ -226,7 +226,7 @@ class VitsDataModule(L.LightningDataModule):
         self._write_config()
 
         if self.phoneme_type == PhonemeType.PINYIN:
-            from piper.phonemize_chinese import ChinesePhonemizer
+            from piper_tts.phonemize_chinese import ChinesePhonemizer
 
             # g2pW -> pinyin -> phonemes
             phonemizer = ChinesePhonemizer(model_dir=Path.cwd() / "local" / "g2pW")
@@ -235,7 +235,7 @@ class VitsDataModule(L.LightningDataModule):
                 return phonemizer.phonemize(text)
 
         elif self.phoneme_type == PhonemeType.HEBREW:
-            from piper.phonemize_hebrew import HebrewPhonemizer
+            from piper_tts.phonemize_hebrew import HebrewPhonemizer
 
             # Nakdimon (niqqud) -> IPA G2P (default IPA id map)
             hebrew_phonemizer = HebrewPhonemizer()
@@ -244,7 +244,7 @@ class VitsDataModule(L.LightningDataModule):
                 return hebrew_phonemizer.phonemize(text)
 
         elif self.phoneme_type == PhonemeType.JAPANESE:
-            from piper.phonemize_japanese import JapanesePhonemizer
+            from piper_tts.phonemize_japanese import JapanesePhonemizer
 
             # OpenJTalk -> IPA + pitch accent (default IPA id map)
             japanese_phonemizer = JapanesePhonemizer()
@@ -253,7 +253,7 @@ class VitsDataModule(L.LightningDataModule):
                 return japanese_phonemizer.phonemize(text)
 
         elif self.phoneme_type == PhonemeType.THAI:
-            from piper.phonemize_thai import ThaiPhonemizer
+            from piper_tts.phonemize_thai import ThaiPhonemizer
 
             # TLTK segmentation + G2P -> IPA + tone digits (default IPA id map)
             thai_phonemizer = ThaiPhonemizer()
@@ -262,7 +262,7 @@ class VitsDataModule(L.LightningDataModule):
                 return thai_phonemizer.phonemize(text)
 
         elif self.phoneme_type == PhonemeType.LITHUANIAN:
-            from piper.phonemize_lithuanian import LithuanianPhonemizer
+            from piper_tts.phonemize_lithuanian import LithuanianPhonemizer
 
             # espeak-ng IPA + pitch accent dictionary (default IPA id map plus
             # one symbol); the dictionary ships with piper as package data.
