@@ -1,0 +1,30 @@
+xh.json, st.json, tn.json - grapheme rule tables for piper.phonemize_rules
+(phoneme_type "rules"). Each file lists its own notes.
+
+The grapheme and context-rule choices were copied and adapted from:
+
+  orthography2ipa (Apache-2.0)        https://github.com/TigreGotico/orthography2ipa
+      orthography2ipa/data/{xh,st,tn}.json, commit 46a4bd7e0f9d9e7a8c0667f5766cb56dd4c95390
+  Epitran (MIT)                        https://github.com/dmort27/epitran
+      epitran/data/map/{xho,tsn}-Latn.csv, epitran/data/post/tsn-Latn.txt,
+      commit 2387d95820d6d9b8f459c35141e6239f4de5dbfb
+  Unicode CLDR (Unicode License v3)    https://github.com/unicode-org/cldr
+      common/transforms/xh-xh_FONIPA.xml (Martin Jansche), commit
+      19bac6f0a76ea5d92b4f272026ca970abed0b413
+
+and checked against the consonant and vowel tables of the English Wikipedia
+articles "Xhosa language", "Sotho phonology", "Sesotho orthography" and
+"Tswana language" (November 2026).
+
+Changes made: symbols were mapped into piper's default phoneme id map (no tie
+bars, no ejective mark, breathy nasals as nasal + ɦ, clicks without the velar
+accompaniment), the three tables were merged into one JSON format, and the
+xh table follows the CLDR transform's context rule for tsh.
+
+Validation (not shipped): the xh table reproduces the NCHLT-inlang isiXhosa
+pronunciation dictionary (15,000 words, CC BY 3.0, North-West University;
+mirrored in https://github.com/google/language-resources under
+third_party/nchlt_inlang) for 14,999 words once notational differences are
+normalized (ŋ written n before velars and clicks, rh written r, doubled letters
+collapsed). The one difference is the loanword "apreli", which NCHLT gives an
+aspirated p.

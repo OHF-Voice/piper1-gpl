@@ -271,6 +271,16 @@ class VitsDataModule(L.LightningDataModule):
             def phonemize(text: str) -> list[list[str]]:
                 return lithuanian_phonemizer.phonemize(text)
 
+        elif self.phoneme_type == PhonemeType.RULES:
+            from piper.phonemize_rules import RulesPhonemizer
+
+            # Grapheme rule table shipped with piper; espeak_voice names the
+            # language (xh, st, tn). Output is inside the default IPA id map.
+            rules_phonemizer = RulesPhonemizer(self.espeak_voice)
+
+            def phonemize(text: str) -> list[list[str]]:
+                return rules_phonemizer.phonemize(text)
+
         elif self.phoneme_type == PhonemeType.TEXT:
             # text = phonemes
 

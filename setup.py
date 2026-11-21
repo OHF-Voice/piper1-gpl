@@ -41,6 +41,14 @@ LITHUANIAN_DATA_FILES = [
         "SOURCE",
     )
 ]
+RULES_DATA_DIR = MODULE_DIR / "rules"
+RULES_DATA_FILES = [
+    f.relative_to(MODULE_DIR)
+    for f in itertools.chain(
+        RULES_DATA_DIR.glob("*.json"),
+        (RULES_DATA_DIR / "LICENSE", RULES_DATA_DIR / "SOURCE"),
+    )
+]
 # Web page and images for the HTTP server
 HTTP_DATA_FILES = [
     f.relative_to(MODULE_DIR)
@@ -157,6 +165,7 @@ setup(
                 TASHKEEL_DATA_FILES,
                 HEBREW_DATA_FILES,
                 LITHUANIAN_DATA_FILES,
+                RULES_DATA_FILES,
                 HTTP_DATA_FILES,
             )
         ],
