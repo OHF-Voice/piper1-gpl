@@ -19,6 +19,19 @@ _TESTS_DIR = Path(__file__).parent
 _TEST_VOICE = _TESTS_DIR / "test_voice.onnx"
 
 
+def test_synthesize_returns_wav_content_type(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Declare the synthesized WAV as audio in the HTTP response."""
+    monkeypatch.setattr(sys, "argv", ["piper.http_server", "--model", str(_TEST_VOICE)])
+    with patch.object(http_server.Flask, "run", autospec=True) as run:
+        http_server.main()
+
+    with run.call_args.args[0].test_client() as client:
+        response = client.post("/synthesize", json={"text": "This is a test."})
+
+    assert response.status_code == 200
+    assert response.mimetype == "audio/wav"
+
+
 @pytest.mark.parametrize("sentence_count", [2, 3])
 @pytest.mark.parametrize("sentence_silence", [0.0, 0.25, 0.30])
 def test_sentence_silence(
