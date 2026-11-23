@@ -40,15 +40,16 @@ it says "Finetuned from U.S. English lessac voice", download the voice again.
 ## Voices fine-tuned from rdh
 
 [rdh][rdh] is a Flemish (nl_BE) male voice, trained from scratch on CC0
-recordings. Apart from `en_US-sam-medium` and `eu_ES-antton-medium`, these
-voices' own datasets are CC0 as well, so nothing in the chain asks anything
-of you.
+recordings. Apart from `en_GB-northern_english_male-medium`,
+`en_US-sam-medium` and `eu_ES-antton-medium`, these voices' own datasets are
+CC0 as well, so nothing in the chain asks anything of you.
 
 | Voice | Dataset license |
 | ----- | --------------- |
 | `nl_BE-rdh-medium` (the base itself) | CC0 |
 | `bg_BG-dimitar-medium` | CC0 |
 | `de_DE-thorsten-medium` | CC0 |
+| `en_GB-northern_english_male-medium` | CC BY-SA 4.0 |
 | `en_US-joe-medium` | CC0 |
 | `en_US-mike-medium` | CC0 |
 | `en_US-sam-medium` | Apache 2.0 |
@@ -99,6 +100,7 @@ requirement for Hi-Fi TTS, in addition to whatever its own dataset asks for.
 | `hu_HU-berta-medium` | CC0 | |
 | `it_IT-paola-medium` | CC0 | Retrained on a different recording set than the earlier paola |
 | `mr_IN-google-medium` | CC BY-SA 4.0 | 9 speakers |
+| `ne_NP-google-medium` | CC BY-SA 4.0 | 18 speakers; `ne_NP-google-x_low` is trained from scratch |
 | `nl_BE-nathalie-medium` | CC0 | |
 | `pl_PL-gosia-medium` | CC0 | |
 | `pt_BR-faber-medium` | CC0 | |
