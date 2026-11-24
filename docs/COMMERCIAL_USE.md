@@ -40,7 +40,8 @@ it says "Finetuned from U.S. English lessac voice", download the voice again.
 ## Voices fine-tuned from rdh
 
 [rdh][rdh] is a Flemish (nl_BE) male voice, trained from scratch on CC0
-recordings. Apart from `eu_ES-antton-medium`, these voices' own datasets are
+recordings. Apart from `en_GB-northern_english_male-medium`,
+`en_US-sam-medium` and `eu_ES-antton-medium`, these voices' own datasets are
 CC0 as well, so nothing in the chain asks anything of you.
 
 | Voice | Dataset license |
@@ -48,8 +49,10 @@ CC0 as well, so nothing in the chain asks anything of you.
 | `nl_BE-rdh-medium` (the base itself) | CC0 |
 | `bg_BG-dimitar-medium` | CC0 |
 | `de_DE-thorsten-medium` | CC0 |
+| `en_GB-northern_english_male-medium` | CC BY-SA 4.0 |
 | `en_US-joe-medium` | CC0 |
 | `en_US-mike-medium` | CC0 |
+| `en_US-sam-medium` | Apache 2.0 |
 | `es_ES-davefx-medium` | CC0 |
 | `eu_ES-antton-medium` | CC BY 4.0, synthetic recordings ([see below](#synthetic-recordings)) |
 | `fi_FI-harri-medium` | CC0 |
@@ -84,8 +87,10 @@ requirement for Hi-Fi TTS, in addition to whatever its own dataset asks for.
 | `cs_CZ-jirka-medium` | CC0 | `cs_CZ-jirka-low` still descends from lessac |
 | `de_DE-kerstin-medium` | CC0 | |
 | `en_GB-alba-medium` | CC BY 4.0 | |
+| `en_GB-aru-medium` | CC BY 4.0 | 12 speakers |
 | `en_GB-cori-medium` | CC BY 4.0 | Same reader and dataset as the base |
 | `en_GB-jenny_dioco-medium` | [Custom][jenny] | Commercial use permitted; the voice must be called "Jenny", and "Jenny (Dioco)" where practical |
+| `en_GB-vctk-medium` | CC BY 4.0 | 109 speakers |
 | `en_US-kathleen-medium` | CC0 | New quality; `en_US-kathleen-low` still descends from ryan |
 | `es_ES-sharvard-medium` | CC BY 3.0 | |
 | `et_EE-news-medium` | CC BY | 4 speakers |
@@ -95,12 +100,14 @@ requirement for Hi-Fi TTS, in addition to whatever its own dataset asks for.
 | `hu_HU-berta-medium` | CC0 | |
 | `it_IT-paola-medium` | CC0 | Retrained on a different recording set than the earlier paola |
 | `mr_IN-google-medium` | CC BY-SA 4.0 | 9 speakers |
+| `ne_NP-google-medium` | CC BY-SA 4.0 | 18 speakers; `ne_NP-google-x_low` is trained from scratch |
 | `nl_BE-nathalie-medium` | CC0 | |
 | `pl_PL-gosia-medium` | CC0 | |
 | `pt_BR-faber-medium` | CC0 | |
 | `pt_PT-tugão-medium` | CC0 | |
 | `ru_RU-dmitri-medium` | CC0 | |
 | `sk_SK-lili-medium` | CC0 | |
+| `vi_VN-vais1000-medium` | CC BY 4.0 | |
 | `zh_CN-chaowen-medium` | CC0 | |
 
 ## Synthetic recordings
