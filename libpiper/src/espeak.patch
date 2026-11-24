@@ -1,0 +1,54 @@
+diff --git a/src/include/espeak-ng/espeak_ng.h b/src/include/espeak-ng/espeak_ng.h
+index 81988e48..3e9d5ba5 100644
+--- a/src/include/espeak-ng/espeak_ng.h
++++ b/src/include/espeak-ng/espeak_ng.h
+@@ -26,6 +26,7 @@ extern "C"
+ {
+ #endif
+ 
++/*
+ #if defined(_WIN32) || defined(_WIN64)
+ #ifdef LIBESPEAK_NG_EXPORT
+ #define ESPEAK_NG_API __declspec(dllexport)
+@@ -35,6 +36,14 @@ extern "C"
+ #else
+ #define ESPEAK_NG_API
+ #endif
++*/
++
++#if defined(__GNUC__) && !(defined(__MINGW32__) || defined(__MINGW64__))
++#define ESPEAK_NG_API __attribute__((visibility("hidden")))
++#else
++#define ESPEAK_NG_API
++#endif
++
+ 
+ #define ESPEAKNG_DEFAULT_VOICE "en"
+ 
+diff --git a/src/include/espeak-ng/speak_lib.h b/src/include/espeak-ng/speak_lib.h
+index 9ec4cafb..11d119bd 100644
+--- a/src/include/espeak-ng/speak_lib.h
++++ b/src/include/espeak-ng/speak_lib.h
+@@ -28,6 +28,7 @@
+ #include <stdio.h>
+ #include <stddef.h>
+ 
++/*
+ #if defined(_WIN32) || defined(_WIN64)
+ #ifdef LIBESPEAK_NG_EXPORT
+ #define ESPEAK_API __declspec(dllexport)
+@@ -37,6 +38,14 @@
+ #else
+ #define ESPEAK_API
+ #endif
++*/
++
++#if defined(__GNUC__) && !(defined(__MINGW32__) || defined(__MINGW64__))
++#define ESPEAK_API __attribute__((visibility("hidden")))
++#else
++#define ESPEAK_API
++#endif
++
+ 
+ #define ESPEAK_API_REVISION  12
+ /*

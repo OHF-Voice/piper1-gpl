@@ -40,6 +40,8 @@ else()
     set(UCD_STATIC_LIB ${UCD_TOOLS_DIR}/${UCD_CONFIG_SUBDIR}libucd.a)
 endif()
 
+if (NOT TARGET espeak_ng_external)
+
 # espeak-ng's compat shims (unistd.h, endian.h, getopt.h) test
 # `#if __has_include_next(...)`, which MSVC 14.52 (Visual Studio 2026) rejects
 # with C7780 because MSVC has no __has_include_next. Backport of espeak-ng
@@ -98,6 +100,8 @@ include_directories(
     ${ESPEAKNG_INSTALL_DIR}/include
 )
 
+endif ()
+
 # ---- open_jtalk (Japanese frontend: text -> full-context labels) ---
 #
 # Built from tsukumijima/open_jtalk, the same fork pyopenjtalk-plus vendors
@@ -134,6 +138,8 @@ else()
     set(OPENJTALK_STATIC_LIB
         ${OPENJTALK_LIB_DIR}/${OPENJTALK_CONFIG_SUBDIR}libopenjtalk.a)
 endif()
+
+if (NOT TARGET openjtalk_external)
 
 ExternalProject_Add(openjtalk_external
     GIT_REPOSITORY https://github.com/tsukumijima/open_jtalk.git
@@ -172,6 +178,8 @@ set(OPENJTALK_INCLUDE_DIRS
     ${OPENJTALK_SRC_DIR}/njd_set_unvoiced_vowel
     ${OPENJTALK_SRC_DIR}/text2mecab
 )
+
+endif ()
 
 # ---- onnxruntime ---
 
@@ -362,12 +370,46 @@ target_link_libraries(piper
     onnxruntime::onnxruntime
 )
 
+# ---- libpiper static ---
+
+add_library(piper-static STATIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/piper.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/chinese_phonemizer.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/japanese_phonemizer.cpp
+)
+target_compile_definitions(piper-static PUBLIC _PIPER_ARC)
+
+add_library(piper::static ALIAS piper-static)
+
+add_dependencies(piper-static espeak_ng_external openjtalk_external)
+target_include_directories(piper-static
+  PRIVATE
+    ${ESPEAKNG_INSTALL_DIR}/include
+    ${OPENJTALK_INCLUDE_DIRS}
+    ${ONNXRUNTIME_DIR}/include
+  PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+target_link_directories(piper-static
+  PUBLIC
+    ${ONNXRUNTIME_DIR}/lib
+)
+target_link_libraries(piper-static
+  PRIVATE
+    ${ESPEAKNG_STATIC_LIB}
+    ${UCD_STATIC_LIB}
+    ${OPENJTALK_STATIC_LIB}
+    onnxruntime::onnxruntime
+)
+
 # ---- piper exe ---
 add_subdirectory(src/main)
 
+option(BUILD_APPS "Build CLI applications" OFF)
+
 # ---- version
-file(READ ${CMAKE_SOURCE_DIR}/../setup.py SETUP_PY_CONTENTS)
-string(REGEX MATCH "version=\"([0-9]+\\.[0-9]+\\.[0-9]+)\"" _ ${SETUP_PY_CONTENTS})
+file(READ "${CMAKE_CURRENT_LIST_DIR}/../setup.py" SETUP_PY_CONTENTS)
+string(REGEX MATCH "version=\"([0-9]+\\.[0-9]+\\.[0-9]+)\"" _ "${SETUP_PY_CONTENTS}")
 set(PIPER_VERSION ${CMAKE_MATCH_1})
 
 if(PIPER_VERSION)
@@ -480,3 +522,8 @@ if(CLANG_FORMAT)
 else()
     message(WARNING "clang-format not found. The 'format' target will not be available.")
 endif()
+
+# Only as a top level project (not a subproject).
+if (BUILD_APPS)
+    add_subdirectory(app/cli)
+endif ()
