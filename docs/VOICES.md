@@ -61,3 +61,4 @@ You will need two files per voice:
 
 The `MODEL_CARD` file for each voice contains important licensing information. Piper is intended for personal use and text to speech research only; we do not impose any additional restrictions on voice models. Some voices may have restrictive licenses, however, so please review them carefully!
 
+Some older voices have a smaller phoneme set (`num_symbols` is 130 in the config file) and skip any phoneme they don't know with a `Missing phoneme from id map` warning. These voices don't have the nasal vowel mark (U+0303), so words like "bon" or "não" lose their nasal vowel: `fr_FR-gilles-low`, `fr_FR-mls_1840-low`, `fr_FR-siwis-low`, `pl_PL-mls_6892-low`, and `pt_BR-edresson-low`. The other French, Polish, and Portuguese voices have it.
