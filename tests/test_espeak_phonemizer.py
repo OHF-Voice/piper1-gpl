@@ -1,6 +1,17 @@
-from piper.phonemize_espeak import EspeakPhonemizer
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+from piper.phonemize_espeak import ESPEAK_DATA_DIR, EspeakPhonemizer
 
 from . import EN_US_VOWEL_CLUSTERS
+
+_INITIALIZE_SCRIPT = """
+import sys
+from piper.phonemize_espeak import EspeakPhonemizer
+EspeakPhonemizer(sys.argv[1])
+"""
 
 
 def test_phonemize() -> None:
@@ -70,3 +81,48 @@ def test_vowel_clusters_without_terminator() -> None:
     assert phonemizer.phonemize("en-us", "my", vowel_clusters=EN_US_VOWEL_CLUSTERS) == [
         ["m", "ˈ", "aɪ"],
     ]
+
+
+def test_phonemizers_share_one_initialization() -> None:
+    """Creating another phonemizer must not re-initialize espeak-ng under the
+    first. Re-initializing freed the phoneme tables the current voice pointed
+    into, so the next phonemize() read freed memory; under valgrind that was
+    hundreds of invalid reads, and on CI a segfault."""
+    first = EspeakPhonemizer()
+    expected = first.phonemize("lt", "Labas, mama.")
+
+    for _ in range(3):
+        assert EspeakPhonemizer().phonemize("lt", "Labas, mama.") == expected
+
+    assert first.phonemize("lt", "Labas, mama.") == expected
+
+
+def test_switching_data_directory() -> None:
+    """A different data directory tears espeak-ng down before initializing it
+    again, rather than reloading over live state."""
+    expected = EspeakPhonemizer().phonemize("en-us", "test")
+
+    # Same directory, spelled differently, so the bridge sees a new one.
+    other = EspeakPhonemizer(str(ESPEAK_DATA_DIR) + os.sep)
+    assert other.phonemize("en-us", "test") == expected
+
+    assert EspeakPhonemizer().phonemize("en-us", "test") == expected
+
+
+def test_long_espeak_data_dir(tmp_path: Path) -> None:
+    """Data dir is used as given, even when its path is long."""
+    # espeak-ng sizes its data path buffer at 160 bytes off Linux and silently
+    # falls back to the build-time default when the path does not fit.
+    data_dir = tmp_path / ("d" * 200)
+    data_dir.mkdir()
+
+    # The directory is empty, so espeak-ng must fail on this exact path.
+    # It exits the process on failure, hence the subprocess.
+    result = subprocess.run(
+        [sys.executable, "-c", _INITIALIZE_SCRIPT, str(data_dir)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode != 0
+    assert str(data_dir) in result.stderr

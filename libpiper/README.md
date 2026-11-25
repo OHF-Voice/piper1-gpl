@@ -24,7 +24,7 @@ The `--config Release` flag is required for multi-config generators such as
 Visual Studio and is ignored by single-config generators, so it is safe to
 pass on every platform.
 
-This will automatically download/build [espeak-ng][] as well as download shared libraries for the [onnxruntime][].
+This will automatically download/build [espeak-ng][] as well as download shared libraries for the [onnxruntime][] from Microsoft's [NuGet package][onnxruntime-nuget] (checked against a pinned SHA256). To use your own onnxruntime instead, pass `-DONNXRUNTIME_DIR=<dir>` with `include/` and `lib/` subdirectories, or install it where CMake's `find_package(onnxruntime)` finds it.
 
 To use `libpiper`, you will need to:
 
@@ -67,11 +67,14 @@ int main() {
     piper_synthesize_start(synth, "Welcome to the world of speech synthesis!",
                            &options /* NULL for defaults */);
 
+    // The final chunk has audio too: piper_synthesize_next returns PIPER_DONE
+    // together with it, so loop on is_last.
     piper_audio_chunk chunk;
-    while (piper_synthesize_next(synth, &chunk) != PIPER_DONE) {
+    do {
+        piper_synthesize_next(synth, &chunk);
         audio_stream.write(reinterpret_cast<const char *>(chunk.samples),
                            chunk.num_samples * sizeof(float));
-    }
+    } while (!chunk.is_last);
 
     piper_free(synth);
 
@@ -79,6 +82,17 @@ int main() {
 }
 ```
 
+## Streaming
+
+`piper_synthesize_next` returns one chunk of audio per sentence. To get audio before the whole sentence is synthesized, split the voice into an encoder and a decoder (see [STREAMING.md](../docs/STREAMING.md)):
+
+``` sh
+python3 -m piper.split_voice_for_streaming /path/to/voice.onnx
+```
+
+`piper_create` picks up `voice.encoder.onnx` and `voice.decoder.onnx` automatically and then returns several smaller chunks per sentence.
+
 <!-- Links -->
 [espeak-ng]: https://github.com/espeak-ng/espeak-ng
-[onnxruntime]: https://github.com/microsoft/onnxruntime
+[onnxruntime]: https://onnxruntime.ai/
+[onnxruntime-nuget]: https://www.nuget.org/packages/Microsoft.ML.OnnxRuntime
