@@ -415,7 +415,10 @@ class PiperVoice:
                     expected_ids = self.config.phoneme_id_map.get(phoneme, [])
 
                     ids_to_check: Sequence[int]
-                    if phoneme != EOS:
+                    if phoneme not in self.config.phoneme_id_map:
+                        # phonemes_to_ids skips it (and its PAD) with a warning
+                        ids_to_check = []
+                    elif phoneme != EOS:
                         ids_to_check = list(itertools.chain(expected_ids, pad_ids))
                     else:
                         ids_to_check = expected_ids

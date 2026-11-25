@@ -8,6 +8,7 @@ import wave
 from pathlib import Path
 from unittest.mock import patch
 
+import numpy as np
 import pytest
 
 from piper import PiperVoice
@@ -494,6 +495,40 @@ def test_synthesize_alignment() -> None:
 
             assert actual_alignment.num_samples == expected_samples
             assert actual_alignment.phoneme_ids == expected_ids
+
+
+def test_synthesize_alignment_missing_phoneme() -> None:
+    """Test that a phoneme missing from the id map doesn't break alignments."""
+    voice = PiperVoice.load(_TEST_VOICE)
+    voice.config.phoneme_id_map = {
+        p: ids for p, ids in voice.config.phoneme_id_map.items() if p != "̃"
+    }
+
+    def phoneme_ids_to_audio(phoneme_ids, *args, **kwargs):
+        # 256 samples per phoneme id
+        return np.zeros(256 * len(phoneme_ids)), np.full(len(phoneme_ids), 256)
+
+    with patch.object(voice, "phonemize", return_value=[["a", "̃", "b"]]):
+        with patch.object(voice, "phoneme_ids_to_audio", phoneme_ids_to_audio):
+            audio_chunks = list(voice.synthesize("ãb", include_alignments=True))
+
+    assert len(audio_chunks) == 1
+    chunk = audio_chunks[0]
+
+    # The tilde is skipped along with its PAD
+    assert chunk.phoneme_ids == [1, 0, 14, 0, 15, 0, 2]
+
+    assert chunk.phoneme_alignments is not None
+    assert [
+        (a.phoneme, list(a.phoneme_ids), a.num_samples)
+        for a in chunk.phoneme_alignments
+    ] == [
+        (BOS, [1, 0], 512),
+        ("a", [14, 0], 512),
+        ("̃", [], 0),
+        ("b", [15, 0], 512),
+        (EOS, [2], 256),
+    ]
 
 
 def test_add_alignment_output_autodetect() -> None:
