@@ -44,6 +44,7 @@ People/projects using Piper:
 * [POTaTOS](https://www.youtube.com/watch?v=Dz95q6XYjwY)
 * [Narration Studio](https://github.com/phyce/Narration-Studio)
 * [Basic TTS](https://basictts.com/) - Simple online text-to-speech converter.
+* [ambivox](https://github.com/whispem/ambivox) - self-hosted voice calls with live translation, speaking with Piper voices 
 
 Bindings to use Piper in programming languages other than Python and C/C++:
 
