@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 from urllib.request import urlopen
 
-from flask import Flask, render_template, request
+from flask import Flask, Response, render_template, request
 
 from . import PiperVoice, SynthesisConfig
 from .download_voices import VOICES_JSON, download_voice
@@ -270,7 +270,7 @@ def main() -> None:
         return download_voice(model_id, download_dir, force_redownload=force_redownload)
 
     @app.route("/synthesize", methods=["POST"])
-    def app_synthesize() -> bytes:
+    def app_synthesize() -> Response:
         """Synthesize audio from text.
 
         Expects a JSON object with the format:
@@ -389,7 +389,7 @@ def main() -> None:
                 alignments=alignments,
             )
 
-            return wav_io.getvalue()
+            return Response(wav_io.getvalue(), mimetype="audio/wav")
 
     app.run(host=args.host, port=args.port)
 
