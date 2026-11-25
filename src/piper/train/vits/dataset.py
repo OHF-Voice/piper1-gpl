@@ -548,6 +548,12 @@ class VitsDataModule(L.LightningDataModule):
                     )
                 )
 
+        if not all_utts:
+            raise ValueError(
+                f"No usable utterances in {self.csv_path} "
+                "(see the warnings above for missing audio or cache files)"
+            )
+
         full_dataset = VitsDataset(all_utts)
 
         n = len(full_dataset)
