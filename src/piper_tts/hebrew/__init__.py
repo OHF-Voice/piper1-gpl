@@ -2,7 +2,7 @@
 
 Hebrew is normally written without niqqud (vowel points), but espeak-ng needs the
 points to produce correct phonemes. This module restores them with the Nakdimon
-model, mirroring the Arabic ``libtashkeel`` path in :mod:`piper.tashkeel`.
+model, mirroring the Arabic ``libtashkeel`` path in :mod:`piper_tts.tashkeel`.
 
 Inference-only port of Nakdimon (https://github.com/elazarg/nakdimon, MIT).
 The character tables and merge logic are vendored from ``nakdimon/hebrew.py`` and

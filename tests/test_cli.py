@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from piper.__main__ import main
+from piper_tts.__main__ import main
 
 _TESTS_DIR = Path(__file__).parent
 

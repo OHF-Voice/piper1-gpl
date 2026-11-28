@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, call, patch
 
 import pytest
 
-from piper.audio_playback import AudioPlayer
+from piper_tts.audio_playback import AudioPlayer
 
 
 def _process_mock() -> MagicMock:
@@ -33,7 +33,7 @@ def test_wait_timeout_scales_with_audio_duration(
     process.stdin.close.side_effect = lambda: events.append("close")
     process.wait.side_effect = lambda **kwargs: events.append("wait")
 
-    with patch("piper.audio_playback.subprocess.Popen", return_value=process):
+    with patch("piper_tts.audio_playback.subprocess.Popen", return_value=process):
         with AudioPlayer(sample_rate=10) as player:
             for chunk_size in chunks:
                 player.play(bytes(chunk_size))
@@ -47,7 +47,7 @@ def test_failed_write_does_not_extend_wait_timeout() -> None:
     process = _process_mock()
     process.stdin.write.side_effect = OSError("write failed")
 
-    with patch("piper.audio_playback.subprocess.Popen", return_value=process):
+    with patch("piper_tts.audio_playback.subprocess.Popen", return_value=process):
         with pytest.raises(OSError, match="write failed"):
             with AudioPlayer(sample_rate=10) as player:
                 player.play(bytes(2 * 10 * 12))
@@ -63,7 +63,7 @@ def test_timeout_kills_ffplay_and_remains_bounded() -> None:
         None,
     ]
 
-    with patch("piper.audio_playback.subprocess.Popen", return_value=process):
+    with patch("piper_tts.audio_playback.subprocess.Popen", return_value=process):
         with pytest.raises(subprocess.TimeoutExpired):
             with AudioPlayer(sample_rate=10):
                 pass
@@ -83,7 +83,7 @@ def test_reentering_player_resets_audio_duration() -> None:
     player = AudioPlayer(sample_rate=10)
 
     with patch(
-        "piper.audio_playback.subprocess.Popen",
+        "piper_tts.audio_playback.subprocess.Popen",
         side_effect=[first_process, second_process],
     ):
         with player:
@@ -102,7 +102,9 @@ def test_ffplay_command_has_no_channel_option() -> None:
     """
     process = _process_mock()
 
-    with patch("piper.audio_playback.subprocess.Popen", return_value=process) as popen:
+    with patch(
+        "piper_tts.audio_playback.subprocess.Popen", return_value=process
+    ) as popen:
         with AudioPlayer(sample_rate=22050):
             pass
 

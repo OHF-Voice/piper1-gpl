@@ -7,7 +7,7 @@ When a voice is split into an encoder and a decoder, `libpiper` runs the encoder
 ## Splitting Voices
 
 ``` sh
-python3 -m piper.split_voice_for_streaming /path/to/model.onnx
+python3 -m piper_tts.split_voice_for_streaming /path/to/model.onnx
 ```
 
 This writes `/path/to/model.encoder.onnx` and `/path/to/model.decoder.onnx`. Like [alignments](ALIGNMENTS.md), it requires the `onnx` Python package (not `onnxruntime`), which is not needed afterwards. Alignment outputs of a patched voice are kept, so patch first if you need both.

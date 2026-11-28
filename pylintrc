@@ -1,6 +1,6 @@
 [MASTER]
-ignore=espeakbridge.pyi, src/piper/train/vits, src/piper/train/vits/monotonic_align
-extension-pkg-allow-list = piper.espeakbridge
+ignore=espeakbridge.pyi, src/piper_tts/train/vits, src/piper_tts/train/vits/monotonic_align
+extension-pkg-allow-list = piper_tts.espeakbridge
 
 [MESSAGES CONTROL]
 disable=

@@ -14,10 +14,10 @@ from typing import Any
 import pytest
 
 torch = pytest.importorskip("torch")
-lightning_module = pytest.importorskip("piper.train.vits.lightning")
-dataset_module = pytest.importorskip("piper.train.vits.dataset")
+lightning_module = pytest.importorskip("piper_tts.train.vits.lightning")
+dataset_module = pytest.importorskip("piper_tts.train.vits.dataset")
 # The training step aligns with the Cython extension from build_monotonic_align.sh
-pytest.importorskip("piper.train.vits.monotonic_align")
+pytest.importorskip("piper_tts.train.vits.monotonic_align")
 
 
 def _tiny_model(use_mrd: bool) -> Any:

@@ -5,12 +5,12 @@ import unicodedata
 
 import pytest
 
-from piper.config import PhonemeType, PiperConfig
-from piper.hebrew import NakdimonDiacritizer
-from piper.hebrew.hebrew_ipa import hebrew_to_ipa
-from piper.phoneme_ids import DEFAULT_PHONEME_ID_MAP
-from piper.phonemize_hebrew import HebrewPhonemizer
-from piper.voice import PiperVoice
+from piper_tts.config import PhonemeType, PiperConfig
+from piper_tts.hebrew import NakdimonDiacritizer
+from piper_tts.hebrew.hebrew_ipa import hebrew_to_ipa
+from piper_tts.phoneme_ids import DEFAULT_PHONEME_ID_MAP
+from piper_tts.phonemize_hebrew import HebrewPhonemizer
+from piper_tts.voice import PiperVoice
 
 # Undotted input -> Nakdimon output. Reference produced by the original model.
 _ORACLE = (

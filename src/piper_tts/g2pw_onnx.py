@@ -344,7 +344,7 @@ class G2PWOnnxConverter:
 
     ``model_dir`` must already contain ``g2pw.onnx``, ``config.py``,
     ``POLYPHONIC_CHARS.txt`` and ``MONOPHONIC_CHARS.txt``. Unlike upstream this
-    never downloads anything; :func:`piper.phonemize_chinese.download_model`
+    never downloads anything; :func:`piper_tts.phonemize_chinese.download_model`
     fetches the archive.
     """
 

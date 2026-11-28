@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from piper.phoneme_ids import DEFAULT_PHONEME_ID_MAP
-from piper.phonemize_lithuanian import (
+from piper_tts.phoneme_ids import DEFAULT_PHONEME_ID_MAP
+from piper_tts.phonemize_lithuanian import (
     ACUTE,
     CIRCUMFLEX,
     DEFAULT_DICTIONARY_PATH,
@@ -173,7 +173,7 @@ def test_soft_l_is_kept(phonemizer: LithuanianPhonemizer) -> None:
 def test_espeak_calls_share_the_process_lock() -> None:
     """espeakbridge.set_voice() is process-global, so this phonemizer must take
     the same lock PiperVoice takes around its own espeak calls."""
-    from piper import phonemize_espeak, voice
+    from piper_tts import phonemize_espeak, voice
 
     assert voice._ESPEAK_PHONEMIZER_LOCK is phonemize_espeak.ESPEAK_LOCK
 

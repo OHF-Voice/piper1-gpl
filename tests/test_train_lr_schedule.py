@@ -17,7 +17,7 @@ from typing import Optional
 
 import pytest
 
-lightning_module = pytest.importorskip("piper.train.vits.lightning")
+lightning_module = pytest.importorskip("piper_tts.train.vits.lightning")
 
 VitsModel = lightning_module.VitsModel
 UPSTREAM_LR_DECAY = lightning_module._UPSTREAM_LR_DECAY

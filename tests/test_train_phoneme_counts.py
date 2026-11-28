@@ -5,12 +5,12 @@ import sys
 
 import pytest
 
-from piper.config import PiperConfig
-from piper.phoneme_ids import DEFAULT_PHONEME_ID_MAP, phonemes_to_ids
+from piper_tts.config import PiperConfig
+from piper_tts.phoneme_ids import DEFAULT_PHONEME_ID_MAP, phonemes_to_ids
 
 torch = pytest.importorskip("torch")
-phoneme_counts = pytest.importorskip("piper.train.phoneme_counts")
-get_cache_id = pytest.importorskip("piper.train.vits.utils").get_cache_id
+phoneme_counts = pytest.importorskip("piper_tts.train.phoneme_counts")
+get_cache_id = pytest.importorskip("piper_tts.train.vits.utils").get_cache_id
 
 ID_MAP = {"_": [0], "^": [1], "$": [2], " ": [3], "a": [4], "b": [5], "c": [6]}
 

@@ -18,7 +18,7 @@ from typing import Optional
 import pytest
 
 torch = pytest.importorskip("torch")
-lightning_module = pytest.importorskip("piper.train.vits.lightning")
+lightning_module = pytest.importorskip("piper_tts.train.vits.lightning")
 
 VitsModel = lightning_module.VitsModel
 

@@ -92,7 +92,7 @@ include_directories(
 
 # espeak bridge
 add_library(espeakbridge MODULE
-    src/piper/espeakbridge.c
+    src/piper_tts/espeakbridge.c
 )
 
 add_dependencies(espeakbridge espeak_ng_external)
@@ -127,7 +127,7 @@ install(TARGETS espeakbridge
 
 # Copy espeak-ng-data
 set(DATA_SRC ${CMAKE_BINARY_DIR}/espeak_ng-install/share/espeak-ng-data)
-set(DATA_DST ${CMAKE_CURRENT_SOURCE_DIR}/src/piper/espeak-ng-data)
+set(DATA_DST ${CMAKE_CURRENT_SOURCE_DIR}/src/piper_tts/espeak-ng-data)
 
 add_custom_target(copy_espeak_ng_data ALL
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${DATA_SRC} ${DATA_DST}

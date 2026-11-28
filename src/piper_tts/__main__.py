@@ -141,7 +141,7 @@ def main() -> None:
 
     if not model_path.exists():
         raise ValueError(
-            f"Unable to find voice: {model_path} (use piper.download_voices)"
+            f"Unable to find voice: {model_path} (use piper_tts.download_voices)"
         )
 
     # Load voice

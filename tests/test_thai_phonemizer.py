@@ -3,9 +3,9 @@
 
 import pytest
 
-from piper.config import PhonemeType
-from piper.phoneme_ids import DEFAULT_PHONEME_ID_MAP, phonemes_to_ids
-from piper.phonemize_thai import TONES, ThaiPhonemizer
+from piper_tts.config import PhonemeType
+from piper_tts.phoneme_ids import DEFAULT_PHONEME_ID_MAP, phonemes_to_ids
+from piper_tts.phonemize_thai import TONES, ThaiPhonemizer
 
 # Not pytest.importorskip: that only catches ImportError, and importing tltk
 # pulls in nltk -> scikit-learn, which raises ValueError ("numpy.dtype size

@@ -8,7 +8,7 @@ This exposes the number of audio samples for each **phoneme id** used during syn
 To access alignments, you must first "patch" a voice's ONNX model file:
 
 ``` sh
-python3 -m piper.patch_voice_with_alignment /path/to/model.onnx
+python3 -m piper_tts.patch_voice_with_alignment /path/to/model.onnx
 ```
 
 This requires the `onnx` Python package to be installed (not to be confused with `onnxruntime`). After patching, the `onnx` package is no longer required. Patched ONNX models should still work fine with existing Piper installations.

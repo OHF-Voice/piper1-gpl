@@ -7,6 +7,7 @@ RUN apt-get update && \
 WORKDIR /app
 
 COPY pyproject.toml setup.py CMakeLists.txt MANIFEST.in README.md ./
+COPY src/piper_tts/ ./src/piper_tts/
 COPY src/piper/ ./src/piper/
 COPY script/setup script/dev_build script/package ./script/
 RUN script/setup --dev

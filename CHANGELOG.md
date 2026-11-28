@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Rename the Python package from `piper` to `piper_tts` (#182)
+    - The unrelated mouse configuration tool [libratbag/piper](https://github.com/libratbag/piper) also installs `site-packages/piper/` and `/usr/bin/piper`, so a system package manager could not install both
+    - Use `from piper_tts import PiperVoice` and `python3 -m piper_tts`, `python3 -m piper_tts.train`, and so on; the PyPI name stays `piper-tts`
+    - `import piper`, `import piper.<module>` and `python3 -m piper.<module>` still work: they return the same module objects as `piper_tts` and raise a `DeprecationWarning` on import. They will be removed in 2.0
+    - Nothing in `piper_tts` imports `piper`, so system packages can leave out `site-packages/piper/` and the `piper` command
+    - New `piper-tts` command, the same as `piper`
+    - Loggers are now named `piper_tts.*`, so logging configured for `piper.*` needs updating
+    - Training checkpoints pickle no `piper` module paths, so existing checkpoints keep working
+
 - Write a valid, empty WAV file when the text has nothing to speak
     - `PiperVoice.synthesize_wav`, the `piper` command and `/synthesize` in `piper.http_server` set the WAV format from the first audio chunk, so empty input left the format unset and closing the file raised `wave.Error: # channels not specified`
     - The format now comes from the voice config before synthesis starts

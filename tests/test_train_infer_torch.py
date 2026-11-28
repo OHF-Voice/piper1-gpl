@@ -1,4 +1,4 @@
-"""Tests for the phonemizer dispatch in ``piper.train.infer_torch``.
+"""Tests for the phonemizer dispatch in ``piper_tts.train.infer_torch``.
 
 The regression these guard against: the dispatch over ``config.phoneme_type``
 ended in ``else: EspeakPhonemizer``, so a phoneme type without its own branch
@@ -13,19 +13,19 @@ from pathlib import Path
 
 import pytest
 
-from piper.config import PhonemeType
+from piper_tts.config import PhonemeType
 
-infer_torch = pytest.importorskip("piper.train.infer_torch")
+infer_torch = pytest.importorskip("piper_tts.train.infer_torch")
 
 _TEST_DIR = Path(__file__).parent
 
 # Module and class of the phonemizer each non-espeak phoneme type must use
 _PHONEMIZERS = {
-    PhonemeType.PINYIN: ("piper.phonemize_chinese", "ChinesePhonemizer"),
-    PhonemeType.HEBREW: ("piper.phonemize_hebrew", "HebrewPhonemizer"),
-    PhonemeType.JAPANESE: ("piper.phonemize_japanese", "JapanesePhonemizer"),
-    PhonemeType.THAI: ("piper.phonemize_thai", "ThaiPhonemizer"),
-    PhonemeType.LITHUANIAN: ("piper.phonemize_lithuanian", "LithuanianPhonemizer"),
+    PhonemeType.PINYIN: ("piper_tts.phonemize_chinese", "ChinesePhonemizer"),
+    PhonemeType.HEBREW: ("piper_tts.phonemize_hebrew", "HebrewPhonemizer"),
+    PhonemeType.JAPANESE: ("piper_tts.phonemize_japanese", "JapanesePhonemizer"),
+    PhonemeType.THAI: ("piper_tts.phonemize_thai", "ThaiPhonemizer"),
+    PhonemeType.LITHUANIAN: ("piper_tts.phonemize_lithuanian", "LithuanianPhonemizer"),
 }
 
 

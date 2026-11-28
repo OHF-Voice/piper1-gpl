@@ -1,4 +1,4 @@
 include COPYING
 include CMakeLists.txt
-include src/piper/espeakbridge.c
-recursive-include src/piper/espeak-ng-data *
+include src/piper_tts/espeakbridge.c
+recursive-include src/piper_tts/espeak-ng-data *

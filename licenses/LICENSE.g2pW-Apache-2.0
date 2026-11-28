@@ -1,4 +1,4 @@
-Portions of src/piper/g2pw_onnx.py are ported from g2pW.
+Portions of src/piper_tts/g2pw_onnx.py are ported from g2pW.
 
 g2pW (https://github.com/GitYCC/g2pW)
 Copyright (c) 2022 Yi-Chang Chen
