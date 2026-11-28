@@ -47,6 +47,7 @@ CC0 as well, so nothing in the chain asks anything of you.
 | Voice | Dataset license |
 | ----- | --------------- |
 | `nl_BE-rdh-medium` (the base itself) | CC0 |
+| `ar_JO-clartts-medium` | CC BY 4.0 |
 | `bg_BG-dimitar-medium` | CC0 |
 | `de_DE-thorsten-medium` | CC0 |
 | `en_GB-northern_english_male-medium` | CC BY-SA 4.0 |
@@ -83,7 +84,9 @@ requirement for Hi-Fi TTS, in addition to whatever its own dataset asks for.
 | Voice | Dataset license | Notes |
 | ----- | --------------- | ----- |
 | `en_US-hifi_tts_92-medium` (the base itself) | CC BY 4.0 | |
+| `af_ZA-google-medium` | CC BY-SA 4.0 | 9 speakers |
 | `bn_BD-google-medium` | CC BY-SA 4.0, plus the [CMU Indic license][cmu] for speaker `rm` | 16 speakers. The CMU license asks you to keep its copyright notice, which is in the `MODEL_CARD` |
+| `ca_ES-upc_ona-medium` | CC BY-SA 3.0 ES | `ca_ES-upc_ona-x_low` is trained from scratch |
 | `cs_CZ-jirka-medium` | CC0 | `cs_CZ-jirka-low` still descends from lessac |
 | `de_DE-kerstin-medium` | CC0 | |
 | `en_GB-alba-medium` | CC BY 4.0 | |
@@ -96,9 +99,11 @@ requirement for Hi-Fi TTS, in addition to whatever its own dataset asks for.
 | `et_EE-news-medium` | CC BY | 4 speakers |
 | `eu_ES-maider-medium` | CC BY 4.0 | Synthetic recordings ([see below](#synthetic-recordings)) |
 | `fr_FR-siwis-medium` | CC BY 4.0 | |
+| `gu_IN-google-medium` | CC BY-SA 4.0 | 35 speakers |
 | `hu_HU-anna-medium` | CC0 | |
 | `hu_HU-berta-medium` | CC0 | |
 | `it_IT-paola-medium` | CC0 | Retrained on a different recording set than the earlier paola |
+| `kn_IN-google-medium` | CC BY-SA 4.0 | 45 speakers |
 | `mr_IN-google-medium` | CC BY-SA 4.0 | 9 speakers |
 | `ne_NP-google-medium` | CC BY-SA 4.0 | 18 speakers; `ne_NP-google-x_low` is trained from scratch |
 | `nl_BE-nathalie-medium` | CC0 | |
@@ -107,6 +112,7 @@ requirement for Hi-Fi TTS, in addition to whatever its own dataset asks for.
 | `pt_PT-tugão-medium` | CC0 | |
 | `ru_RU-dmitri-medium` | CC0 | |
 | `sk_SK-lili-medium` | CC0 | |
+| `ta_IN-google-medium` | CC BY-SA 4.0 | 40 speakers |
 | `vi_VN-vais1000-medium` | CC BY 4.0 | |
 | `zh_CN-chaowen-medium` | CC0 | |
 
@@ -183,6 +189,10 @@ licensing information lives (see [Voice licensing](LICENSING.md)).
 * **Datasets with no documented license**, such as amy, irina and huayan.
   `fa_IR-magnoliasis` is in this group: its Kaggle dataset lists no license
   and does not say who the speaker is or where the recordings came from.
+  `en_US-arctic-medium` is in this group too, although it is now fine-tuned
+  from hifi_tts_92. Its seven original CMU ARCTIC speakers (awb, bdl, clb,
+  jmk, ksp, rms, slt) are under CMU's license, which permits commercial use,
+  but the other eleven speakers were released with no license statement.
 * **Datasets whose uploader may not hold the rights.** `es_MX-ald-medium` is now
   fine-tuned from rdh, and its dataset is labeled Unlicense. But the recordings
   look like vlog audio, and the dataset does not say whether the uploader is
