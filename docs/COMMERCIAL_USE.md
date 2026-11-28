@@ -111,6 +111,7 @@ requirement for Hi-Fi TTS, in addition to whatever its own dataset asks for.
 | `pt_BR-faber-medium` | CC0 | |
 | `pt_PT-tugão-medium` | CC0 | |
 | `ru_RU-dmitri-medium` | CC0 | |
+| `si_LK-google-medium` | CC BY-SA 4.0 | 11 speakers |
 | `sk_SK-lili-medium` | CC0 | |
 | `ta_IN-google-medium` | CC BY-SA 4.0 | 40 speakers |
 | `vi_VN-vais1000-medium` | CC BY 4.0 | |
