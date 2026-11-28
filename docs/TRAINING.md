@@ -106,6 +106,25 @@ utt2.wav|speaker_2|Text for utterance 2 with second speaker.
 
 where `speaker_1` and `speaker_2` are the **names** of the speakers. When training begins, Piper will count up the number of unique speaker names and create a mapping between speaker names and ids. This mapping will be saved in the `config.json` file for the voice (`--data.config_path`).
 
+### Languages Without an espeak-ng Voice
+
+Some languages have no usable espeak-ng voice but a regular enough spelling for a grapheme table. Train them with `--data.phoneme_type rules` and set `--data.espeak_voice` to the language code, which names the table:
+
+| Code | Language  | Notes                                                                      |
+| ---- | --------- | -------------------------------------------------------------------------- |
+| `xh` | isiXhosa  | clicks ǀ ǁ ǃ in all series; no espeak-ng voice                             |
+| `st` | Sesotho   | South African orthography (`kg`, `tj`, `y`, `w`); no espeak-ng voice       |
+| `tn` | Setswana  | `š`, `tš` and optional `ê`/`ô`; espeak-ng's `tn` voice is broken (`tlh` → `K`) |
+
+``` sh
+python3 -m piper.train fit \
+  --data.phoneme_type rules \
+  --data.espeak_voice xh \
+  ...
+```
+
+The tables live in `src/piper/rules/` (see `piper/phonemize_rules.py` for the format). Their output uses the default phoneme id map, so these voices can start from any IPA checkpoint. Tone is not written in these languages and is not transcribed. Spell out numbers in the training text first: digits are dropped, since they are tone symbols in the phoneme id map.
+
 ### Custom Phonemes
 
 If you want to skip phonemization with `espeak-ng`, set `--data.phoneme_type text` and use the CSV format:

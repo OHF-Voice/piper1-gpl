@@ -272,6 +272,17 @@ class PiperVoice:
 
             return phonemizer.phonemize(text)
 
+        if self.config.phoneme_type == PhonemeType.RULES:
+            from .phonemize_rules import RulesPhonemizer
+
+            # Grapheme rule table; espeak.voice names the language (xh, st, tn)
+            phonemizer = getattr(self, "_rules_phonemizer", None)
+            if phonemizer is None:
+                phonemizer = RulesPhonemizer(self.config.espeak_voice)
+                setattr(self, "_rules_phonemizer", phonemizer)
+
+            return phonemizer.phonemize(text)
+
         if self.config.phoneme_type != PhonemeType.ESPEAK:
             raise ValueError(f"Unexpected phoneme type: {self.config.phoneme_type}")
 

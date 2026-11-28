@@ -53,6 +53,7 @@ def main() -> None:
     japanese_phonemizer = None
     thai_phonemizer = None
     lithuanian_phonemizer = None
+    rules_phonemizer = None
 
     model = VitsModel.load_from_checkpoint(args.checkpoint, map_location="cpu")
 
@@ -114,6 +115,13 @@ def main() -> None:
                 lithuanian_phonemizer = LithuanianPhonemizer()
 
             sentence_phonemes = lithuanian_phonemizer.phonemize(text)
+        elif config.phoneme_type == PhonemeType.RULES:
+            from ..phonemize_rules import RulesPhonemizer
+
+            if rules_phonemizer is None:
+                rules_phonemizer = RulesPhonemizer(config.espeak_voice)
+
+            sentence_phonemes = rules_phonemizer.phonemize(text)
         else:
             if config.phoneme_type != PhonemeType.ESPEAK:
                 raise ValueError(f"Unexpected phoneme type: {config.phoneme_type}")

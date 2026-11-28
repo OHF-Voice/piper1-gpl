@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add a rule-table phonemizer for languages without a usable espeak-ng voice: isiXhosa (`xh`), Sesotho (`st`) and Setswana (`tn`)
+    - `"phoneme_type": "rules"`, with `espeak.voice` naming the language; train with `--data.phoneme_type rules --data.espeak_voice xh`
+    - One generic engine (`piper.phonemize_rules`) and one JSON table per language in `piper/rules/`: longest-match graphemes, context rules, an optional word lexicon, and tone diacritics written as the tone digits Thai and Chinese voices already use
+    - Output stays inside the default phoneme id map (no tie bars or ejective marks), so these voices can warmstart from any IPA checkpoint
+    - The `xh` table matches 14,999 of the 15,000 words of the NCHLT-inlang isiXhosa pronunciation dictionary once notational differences are normalized
+
 - Write a valid, empty WAV file when the text has nothing to speak
     - `PiperVoice.synthesize_wav`, the `piper` command and `/synthesize` in `piper.http_server` set the WAV format from the first audio chunk, so empty input left the format unset and closing the file raised `wave.Error: # channels not specified`
     - The format now comes from the voice config before synthesis starts

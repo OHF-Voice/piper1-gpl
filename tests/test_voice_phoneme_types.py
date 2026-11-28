@@ -20,6 +20,7 @@ _PHONEMIZERS = {
     PhonemeType.JAPANESE: ("piper.phonemize_japanese", "JapanesePhonemizer"),
     PhonemeType.THAI: ("piper.phonemize_thai", "ThaiPhonemizer"),
     PhonemeType.LITHUANIAN: ("piper.phonemize_lithuanian", "LithuanianPhonemizer"),
+    PhonemeType.RULES: ("piper.phonemize_rules", "RulesPhonemizer"),
 }
 
 
